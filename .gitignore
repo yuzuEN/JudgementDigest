@@ -1,0 +1,26 @@
+# 虛擬環境
+.venv/
+
+# Python 快取
+__pycache__/
+*.pyc
+*.pyo
+
+# 資料（不入版控）
+html_cache/
+judgments.db
+*.xlsx
+*.log
+
+# 除錯用暫存頁面
+*_page.html
+
+# 簡報（不上傳）
+*.pptx
+
+# 暫時用的腳本（不屬於核心功能）
+check_html.py
+check_html2.py
+diagnose.py
+add_role_stats_slide.py
+update_pptx.py
