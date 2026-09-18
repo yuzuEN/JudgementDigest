@@ -71,6 +71,57 @@ BASE_COLUMNS: List[tuple] = [
     ("parsed_at",         "解析時間"),
 ]
 
+# 結構化欄位（structuring.py 推導）。欄位順序刻意分成三群：
+#   案件分類 → 訴訟結果 → 金額 → 法條 → 法官 → 品質旗標
+# 讓拿到 Excel 的人由左至右就能看懂一個案子的輪廓。
+STRUCTURED_EXPORT_COLUMNS: List[tuple] = [
+    ("case_kind",            "案由代碼"),
+    ("case_kind_category",   "案件層級"),
+    ("case_type_norm",       "案由（正規化）"),
+    ("case_type_category",   "案由大類"),
+    ("outcome",              "訴訟結果"),
+    ("main_outcome",         "本訴結果"),
+    ("counter_outcome",      "反訴結果"),
+    ("has_counterclaim",     "有無反訴"),
+    ("appeal_outcome",       "上訴審結果"),
+    ("relief_type",          "給付類型"),
+    ("awarded_amount",       "判准金額"),
+    ("awarded_currency",     "判准幣別"),
+    ("awarded_n_items",      "判准項目數"),
+    ("awarded_items_json",   "判准金額明細JSON"),
+    ("awarded_in_table",     "金額於附表"),
+    ("claimed_amount",       "請求金額"),
+    ("claimed_currency",     "請求幣別"),
+    ("claimed_source",       "請求金額來源"),
+    ("grant_ratio",          "獲償比例"),
+    ("cost_share_plaintiff", "訴訟費用原告負擔比例"),
+    ("law_primary",          "主要法規"),
+    ("law_n_citations",      "法條引用數"),
+    ("applicable_laws_json", "適用法條（結構化JSON）"),
+    ("presiding_judge",      "審判長／獨任法官"),
+    ("judge_count",          "法官人數"),
+    ("judges_json",          "法官與角色JSON"),
+    ("panel_key",            "合議庭組合"),
+    ("defendant_is_corp",    "被告為法人"),
+    ("plaintiff_has_lawyer", "原告有律師"),
+    ("defendant_has_lawyer", "被告有律師"),
+    ("is_default_judgment",  "一造辯論判決"),
+    ("has_provisional_exec", "准假執行"),
+    ("reasoning_length",     "論理字數"),
+    ("quality_flags",        "資料品質旗標"),
+    ("structuring_version",  "結構化規則版本"),
+]
+
+# 這些欄位必須以「數值」而非文字寫入 Excel，否則樞紐分析、排序、
+# 平均值都無法直接使用——存成文字是資料結構化最常見的功虧一簣。
+NUMERIC_EXPORT_FIELDS = {
+    "awarded_amount", "claimed_amount", "grant_ratio", "cost_share_plaintiff",
+    "awarded_n_items", "law_n_citations", "judge_count", "reasoning_length",
+    "has_counterclaim", "defendant_is_corp", "plaintiff_has_lawyer",
+    "defendant_has_lawyer", "is_default_judgment", "has_provisional_exec",
+    "awarded_in_table",
+}
+
 # 每欄的建議寬度（字元數）
 COL_WIDTHS: Dict[str, int] = {
     "序號": 6, "裁判字號": 26, "裁判書連結": 55, "法院": 22, "裁判日期": 16,
@@ -80,6 +131,18 @@ COL_WIDTHS: Dict[str, int] = {
     "主文": 45, "事實": 55, "事實及理由": 65, "犯罪事實": 55,
     "理由": 65, "結論": 35, "適用法條": 35,
     "法官": 28, "書記官": 16, "搜尋關鍵字": 16, "解析時間": 22, "全文": 65,
+    "案由代碼": 12, "案件層級": 12, "案由（正規化）": 20, "案由大類": 14,
+    "訴訟結果": 16, "本訴結果": 16, "反訴結果": 16, "有無反訴": 10,
+    "上訴審結果": 14, "給付類型": 22,
+    "判准金額": 16, "判准幣別": 10, "判准項目數": 10, "判准金額明細JSON": 40,
+    "金額於附表": 12,
+    "請求金額": 16, "請求幣別": 10, "請求金額來源": 14, "獲償比例": 12,
+    "訴訟費用原告負擔比例": 16,
+    "主要法規": 18, "法條引用數": 10, "適用法條（結構化JSON）": 50,
+    "審判長／獨任法官": 18, "法官人數": 10, "法官與角色JSON": 35, "合議庭組合": 28,
+    "被告為法人": 10, "原告有律師": 10, "被告有律師": 10,
+    "一造辯論判決": 12, "准假執行": 10,
+    "論理字數": 12, "資料品質旗標": 24, "結構化規則版本": 14,
 }
 
 
@@ -163,7 +226,7 @@ def export_to_excel(
         logger.warning("No data to export.")
         return False
 
-    columns = list(BASE_COLUMNS)
+    columns = list(BASE_COLUMNS) + list(STRUCTURED_EXPORT_COLUMNS)
     if include_full_text:
         columns.append(("full_text", "全文"))
 
@@ -172,7 +235,13 @@ def export_to_excel(
     for row in rows:
         entry: dict = {}
         for field, label in columns:
-            val = str(row.get(field, "") or "")
+            raw = row.get(field)
+            if field in NUMERIC_EXPORT_FIELDS:
+                # 數值欄保持數值型別；None 寫成空白（不是字串 "None"），
+                # 這樣 Excel 的平均值/樞紐分析才會正確忽略缺值。
+                entry[label] = raw if isinstance(raw, (int, float)) else None
+                continue
+            val = str(raw if raw is not None else "")
             # Excel 單格上限 32767 字
             if len(val) > 32700:
                 val = val[:32700] + "…(截斷)"
