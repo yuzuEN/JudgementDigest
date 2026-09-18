@@ -1,0 +1,63 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="900" viewBox="0 0 1600 900" font-family="'Microsoft JhengHei','微軟正黑體','PingFang TC','Noto Sans TC','Heiti TC',sans-serif">
+<defs><marker id="ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#8a8880"/></marker></defs>
+<rect width="1600" height="900" fill="#fcfcfb"/>
+<text x="64" y="84" font-size="44" font-weight="700" fill="#0b0b0b">原本同屬「借貸／清償」的四類案件，勝訴率相差 69 個百分點</text>
+<text x="64" y="134" font-size="27" fill="#52514e">拆分前它佔全部對審案件的 38.2%，把幾乎必勝與難勝的案件平均在一起</text>
+<rect x="64" y="172" width="28" height="28" rx="6" fill="#eb6834"/>
+<text x="104" y="194" font-size="26" fill="#52514e">原本混在「借貸／清償」一類</text>
+<rect x="485.09999999999997" y="172" width="28" height="28" rx="6" fill="#2a78d6"/>
+<text x="525.0999999999999" y="194" font-size="26" fill="#52514e">其他類別</text>
+<text x="440" y="264" font-size="29" fill="#0b0b0b" text-anchor="end">信用卡／消費金融</text>
+<rect x="470" y="240" width="775.1" height="32" rx="4" fill="#eb6834"/>
+<text x="1263.0677506775069" y="266" font-size="30" font-weight="600" fill="#0b0b0b">99.4%</text>
+<text x="1375.0677506775069" y="266" font-size="23" fill="#8a8880">1,107 件</text>
+<text x="440" y="311" font-size="29" fill="#0b0b0b" text-anchor="end">金融借貸</text>
+<rect x="470" y="287" width="761.3" height="32" rx="4" fill="#eb6834"/>
+<text x="1249.2908853030965" y="313" font-size="30" font-weight="600" fill="#0b0b0b">97.6%</text>
+<text x="1361.2908853030965" y="313" font-size="23" fill="#8a8880">2,293 件</text>
+<text x="440" y="358" font-size="29" fill="#0b0b0b" text-anchor="end">民間借貸</text>
+<rect x="470" y="334" width="511.0" height="32" rx="4" fill="#eb6834"/>
+<text x="998.9722222222222" y="360" font-size="30" font-weight="600" fill="#0b0b0b">65.5%</text>
+<text x="1110.9722222222222" y="360" font-size="23" fill="#8a8880">432 件</text>
+<text x="440" y="405" font-size="29" fill="#0b0b0b" text-anchor="end">侵權</text>
+<rect x="470" y="381" width="272.5" height="32" rx="4" fill="#2a78d6"/>
+<text x="760.4657534246576" y="407" font-size="30" font-weight="600" fill="#0b0b0b">34.9%</text>
+<text x="872.4657534246576" y="407" font-size="23" fill="#8a8880">1,460 件</text>
+<text x="440" y="452" font-size="29" fill="#0b0b0b" text-anchor="end">契約</text>
+<rect x="470" y="428" width="237.2" height="32" rx="4" fill="#2a78d6"/>
+<text x="725.1621621621622" y="454" font-size="30" font-weight="600" fill="#0b0b0b">30.4%</text>
+<text x="837.1621621621622" y="454" font-size="23" fill="#8a8880">592 件</text>
+<text x="440" y="499" font-size="29" fill="#0b0b0b" text-anchor="end">強制執行救濟</text>
+<rect x="470" y="475" width="235.6" height="32" rx="4" fill="#eb6834"/>
+<text x="723.625" y="501" font-size="30" font-weight="600" fill="#0b0b0b">30.2%</text>
+<text x="835.625" y="501" font-size="23" fill="#8a8880">192 件</text>
+<text x="440" y="546" font-size="29" fill="#0b0b0b" text-anchor="end">物權／不動產</text>
+<rect x="470" y="522" width="226.1" height="32" rx="4" fill="#2a78d6"/>
+<text x="714.0869565217391" y="548" font-size="30" font-weight="600" fill="#0b0b0b">29.0%</text>
+<text x="826.0869565217391" y="548" font-size="23" fill="#8a8880">414 件</text>
+<text x="440" y="593" font-size="29" fill="#0b0b0b" text-anchor="end">勞動</text>
+<rect x="470" y="569" width="215.6" height="32" rx="4" fill="#2a78d6"/>
+<text x="703.5778894472362" y="595" font-size="30" font-weight="600" fill="#0b0b0b">27.6%</text>
+<text x="815.5778894472362" y="595" font-size="23" fill="#8a8880">398 件</text>
+<text x="440" y="640" font-size="29" fill="#0b0b0b" text-anchor="end">其他</text>
+<rect x="470" y="616" width="213.0" height="32" rx="4" fill="#2a78d6"/>
+<text x="701.0474040632055" y="642" font-size="30" font-weight="600" fill="#0b0b0b">27.3%</text>
+<text x="813.0474040632055" y="642" font-size="23" fill="#8a8880">443 件</text>
+<text x="440" y="687" font-size="29" fill="#0b0b0b" text-anchor="end">不當得利</text>
+<rect x="470" y="663" width="170.8" height="32" rx="4" fill="#2a78d6"/>
+<text x="658.8029197080292" y="689" font-size="30" font-weight="600" fill="#0b0b0b">21.9%</text>
+<text x="770.8029197080292" y="689" font-size="23" fill="#8a8880">137 件</text>
+<text x="440" y="734" font-size="29" fill="#0b0b0b" text-anchor="end">確認</text>
+<rect x="470" y="710" width="166.0" height="32" rx="4" fill="#2a78d6"/>
+<text x="653.9574468085107" y="736" font-size="30" font-weight="600" fill="#0b0b0b">21.3%</text>
+<text x="765.9574468085107" y="736" font-size="23" fill="#8a8880">94 件</text>
+<text x="440" y="781" font-size="29" fill="#0b0b0b" text-anchor="end">保險</text>
+<rect x="470" y="757" width="163.3" height="32" rx="4" fill="#2a78d6"/>
+<text x="651.2558139534883" y="783" font-size="30" font-weight="600" fill="#0b0b0b">20.9%</text>
+<text x="763.2558139534883" y="783" font-size="23" fill="#8a8880">43 件</text>
+<text x="440" y="828" font-size="29" fill="#0b0b0b" text-anchor="end">繼承</text>
+<rect x="470" y="804" width="46.3" height="32" rx="4" fill="#2a78d6"/>
+<text x="534.3366336633663" y="830" font-size="30" font-weight="600" fill="#0b0b0b">5.9%</text>
+<text x="646.3366336633663" y="830" font-size="23" fill="#8a8880">202 件</text>
+<text x="64" y="866" font-size="23" fill="#8a8880">原告全部勝訴率；僅計對審案件（給付確認層級），每類至少 40 件</text>
+</svg>

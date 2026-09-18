@@ -1,0 +1,33 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="900" viewBox="0 0 1600 900" font-family="'Microsoft JhengHei','微軟正黑體','PingFang TC','Noto Sans TC','Heiti TC',sans-serif">
+<defs><marker id="ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#8a8880"/></marker></defs>
+<rect width="1600" height="900" fill="#fcfcfb"/>
+<text x="64" y="84" font-size="44" font-weight="700" fill="#0b0b0b">案由拆細後，「顯著偏離」的法官從 11 位降到 1 位</text>
+<text x="64" y="134" font-size="27" fill="#52514e">先前看到的法官差異，大多是案件分派造成的混淆，不是心證差異</text>
+<text x="64" y="192" font-size="23" fill="#8a8880">縱軸＝檢定判定為顯著的法官人數；母體為獨任對審案件 ≥ 30 件的 68 位法官</text>
+<rect x="110" y="276.0" width="300" height="330" rx="8" fill="#eb6834"/>
+<text x="260.0" y="254.0" font-size="58" font-weight="700" fill="#0b0b0b" text-anchor="middle">21</text>
+<text x="260.0" y="654" font-size="29" fill="#0b0b0b" text-anchor="middle">①不調整案件組合</text>
+<text x="260.0" y="690" font-size="29" fill="#0b0b0b" text-anchor="middle">不校正多重比較</text>
+<text x="260.0" y="748" font-size="23" fill="#8a8880" text-anchor="middle">把案件分派差異</text>
+<text x="260.0" y="780" font-size="23" fill="#8a8880" text-anchor="middle">全部算成法官傾向</text>
+<rect x="462" y="527.4285714285714" width="300" height="79" rx="8" fill="#eda100"/>
+<text x="612.0" y="505.42857142857144" font-size="58" font-weight="700" fill="#0b0b0b" text-anchor="middle">5</text>
+<text x="612.0" y="654" font-size="29" fill="#0b0b0b" text-anchor="middle">②不調整案件組合</text>
+<text x="612.0" y="690" font-size="29" fill="#0b0b0b" text-anchor="middle">＋ BH 校正</text>
+<text x="612.0" y="748" font-size="23" fill="#8a8880" text-anchor="middle">校正後只剩</text>
+<text x="612.0" y="780" font-size="23" fill="#8a8880" text-anchor="middle">最極端的幾位</text>
+<rect x="814" y="433.1428571428571" width="300" height="173" rx="8" fill="#eda100"/>
+<text x="964.0" y="411.1428571428571" font-size="58" font-weight="700" fill="#0b0b0b" text-anchor="middle">11</text>
+<text x="964.0" y="654" font-size="29" fill="#0b0b0b" text-anchor="middle">③以 14 類案由調整</text>
+<text x="964.0" y="690" font-size="29" fill="#0b0b0b" text-anchor="middle">＋ BH 校正</text>
+<text x="964.0" y="748" font-size="23" fill="#8a8880" text-anchor="middle">「借貸／清償」佔 38%</text>
+<text x="964.0" y="780" font-size="23" fill="#8a8880" text-anchor="middle">控制力不足</text>
+<rect x="1166" y="582" width="300" height="24" rx="8" fill="#1baf7a"/>
+<text x="1316.0" y="560" font-size="58" font-weight="700" fill="#0b0b0b" text-anchor="middle">1</text>
+<text x="1316.0" y="654" font-size="29" fill="#0b0b0b" text-anchor="middle">④以 17 類案由調整</text>
+<text x="1316.0" y="690" font-size="29" fill="#0b0b0b" text-anchor="middle">＋ BH 校正</text>
+<text x="1316.0" y="748" font-size="23" fill="#8a8880" text-anchor="middle">僅 1 位法官</text>
+<text x="1316.0" y="780" font-size="23" fill="#8a8880" text-anchor="middle">仍顯著偏離</text>
+<line x1="74" y1="606" x2="1530" y2="606" stroke="#8a8880" stroke-width="3"/>
+<text x="64" y="866" font-size="23" fill="#8a8880">②→③ 人數反而上升：調整案件組合會同時揭露被案件難度掩蓋的偏離，並非單調下降</text>
+</svg>
