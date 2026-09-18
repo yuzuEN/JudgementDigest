@@ -22,6 +22,7 @@ README = (ROOT / "README.md").read_text(encoding="utf-8")
 SCRIPTS = [
     "pipeline.py", "crawl_batched.py", "crawl_monthly.py", "crawler.py",
     "html_parser.py", "export_excel.py", "tests/live_check.py",
+    "backfill_structured.py", "judge_analysis/run_analysis.py",
 ]
 
 # 只看 argparse 的參數；`opts.add_argument("--headless=new")` 那些是 Chrome 啟動旗標

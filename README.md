@@ -289,8 +289,15 @@ python crawler.py --recrawl-stubs
 ├── crawl_monthly.py     # 逐月長時間爬取（可中斷接續），完成後匯出成一份 Excel
 ├── crawler.py           # 核心爬蟲（Selenium）
 ├── html_parser.py       # HTML 解析，結構化存入 SQLite
+├── structuring.py       # 民事判決結構化欄位推導規則（純函式，可單元測試）
+├── backfill_structured.py # 對既有資料庫回填結構化欄位（不重新解析 HTML）
 ├── export_excel.py      # 匯出 Excel
 ├── requirements.txt
+│
+├── judge_analysis/      # 法官資料分析（獨立於爬蟲，見其 README）
+│   ├── run_analysis.py
+│   ├── src/             # loader.py（資料攤平）、metrics.py（指標與檢定）
+│   └── output/          # 產出（不入版控）
 │
 ├── tests/               # 離線測試（unittest）＋ 線上煙霧測試
 │   ├── fixtures/        # 測試用的真實裁判書 HTML 樣本
@@ -368,13 +375,56 @@ crawl_batched.py
 | 資料表 | 內容 |
 |--------|------|
 | `crawl_records` | 爬取紀錄（URL、HTML 路徑、是否已解析） |
-| `judgments` | 解析結果（裁判字號、法院、當事人、主文等 20+ 欄位） |
+| `judgments` | 解析結果（原始欄位 30 欄＋結構化欄位 35 欄） |
 
 ### 支援的解析欄位
 
 裁判字號、裁判書連結、法院、裁判日期、案件類型、裁判種類、當事人角色、原告／聲請人、被告／相對人、上訴人、被上訴人（及各方代理人）、主文、事實、事實及理由、犯罪事實、理由、結論、適用法條、法官、書記官、搜尋關鍵字、解析時間
 
 裁判日期一律正規化為西元 ISO（`YYYY-MM-DD`），可直接排序與比較。
+
+### 民事判決結構化欄位
+
+`structuring.py` 在解析當下從既有文字欄位推導出 35 個結構化欄位，涵蓋
+案件分類、訴訟結果（本訴／反訴分離）、判准與請求金額、結構化法條引用、
+法官與角色、當事人與程序特徵。完整欄位字典見
+[judge_analysis/README.md](judge_analysis/README.md)。
+
+三個設計重點：
+
+1. **純函式模組**。`structuring.py` 不碰資料庫、不碰 HTML，同一份輸入永遠
+   得到同一份輸出，因此可完整重現、可單元測試（`tests/test_structuring.py`，
+   83 個測試，其中每個回歸測試都對應一個實際發生過的缺陷）。
+2. **爬取與回填共用同一份規則**。`html_parser.parse_html()` 在解析當下呼叫，
+   `backfill_structured.py` 對既有資料回填，兩條路徑不會產生不一致。
+3. **可稽核**。推導值一律附帶來源標記（`claimed_source`）或品質旗標
+   （`quality_flags`），下游分析知道哪些是直接抽取、哪些是推論、哪些要複查。
+
+```bash
+# 規則改版後回填（會自動備份資料庫）
+python backfill_structured.py --court 臺北 --year 2025
+python backfill_structured.py --dry-run          # 只看分布，不寫入
+python backfill_structured.py --only-missing     # 只刷新規則版本較舊的列
+python backfill_structured.py --no-backup        # 略過資料庫備份（不建議）
+```
+
+### 法官資料分析
+
+回填完成後即可產生法官層級的報表：
+
+```bash
+python judge_analysis/run_analysis.py
+python judge_analysis/run_analysis.py --min-cases 30   # 納入統計檢定的最低案件數
+```
+
+方法論與完整欄位字典見 [judge_analysis/README.md](judge_analysis/README.md)。
+重點是**不能直接比較法官的原始勝訴率**：案件組合不同會把分派差異誤讀成
+心證傾向，因此報表算的是依案由大類調整後的差異，並以 Benjamini–Hochberg
+控制多重比較的偽發現率。
+
+> ⚠ 使用 `grant_ratio`（獲償比例）前務必先看 `claimed_source`。
+> 值為「主文回推」的列，請求金額是用判准金額代入的，比例恆為 100%，
+> 拿去平均是循環論證。程式已強制只在「直接抽取」時計算比例。
 
 ## 注意事項
 
