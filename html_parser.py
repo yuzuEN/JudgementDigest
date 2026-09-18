@@ -34,6 +34,10 @@ from typing import Dict, List, Tuple
 
 from bs4 import BeautifulSoup, Tag, NavigableString
 
+# 結構化欄位推導規則（純函式模組）。爬蟲解析與事後回填共用同一份規則，
+# 確保兩條路徑產生的欄位完全一致、可重現。
+from structuring import STRUCTURED_COLUMNS, derive_structured_fields
+
 # ─── 設定 ────────────────────────────────────────────────────────────────────
 DB_PATH  = "judgments.db"
 HTML_DIR = "html_cache"
@@ -218,6 +222,12 @@ def init_db() -> None:
     """)
     # 對舊版資料庫補齊新增欄位
     existing_cols = {row[1] for row in conn.execute("PRAGMA table_info(judgments)")}
+    # 結構化欄位一律以 ALTER TABLE 增補，新舊資料庫走同一條路徑，
+    # 不必為了新欄位重建資料表。
+    for col, sqltype in STRUCTURED_COLUMNS:
+        if col not in existing_cols:
+            conn.execute(f"ALTER TABLE judgments ADD COLUMN {col} {sqltype}")
+            existing_cols.add(col)
     for col, typedef in (
         ("source_url",        "TEXT DEFAULT ''"),
         ("facts_and_reasons", "TEXT DEFAULT ''"),
@@ -244,9 +254,26 @@ def _t(elem) -> str:
     return _SPACES.sub(" ", raw).strip()
 
 
+# 零寬字元。司法院頁面的標題偶爾夾帶這些不可見字元（實測「主 文」後面接了
+# 六個 U+200B），它們不是空白，_SPACES 清不掉，會讓標題比對整個失效。
+_ZERO_WIDTH_RE = re.compile(r"[​‌‍⁠﻿]")
+
+
 def _normalize_section_title(text: str) -> str:
-    """移除全形與一般空格，取得純標題文字。例：'主　文' → '主文'"""
-    return _SPACES.sub("", text.strip())
+    """移除空白與零寬字元，取得純標題文字。例：'主　文' → '主文'"""
+    return _SPACES.sub("", _ZERO_WIDTH_RE.sub("", text).strip())
+
+
+# 下游真正會取用的段落標題（見 parse_html 的 sections.get(...)）。
+# 用於「標題 div 沒有 notEdit class」時的後備辨識，比對完整字串。
+_SECTION_TITLES = frozenset({
+    "主文",
+    "事實", "犯罪事實",
+    "事實及理由", "事實暨理由", "事實與理由",
+    # 簡易判決的理由段常寫成「理由要領」，不列入的話整段論理都抓不到
+    "理由", "理由要領", "事實及理由要領", "認定犯罪事實所憑之證據及理由",
+    "據上論斷", "結論",
+})
 
 
 def _cap(s: str, n: int = 30000) -> str:
@@ -454,6 +481,15 @@ def _extract_sections(container) -> Tuple[Dict[str, str], str, List[str]]:
             and len(text) <= 20                               # 標題不應太長
             and re.search(r'[主文事實理由結論法條犯罪據上聲明陳述附]', text)
         )
+
+        # 少數裁判書的段落標題是沒有任何 class 的純 <div>（實測 17 筆，
+        # 其中 14 筆落在臺北地院 2025 民事判決）。只靠 notEdit class 判斷的話，
+        # 「主　文」不會被當成標題，其後的內容全部留在 preamble，
+        # verdict 欄位變成空的——而且不會有任何錯誤訊息。
+        # 這裡以「正規化後剛好等於已知段落標題」作為後備判準：比對的是
+        # 完整字串而非包含關係，因此不會把內文誤判成標題。
+        if not is_heading and "he-h1" not in classes:
+            is_heading = _normalize_section_title(text) in _SECTION_TITLES
 
         if is_heading:
             flush()
@@ -891,10 +927,12 @@ def parse_html(
         sections.get("事實及理由", "")
         or sections.get("事實暨理由", "")
         or sections.get("事實與理由", "")
+        or sections.get("事實及理由要領", "")
     )
     facts_val   = sections.get("事實", "")
     reasons_val = (
         sections.get("理由", "")
+        or sections.get("理由要領", "")          # 簡易判決的寫法
         or sections.get("認定犯罪事實所憑之證據及理由", "")
     )
 
@@ -909,7 +947,7 @@ def parse_html(
     else:
         judgment_type = ""
 
-    return {
+    parsed = {
         "crawl_id":           crawl_id,
         "case_number":        meta["case_number"],
         "court":              meta["court"],
@@ -940,38 +978,34 @@ def parse_html(
         "keyword":            keyword,
     }
 
+    # 解析當下就推導結構化欄位，新爬的資料不需要額外的回填步驟。
+    parsed.update(derive_structured_fields(parsed))
+    return parsed
+
 
 # ─── DB 寫入 ──────────────────────────────────────────────────────────────────
+# 基礎欄位（解析器直接產出）。結構化欄位由 STRUCTURED_COLUMNS 動態接在後面，
+# 因此 structuring.py 新增欄位時，這裡不需要同步修改——舊版做法要同時改
+# 四個地方（建表、升級清單、INSERT、匯出），漏改任何一處欄位就會悄悄變空。
+_BASE_INSERT_COLUMNS = [
+    "crawl_id", "case_number", "court", "judgment_date", "case_type", "judgment_type",
+    "source_url", "verdict", "facts", "facts_and_reasons", "criminal_facts", "reasons",
+    "conclusion", "applicable_laws", "judges", "clerk",
+    "plaintiff", "plaintiff_agent", "defendant", "defendant_agent",
+    "appellant", "appellant_agent", "appellee", "appellee_agent",
+    "party_roles", "other_parties", "full_text", "keyword",
+]
+
+
 def save_judgment(data: Dict) -> bool:
     conn = sqlite3.connect(DB_PATH)
     c    = conn.cursor()
     try:
+        cols = _BASE_INSERT_COLUMNS + [col for col, _ in STRUCTURED_COLUMNS]
+        placeholders = ",".join("?" * len(cols))
         c.execute(
-            """INSERT OR REPLACE INTO judgments (
-                   crawl_id, case_number, court, judgment_date, case_type, judgment_type,
-                   source_url,
-                   verdict, facts, facts_and_reasons, criminal_facts, reasons,
-                   conclusion, applicable_laws, judges, clerk,
-                   plaintiff, plaintiff_agent,
-                   defendant, defendant_agent,
-                   appellant, appellant_agent,
-                   appellee,  appellee_agent,
-                   party_roles, other_parties, full_text, keyword
-               ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
-            (
-                data["crawl_id"], data["case_number"], data["court"],
-                data["judgment_date"], data["case_type"], data["judgment_type"],
-                data["source_url"],
-                data["verdict"], data["facts"], data["facts_and_reasons"],
-                data["criminal_facts"], data["reasons"], data["conclusion"],
-                data["applicable_laws"], data["judges"], data["clerk"],
-                data["plaintiff"],       data["plaintiff_agent"],
-                data["defendant"],       data["defendant_agent"],
-                data["appellant"],       data["appellant_agent"],
-                data["appellee"],        data["appellee_agent"],
-                data["party_roles"],
-                data["other_parties"], data["full_text"], data["keyword"],
-            ),
+            f"INSERT OR REPLACE INTO judgments ({','.join(cols)}) VALUES ({placeholders})",
+            tuple(data.get(col) for col in cols),
         )
         c.execute("UPDATE crawl_records SET parsed=1 WHERE id=?", (data["crawl_id"],))
         conn.commit()
