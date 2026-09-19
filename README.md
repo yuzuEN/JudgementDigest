@@ -123,7 +123,7 @@ python crawl_monthly.py               # 開始跑；中斷後重新執行同一�
 | `--no-export` | 只爬取，不匯出 |
 | `--export-all` | 匯出擴大為該年 1~12 月（**爬取範圍不變，仍由 `--months` 決定**） |
 | `-o <檔名>` / `--full-text` | 輸出檔名、是否含全文欄位 |
-| `--allow-sleep` | 不阻止 Windows 睡眠（預設執行期間保持喚醒） |
+| `--allow-sleep` | 不阻止系統睡眠（預設執行期間保持喚醒；Windows／macOS／Linux 皆支援） |
 | `--no-headless` | 顯示瀏覽器視窗 |
 
 **接續機制**：每個月跑完就寫入狀態檔。重新執行時，狀態為 `done` 的月份直接跳過；
@@ -139,8 +139,18 @@ python crawl_monthly.py               # 開始跑；中斷後重新執行同一�
 只有 3~12 月有資料時是 `..._2025_03-12_....xlsx` 而非「全年」，不連續的月份以 `+`
 串接（`01+03-04+12`）。
 
-**保持喚醒**：Windows 上執行期間會要求系統不要閒置睡眠，程式結束即自動恢復，不修改電源計畫。
-闔上筆電蓋子仍可能依系統設定而睡眠。
+**保持喚醒**：執行期間會要求系統不要閒置睡眠，程式結束（含被中斷）即自動恢復，
+不修改任何持久設定。三個平台各用各的機制：
+
+| 系統 | 機制 |
+|---|---|
+| Windows | `SetThreadExecutionState(ES_CONTINUOUS \| ES_SYSTEM_REQUIRED)` |
+| macOS | `caffeinate -i -w <pid>` 子行程（主程序被強制結束也會自行收掉） |
+| Linux | `systemd-inhibit --what=idle:sleep --mode=block` |
+
+都只擋「系統睡眠」、不擋螢幕關閉。找不到對應機制時（例如沒有 systemd）會安靜降級，
+不影響爬取，但**開頭那行「已要求系統在執行期間保持喚醒」就不會出現**——沒看到它就代表
+這台機器不會被擋睡，請自行調整電源設定。闔上筆電蓋子仍可能依系統設定而睡眠，三個平台皆然。
 
 ```bash
 python crawl_monthly.py --months 8-12                 # 只跑 8~12 月

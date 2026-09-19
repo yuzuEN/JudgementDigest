@@ -27,6 +27,7 @@ import json
 import os
 import re
 import sqlite3
+import subprocess
 import sys
 import time
 from contextlib import contextmanager
@@ -42,6 +43,9 @@ from crawler import Pacer, _COURT_CODES, _JUDGMENT_TYPES, _court_code
 _MINUTES_PER_MONTH_ESTIMATE = 25
 # 連續幾個月出現例外（非清單頁錯誤，例如斷網、瀏覽器起不來）就停止，避免一路空轉
 _MAX_CONSECUTIVE_ERRORS = 2
+# 外部睡眠抑制指令啟動後的觀察時間：指令存在但立刻失敗（例如沒有 systemd）時，
+# 要在這段時間內發現，否則會誤報「已保持喚醒」讓使用者放心去睡。測試會設為 0。
+_INHIBITOR_PROBE_SEC = 0.2
 
 
 # ─── 月份處理 ─────────────────────────────────────────────────────────────────
@@ -99,13 +103,43 @@ def save_state(path: str, state: Dict) -> None:
 
 
 # ─── 防止系統睡眠（僅 Windows）──────────────────────────────────────────────
+def _spawn_inhibitor(cmd: List[str]) -> Optional[subprocess.Popen]:
+    """
+    啟動外部的睡眠抑制指令。指令不存在、或存在但立刻失敗，都回傳 None。
+
+    後者是重點：`systemd-inhibit` 在沒有 systemd 的環境下裝得起來卻跑不動，
+    只看 Popen 有沒有拋例外會誤判成「已保持喚醒」——使用者因此放心去睡，
+    醒來發現機器睡著、爬蟲斷在第三個月。
+    """
+    try:
+        proc = subprocess.Popen(
+            cmd, stdin=subprocess.DEVNULL,
+            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    except Exception:
+        return None
+    if _INHIBITOR_PROBE_SEC:
+        time.sleep(_INHIBITOR_PROBE_SEC)
+    if proc.poll() is not None:
+        return None
+    return proc
+
+
 @contextmanager
 def keep_awake(enabled: bool = True):
     """
-    執行期間要求 Windows 不要進入閒置睡眠；程序結束（含被中斷）即自動恢復原本設定。
-    不會修改電源計畫。注意：闔上筆電蓋子仍可能依「蓋上蓋子時」的設定而睡眠。
+    執行期間要求作業系統不要進入閒置睡眠；程序結束（含被中斷）即自動恢復。
+
+      Windows  SetThreadExecutionState(ES_CONTINUOUS | ES_SYSTEM_REQUIRED)
+      macOS    caffeinate -i -w <本程序 pid>（我們被 kill -9 也會自己收掉）
+      Linux    systemd-inhibit --what=idle:sleep --mode=block
+
+    三者都只擋「系統睡眠」、不擋螢幕關閉 —— 跑一整晚沒必要讓螢幕亮著。
+    都不修改任何持久設定，找不到對應機制時安靜降級為 no-op（回傳 False）。
+    注意：闔上筆電蓋子仍可能依系統設定而睡眠，三個平台皆然。
     """
     active = False
+    proc: Optional[subprocess.Popen] = None
+
     if enabled and sys.platform == "win32":
         try:
             import ctypes
@@ -114,12 +148,32 @@ def keep_awake(enabled: bool = True):
                 ES_CONTINUOUS | ES_SYSTEM_REQUIRED))
         except Exception:
             active = False
+    elif enabled and sys.platform == "darwin":
+        # -i 只抑制閒置睡眠；-w 讓 caffeinate 跟著本程序的生命週期走
+        proc = _spawn_inhibitor(["caffeinate", "-i", "-w", str(os.getpid())])
+        active = proc is not None
+    elif enabled and sys.platform.startswith("linux"):
+        # systemd-inhibit 的抑制效力只存在於它所執行的指令期間，
+        # 所以讓它跑一個無限期的 sleep，結束時再由我們收掉。
+        proc = _spawn_inhibitor([
+            "systemd-inhibit", "--what=idle:sleep", "--mode=block",
+            "--who=crawl_monthly.py", "--why=judgment crawl in progress",
+            "sleep", "infinity",
+        ])
+        active = proc is not None
+
     try:
         yield active
     finally:
-        if active:
+        if sys.platform == "win32" and active:
             import ctypes
             ctypes.windll.kernel32.SetThreadExecutionState(0x80000000)
+        if proc is not None:
+            try:
+                proc.terminate()
+                proc.wait(timeout=5)
+            except Exception:
+                pass
 
 
 # ─── 逐月爬取 ─────────────────────────────────────────────────────────────────
@@ -434,7 +488,7 @@ def main(argv: Optional[List[str]] = None) -> int:
     if not args.export_only:
         with keep_awake(not args.allow_sleep) as awake:
             if awake:
-                print("  已要求 Windows 在執行期間保持喚醒（闔上筆電蓋子仍可能睡眠）")
+                print("  已要求系統在執行期間保持喚醒（闔上筆電蓋子仍可能睡眠）")
             try:
                 state = crawl_months(args.year, months, args.court, case_types,
                                      args.judgment_type, args.delay, state_path,

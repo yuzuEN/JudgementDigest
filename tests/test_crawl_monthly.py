@@ -298,13 +298,97 @@ class TestDryRun(_Base):
                 crawl_monthly.main(["--dry-run", "--court", "不存在的法院"])
 
 
+class _FakeProc:
+    """假的抑制子行程：活著（poll() 為 None），並記錄是否被收掉。"""
+
+    def __init__(self):
+        self.terminated = False
+        self.waited = False
+
+    def poll(self):
+        return None
+
+    def terminate(self):
+        self.terminated = True
+
+    def wait(self, timeout=None):
+        self.waited = True
+        return 0
+
+
 class TestKeepAwake(unittest.TestCase):
+    """
+    長時間爬取途中機器睡著，任務就斷了。這一組確保：三個平台各自用對的機制、
+    找不到機制時安靜降級（而不是拋錯或謊稱成功）、離開時一定把子行程收掉。
+    """
+
+    def setUp(self):
+        # 觀察時間在測試中沒有意義，設為 0 以免每個案例多等 0.2 秒
+        self._probe = crawl_monthly._INHIBITOR_PROBE_SEC
+        crawl_monthly._INHIBITOR_PROBE_SEC = 0
+
+    def tearDown(self):
+        crawl_monthly._INHIBITOR_PROBE_SEC = self._probe
+
     def test_context_manager_is_safe(self):
         # 非 Windows 為 no-op；Windows 上會設定並在結束時還原，兩者都不應拋錯
         with crawl_monthly.keep_awake(True):
             pass
         with crawl_monthly.keep_awake(False) as active:
             self.assertFalse(active)
+
+    def _run_on(self, platform, popen):
+        with unittest.mock.patch.object(crawl_monthly.sys, "platform", platform), \
+             unittest.mock.patch.object(crawl_monthly.subprocess, "Popen", popen):
+            with crawl_monthly.keep_awake(True) as active:
+                pass
+        return active
+
+    def test_macos_uses_caffeinate_bound_to_our_pid(self):
+        proc, seen = _FakeProc(), []
+        active = self._run_on("darwin", lambda cmd, **kw: (seen.append(cmd), proc)[1])
+        self.assertTrue(active)
+        self.assertEqual(seen[0][:3], ["caffeinate", "-i", "-w"])
+        self.assertEqual(seen[0][3], str(os.getpid()))
+        self.assertTrue(proc.terminated, "離開時必須收掉 caffeinate")
+
+    def test_linux_uses_systemd_inhibit_on_idle_and_sleep(self):
+        proc, seen = _FakeProc(), []
+        active = self._run_on("linux", lambda cmd, **kw: (seen.append(cmd), proc)[1])
+        self.assertTrue(active)
+        self.assertEqual(seen[0][0], "systemd-inhibit")
+        self.assertIn("--what=idle:sleep", seen[0])
+        # 抑制效力只存在於它執行的指令期間，所以必須帶一個長命的指令
+        self.assertEqual(seen[0][-2:], ["sleep", "infinity"])
+        self.assertTrue(proc.terminated)
+
+    def test_missing_command_degrades_to_noop(self):
+        def boom(cmd, **kw):
+            raise FileNotFoundError(cmd[0])
+        self.assertFalse(self._run_on("darwin", boom))
+
+    def test_command_that_dies_immediately_is_not_reported_as_active(self):
+        """REGRESSION：systemd-inhibit 在沒有 systemd 的環境會裝得起來卻跑不動。"""
+        class _DeadProc(_FakeProc):
+            def poll(self):
+                return 1
+        self.assertFalse(self._run_on("linux", lambda cmd, **kw: _DeadProc()))
+
+    def test_allow_sleep_spawns_nothing(self):
+        def fail(cmd, **kw):
+            raise AssertionError("--allow-sleep 時不應啟動任何抑制指令")
+        with unittest.mock.patch.object(crawl_monthly.sys, "platform", "darwin"), \
+             unittest.mock.patch.object(crawl_monthly.subprocess, "Popen", fail):
+            with crawl_monthly.keep_awake(False) as active:
+                self.assertFalse(active)
+
+    def test_unknown_platform_is_noop(self):
+        def fail(cmd, **kw):
+            raise AssertionError("未知平台不應啟動任何指令")
+        with unittest.mock.patch.object(crawl_monthly.sys, "platform", "freebsd13"), \
+             unittest.mock.patch.object(crawl_monthly.subprocess, "Popen", fail):
+            with crawl_monthly.keep_awake(True) as active:
+                self.assertFalse(active)
 
 
 if __name__ == "__main__":
