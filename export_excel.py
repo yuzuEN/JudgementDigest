@@ -13,6 +13,7 @@
 
 import sys
 import io
+import json
 import sqlite3
 import argparse
 import logging
@@ -64,7 +65,6 @@ BASE_COLUMNS: List[tuple] = [
     ("criminal_facts",    "犯罪事實"),
     ("reasons",           "理由"),
     ("conclusion",        "結論"),
-    ("applicable_laws",   "適用法條"),
     ("judges",            "法官"),
     ("clerk",             "書記官"),
     ("keyword",           "搜尋關鍵字"),
@@ -97,6 +97,7 @@ STRUCTURED_EXPORT_COLUMNS: List[tuple] = [
     ("cost_share_plaintiff", "訴訟費用原告負擔比例"),
     ("law_primary",          "主要法規"),
     ("law_n_citations",      "法條引用數"),
+    ("applicable_laws_text", "適用法條"),
     ("applicable_laws_json", "適用法條（結構化JSON）"),
     ("presiding_judge",      "審判長／獨任法官"),
     ("judge_count",          "法官人數"),
@@ -111,6 +112,33 @@ STRUCTURED_EXPORT_COLUMNS: List[tuple] = [
     ("quality_flags",        "資料品質旗標"),
     ("structuring_version",  "結構化規則版本"),
 ]
+
+# ─── 衍生欄位 ────────────────────────────────────────────────────────────────
+# DB 裡的 `applicable_laws` 是早期以正則從「據上論斷」抽的結果，實測 85.7% 被
+# 截斷（`_LAW_CITE_RE` 的字元類不含「項」「款」與中文數字，所以「第436條之1第3項」
+# 會停在「第3」）。structuring.py 的 `applicable_laws_json` 覆蓋率 99.8%，且
+# 「原始欄有值但 JSON 為空」一筆都沒有 —— 原始欄沒有獨佔資訊，故不再匯出。
+#
+# 易讀欄直接串接 JSON 每筆現成的 `key`（例：「民法§767第1項前段」），
+# 不另立一套抽取規則：人看易讀欄、程式讀 JSON 欄，兩者永遠一致不會漂移。
+def _applicable_laws_text(row: Dict) -> str:
+    raw = row.get("applicable_laws_json")
+    if not raw:
+        return ""
+    try:
+        items = json.loads(raw)
+    except (TypeError, ValueError):
+        return ""
+    if not isinstance(items, list):
+        return ""
+    keys = (it.get("key", "") for it in items if isinstance(it, dict))
+    return "；".join(dict.fromkeys(k for k in keys if k))
+
+
+# 欄位名 → 取值函式。值不存在於 DB，於匯出時即時計算。
+DERIVED_EXPORT_FIELDS = {
+    "applicable_laws_text": _applicable_laws_text,
+}
 
 # 這些欄位必須以「數值」而非文字寫入 Excel，否則樞紐分析、排序、
 # 平均值都無法直接使用——存成文字是資料結構化最常見的功虧一簣。
@@ -129,7 +157,7 @@ COL_WIDTHS: Dict[str, int] = {
     "原告／聲請人": 22, "原告代理人": 22, "被告／相對人": 22, "被告代理人": 22,
     "上訴人": 22, "上訴人代理人": 22, "被上訴人": 22, "被上訴人代理人": 22,
     "主文": 45, "事實": 55, "事實及理由": 65, "犯罪事實": 55,
-    "理由": 65, "結論": 35, "適用法條": 35,
+    "理由": 65, "結論": 35, "適用法條": 50,
     "法官": 28, "書記官": 16, "搜尋關鍵字": 16, "解析時間": 22, "全文": 65,
     "案由代碼": 12, "案件層級": 12, "案由（正規化）": 20, "案由大類": 14,
     "訴訟結果": 16, "本訴結果": 16, "反訴結果": 16, "有無反訴": 10,
@@ -235,7 +263,8 @@ def export_to_excel(
     for row in rows:
         entry: dict = {}
         for field, label in columns:
-            raw = row.get(field)
+            derive = DERIVED_EXPORT_FIELDS.get(field)
+            raw = derive(row) if derive else row.get(field)
             if field in NUMERIC_EXPORT_FIELDS:
                 # 數值欄保持數值型別；None 寫成空白（不是字串 "None"），
                 # 這樣 Excel 的平均值/樞紐分析才會正確忽略缺值。
