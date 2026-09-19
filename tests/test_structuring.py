@@ -91,6 +91,20 @@ class TestCaseKind(unittest.TestCase):
         # 「簡上附民移簡」是附帶民事訴訟移送簡易庭後的第一審，不是上訴審
         self.assertEqual(S.case_kind_category("簡上附民移簡"), "給付確認")
 
+    def test_retrial_suffix_inherits_parent_kind(self):
+        # 發回更審不改變案件性質。漏掉正規化時「除更一」會從「非對審」
+        # 掉進「給付確認」，被算進勝訴率分母（實測全庫 6 筆錯置）。
+        self.assertEqual(S.case_kind_category("除更一"), "非對審")
+        self.assertEqual(S.case_kind_category("簡上更一"), "上訴抗告")
+        self.assertEqual(S.case_kind_category("婚更一"), "家事形成")
+        self.assertEqual(S.case_kind_category("再更一"), "上訴抗告")
+
+    def test_retrial_suffix_keeps_ordinary_kinds_unchanged(self):
+        # 正規化不能反過來把本來就正確的字別搬走
+        self.assertEqual(S.case_kind_category("訴更一"), "給付確認")
+        self.assertEqual(S.case_kind_category("重訴更二"), "給付確認")
+        self.assertEqual(S.case_kind_category("勞訴更一"), "給付確認")
+
 
 # ═══════════════════════════════════════════════════════════════════════════
 class TestOutcome(unittest.TestCase):
@@ -216,6 +230,25 @@ class TestAppealOutcome(unittest.TestCase):
             S.classify_appeal_outcome(
                 "原判決關於命上訴人給付部分廢棄。上訴人其餘上訴駁回。"), "一部廢棄")
 
+    def test_partially_reversed_with_long_enumeration(self):
+        # 主文會逐項列出被廢棄的範圍（金額、利息起算日、假執行、訴訟費用），
+        # 「原判決」到「廢棄」實測可隔 168 字。舊的 .{0,40} 視窗讓 549 筆
+        # 上訴抗告中的 51 筆被誤判為「上訴駁回」，「一部廢棄」少算 54%。
+        self.assertEqual(
+            S.classify_appeal_outcome(
+                "原判決命上訴人、視同上訴人連帶給付逾新臺幣壹拾陸萬捌仟貳佰零參元"
+                "及自民國一百一十三年十二月三十一日起至清償日止，按週年利率"
+                "百分之五計算之利息部分，及該部分假執行宣告，暨訴訟費用之裁判均廢棄。"
+                "上開廢棄部分，被上訴人在第一審之訴駁回。其餘上訴駁回。"), "一部廢棄")
+
+    def test_reverse_detection_does_not_cross_sentences(self):
+        # 放寬視窗不能放寬到跨句：上一句的「原判決」不該和下一句的「廢棄」配對，
+        # 否則單純維持原判的案件會被誤標成一部廢棄。
+        self.assertEqual(
+            S.classify_appeal_outcome(
+                "上訴駁回。原判決所命給付部分，上訴人應於確定後履行。"
+                "假執行之聲請廢棄。"), "上訴駁回")
+
 
 # ═══════════════════════════════════════════════════════════════════════════
 class TestAmounts(unittest.TestCase):
@@ -265,6 +298,61 @@ class TestAmounts(unittest.TestCase):
         self.assertEqual(S.extract_awarded_amounts(v)["awarded_total"], 6391)
 
 
+class TestJointReleaseClause(unittest.TestCase):
+    """
+    不真正連帶：主文分列各判項、再以一句話說明重複給付免責。
+    兩筆金額其實是同一筆債務，加總會憑空多一倍。
+    """
+
+    VERDICT = (
+        "被告娜里諾有限公司應給付原告新臺幣肆拾肆萬零捌佰玖拾柒元。"
+        "被告曾得華應給付原告新臺幣肆拾肆萬零捌佰玖拾柒元。"
+        "前二項給付，如任一被告為給付，其餘被告於給付範圍內，免除給付責任。"
+    )
+
+    def test_total_is_withheld_not_summed(self):
+        r = S.extract_awarded_amounts(self.VERDICT)
+        self.assertIsNone(r["awarded_total"])       # 不是 881794
+        self.assertEqual(r["awarded_joint_release"], 1)
+
+    def test_items_are_still_recorded(self):
+        # 明細是事實記錄，不因總額作廢而消失——下游要能自行判斷
+        r = S.extract_awarded_amounts(self.VERDICT)
+        self.assertEqual([i["amount"] for i in r["awarded_items"]], [440897, 440897])
+        self.assertEqual(r["awarded_n_items"], 2)
+
+    def test_flagged_as_release_not_extraction_failure(self):
+        row = {"verdict": self.VERDICT,
+               "case_number": "臺灣臺北地方法院 111 年度訴字第 4265 號民事判決"}
+        flags = S.derive_structured_fields(row)["quality_flags"]
+        self.assertIn("重複給付免責", flags)
+        self.assertNotIn("金額抽取失敗", flags)
+
+    def test_true_joint_liability_is_unaffected(self):
+        # 真正連帶（民法 §272）只有一個給付動詞、一筆金額，總額照算
+        r = S.extract_awarded_amounts("被告甲、乙應連帶給付原告新臺幣壹拾萬元。")
+        self.assertEqual(r["awarded_total"], 100000)
+        self.assertEqual(r["awarded_joint_release"], 0)
+
+    def test_single_item_keeps_its_total(self):
+        # 只抽到一筆時沒有東西可加，作廢反而丟掉好資料
+        r = S.extract_awarded_amounts(
+            "被告甲應給付原告新臺幣壹拾萬元。"
+            "被告乙於前項給付範圍內負給付責任，如任一被告為給付，"
+            "其餘被告於給付範圍內免除給付責任。")
+        self.assertEqual(r["awarded_total"], 100000)
+        self.assertEqual(r["awarded_joint_release"], 0)
+
+    def test_multi_plaintiff_without_release_still_sums(self):
+        # 多原告各自判項沒有免責條款，總額仍應加總（海商字第 2 號的情形）
+        r = S.extract_awarded_amounts(
+            "被告應給付原告甲新臺幣伍仟伍佰捌拾貳元。"
+            "被告應給付原告乙新臺幣壹仟柒佰肆拾肆元。")
+        self.assertEqual(r["awarded_total"], 7326)
+        self.assertEqual(r["awarded_joint_release"], 0)
+
+
+# ═══════════════════════════════════════════════════════════════════════════
 class TestReliefType(unittest.TestCase):
     def test_money(self):
         self.assertIn("金錢給付", S.extract_relief_type("被告應給付原告新臺幣100萬元。"))

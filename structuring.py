@@ -146,10 +146,19 @@ def extract_case_kind(case_number: str) -> str:
     return m.group(1).strip() if m else ""
 
 
+# 發回更審的字別是在母字別後綴「更一」「更二」…（除更一、簡上更一、婚更一）。
+# 更審不改變案件的性質，分類必須沿用母字別，否則「除更一」會從「非對審」
+# 掉進「給付確認」，被算進勝訴率分母。
+_RETRIAL_SUFFIX_RE = re.compile(r"更[一二三四五六七八九十百]+$")
+
+
 def case_kind_category(kind: str) -> str:
     """字別 → 案件層級分類。未知字別以字尾規則推定，避免新字別靜默漏失。"""
     if not kind:
         return "未知"
+    stripped = _RETRIAL_SUFFIX_RE.sub("", kind)
+    if stripped and stripped != kind:
+        return case_kind_category(stripped)
     if kind in _NON_ADVERSARIAL:
         return "非對審"
     if kind in _APPEAL_KINDS:
@@ -428,7 +437,12 @@ def classify_outcome(verdict: str, kind_category: str = "給付確認") -> Dict[
 
 # ── 上訴審結果（維持 / 廢棄）─────────────────────────────────────────────
 _APPEAL_DISMISS_RE = re.compile(r"上訴(?:及.{0,12})?駁回|抗告駁回")
-_APPEAL_REVERSE_RE = re.compile(r"(?:原判決|原裁定).{0,40}?(?:廢棄|撤銷)")
+# 「原判決…廢棄」中間會逐項列出被廢棄的範圍（金額、利息起算日、假執行宣告、
+# 訴訟費用裁判），實測距離可達 168 字，原本的 .{0,40} 視窗會整批漏掉：
+# 549 筆上訴抗告中有 51 筆（9.3%）因此被判成「上訴駁回」而非「一部廢棄」，
+# 讓「一部廢棄」少算 54%。改以「同一句內」為界（不跨 。），既涵蓋長列舉，
+# 又不會把上一句的「原判決」和下一句的「廢棄」湊成一對。
+_APPEAL_REVERSE_RE = re.compile(r"(?:原判決|原裁定)[^。]{0,300}?(?:廢棄|撤銷)")
 
 
 def classify_appeal_outcome(verdict: str) -> str:
@@ -578,6 +592,23 @@ def _iter_amounts_in_clause(clause: str, default_currency: str = "TWD") -> List[
     return out
 
 
+# 不真正連帶的「重複給付免責」條款。
+#
+# 數人基於**不同法律原因**對同一債權人負同一給付（例：保險人依保險契約、
+# 加害人依侵權行為）時，法律沒有「連帶」的明文可援用，主文因此不能寫「連帶」，
+# 只能分列各項、再用一句話講明重複給付的效果：
+#     「前二項給付，如任一被告為給付，其餘被告於給付範圍內，免除給付責任。」
+# 兩個判項各有金額，但原告只能拿一次——把它們加起來會憑空多一倍
+# （實測 111 年度訴字第 4265 號：440,897 × 2 被算成 881,794）。
+#
+# 真正連帶（民法 §272）不受影響：主文寫成「被告甲、乙應連帶給付…10 萬元」，
+# 只有一個給付動詞、一筆金額，本來就只會抽到一次。
+_JOINT_RELEASE_RE = re.compile(
+    r"(?:任一|其中一|其中任一|任何一|之一)(?:人|造|被告|債務人)?[^。；]{0,40}?(?:已)?為給付"
+    r"[^。；]{0,60}?(?:他|其他|其餘|另)[^。；]{0,25}?(?:同免|免除|免)[^。；]{0,12}?給付"
+)
+
+
 def extract_awarded_amounts(verdict: str) -> Dict:
     """
     從主文抽出判准金額。
@@ -597,6 +628,7 @@ def extract_awarded_amounts(verdict: str) -> Dict:
         "awarded_currency": "",
         "awarded_n_items": 0,
         "awarded_in_table": 0,
+        "awarded_joint_release": 0,
     }
     if not verdict:
         return res
@@ -623,8 +655,16 @@ def extract_awarded_amounts(verdict: str) -> Dict:
     res["awarded_n_items"] = len(items)
     currencies = dict.fromkeys(i["currency"] for i in items)
     res["awarded_currency"] = "/".join(currencies)
-    # 只有單一幣別才合計；混幣不做匯率換算，避免捏造數字
-    if len(currencies) == 1:
+
+    # 重複給付免責條款只有在抽到多筆金額時才造成重複計算：單筆時總額就是那一筆，
+    # 沒有東西可加，作廢反而會丟掉好資料（實測 31 筆命中中有 5 筆是單筆）。
+    if len(items) > 1 and _JOINT_RELEASE_RE.search(re.sub(r"\s+", "", verdict)):
+        res["awarded_joint_release"] = 1
+
+    # 只有單一幣別才合計；混幣不做匯率換算，避免捏造數字。
+    # 重複給付免責同理：實際總額取決於免責範圍（實測 26 筆中有 14 筆各判項
+    # 金額不同，屬部分重疊），去重或取最大值都是猜測——留空並以旗標說明。
+    if len(currencies) == 1 and not res["awarded_joint_release"]:
         res["awarded_total"] = sum(i["amount"] for i in items)
     return res
 
@@ -1285,7 +1325,10 @@ def derive_structured_fields(row: Dict) -> Dict:
 
     # ── 金額缺漏的原因標記（區分「真的沒有」與「抽不到」）──
     if oc["outcome"] in (WIN, PARTIAL) and not aw["awarded_total"]:
-        if re.search(r"按(?:月|年|日|季)[^。；]{0,20}給付", verdict or ""):
+        if aw["awarded_joint_release"]:
+            # 總額是「刻意不算」而非「抽不到」，理由由 重複給付免責 旗標說明。
+            pass
+        elif re.search(r"按(?:月|年|日|季)[^。；]{0,20}給付", verdict or ""):
             # 定期金給付（按月給付租金、薪資）沒有「總額」可言，
             # 總額取決於未定的終期。這不是抽取失敗，是本質上不存在的欄位。
             flags.append("定期給付")
@@ -1299,6 +1342,8 @@ def derive_structured_fields(row: Dict) -> Dict:
             flags.append("金額抽取失敗")
     if aw["awarded_currency"] and "/" in aw["awarded_currency"]:
         flags.append("混合幣別未合計")
+    if aw["awarded_joint_release"]:
+        flags.append("重複給付免責")
 
     # ── 法條（從本文抽取，頁尾欄位作為補充來源）──
     # 必須包含 facts。部分判決（尤其銀行請求清償借款的一造辯論判決）只有
