@@ -272,6 +272,30 @@ def select_rows(
         conn.close()
 
 
+def _span_label(covered: List[int]) -> str:
+    """
+    檔名用的月份標記，依「實際有資料」的月份而非「要求匯出」的月份。
+
+    `--export-all` 要求 1~12 月，但若 1、2 月從未爬過，檔名叫「全年」會誤導——
+    三個月後再打開這個檔，沒有人會記得它其實只有 3~12 月。
+    連續的月份合併為區間，不連續的以 + 串接：[1, 3, 4, 12] → "01+03-04+12"。
+    """
+    if not covered:
+        return "無資料"
+    if covered == list(range(1, 13)):
+        return "全年"
+    groups: List[Tuple[int, int]] = []
+    start = prev = covered[0]
+    for m in covered[1:]:
+        if m == prev + 1:
+            prev = m
+            continue
+        groups.append((start, prev))
+        start = prev = m
+    groups.append((start, prev))
+    return "+".join(f"{a:02d}" if a == b else f"{a:02d}-{b:02d}" for a, b in groups)
+
+
 def export_months(
     year:          int,
     months:        List[int],
@@ -305,9 +329,9 @@ def export_months(
 
     if not output:
         safe = re.sub(r'[\\/*?:"<>|\s]', "_", label)
-        span = "全年" if months == list(range(1, 13)) else (
-            f"{months[0]:02d}-{months[-1]:02d}" if len(months) > 1 else f"{months[0]:02d}")
-        output = f"judgments_{safe}_{year}_{span}_{datetime.now():%Y%m%d_%H%M%S}.xlsx"
+        covered = [m for m in months if per_month[month_key(year, m)]]
+        output = (f"judgments_{safe}_{year}_{_span_label(covered)}"
+                  f"_{datetime.now():%Y%m%d_%H%M%S}.xlsx")
 
     ok = export_excel.export_to_excel(rows, output, include_full_text=full_text)
     if not ok:

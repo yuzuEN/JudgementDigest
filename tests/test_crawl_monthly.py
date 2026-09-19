@@ -24,7 +24,8 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 import crawl_monthly  # noqa: E402
 import html_parser  # noqa: E402
 from crawl_monthly import (  # noqa: E402
-    crawl_months, load_state, month_bounds, parse_months, select_rows,
+    _span_label, crawl_months, export_months, load_state, month_bounds,
+    parse_months, select_rows,
 )
 
 LABEL = "臺灣臺北地方法院-民事-判決"
@@ -231,6 +232,54 @@ class TestSelectRows(unittest.TestCase):
 
     def test_court_code_is_accepted(self):
         self.assertEqual(len(self._select(list(range(3, 13)), court="TPD")), 3)
+
+    def test_filename_reflects_months_with_data_not_months_requested(self):
+        """
+        REGRESSION：`--export-all` 要求 1~12 月時，檔名原本一律寫「全年」，
+        即使其中好幾個月從來沒爬過。檔名要說實話，否則三個月後沒人分得出來。
+        本組資料只有 1、3、4、12 月有判決。
+        """
+        import export_excel
+        orig, cwd = export_excel.DB_PATH, os.getcwd()
+        export_excel.DB_PATH = self.db
+        os.chdir(self.tmp.name)                 # 檔名未指定時會寫進 CWD
+        try:
+            with redirect_stdout(io.StringIO()):
+                out = export_months(2025, list(range(1, 13)), COURT, ("民事",),
+                                    "判決", LABEL)
+        finally:
+            os.chdir(cwd)
+            export_excel.DB_PATH = orig
+
+        self.assertIsNotNone(out, "應該有資料可匯出")
+        self.assertIn("_2025_01+03-04+12_", out)
+        self.assertNotIn("全年", out)
+
+
+class TestSpanLabel(unittest.TestCase):
+    """檔名的月份標記。"""
+
+    def test_full_year(self):
+        self.assertEqual(_span_label(list(range(1, 13))), "全年")
+
+    def test_contiguous_run(self):
+        self.assertEqual(_span_label(list(range(3, 13))), "03-12")
+
+    def test_single_month(self):
+        self.assertEqual(_span_label([5]), "05")
+
+    def test_gaps_are_spelled_out(self):
+        self.assertEqual(_span_label([1, 3, 4, 12]), "01+03-04+12")
+        self.assertEqual(_span_label([1, 2, 5, 8, 9, 10]), "01-02+05+08-10")
+
+    def test_empty(self):
+        self.assertEqual(_span_label([]), "無資料")
+
+    def test_is_filename_safe(self):
+        # Windows 禁用字元一個都不能出現，否則檔案開不起來
+        for covered in ([1, 3, 4, 12], list(range(1, 13)), [7]):
+            self.assertFalse(set(_span_label(covered)) & set('\\/*?:"<>|'),
+                             msg=covered)
 
 
 class TestDryRun(_Base):
