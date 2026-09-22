@@ -51,6 +51,9 @@ logger = logging.getLogger(__name__)
 
 # 全形空格 U+3000 + 一般空格
 _SPACES = re.compile(r"[　  \t]+")
+# 零寬字元。司法院頁面的標題偶爾夾帶這些不可見字元（PR #3 實測「主　文」
+# 後面接了六個 U+200B），它們不是空白，_SPACES 清不掉，會讓標題比對整個失效。
+_ZERO_WIDTH_RE = re.compile("[​‌‍⁠﻿]")
 
 # 從「裁判字號」全文解析法院名稱
 _COURT_RE = re.compile(
@@ -245,8 +248,8 @@ def _t(elem) -> str:
 
 
 def _normalize_section_title(text: str) -> str:
-    """移除全形與一般空格，取得純標題文字。例：'主　文' → '主文'"""
-    return _SPACES.sub("", text.strip())
+    """移除空白與零寬字元，取得純標題文字。例：'主　文' → '主文'"""
+    return _SPACES.sub("", _ZERO_WIDTH_RE.sub("", text).strip())
 
 
 def _cap(s: str, n: int = 30000) -> str:
@@ -400,9 +403,17 @@ def _extract_sections_text_pre(text_pre_elem) -> Tuple[Dict[str, str], str, List
 
 
 # ─── Step 3：將正文容器依段落標題切割成 sections ──────────────────────────────
+# 下游真正會取用的段落標題。用於「標題 div 沒有 notEdit class」時的後備辨識，
+# 比對正規化後的完整字串（而非包含關係），所以不會把內文誤判成標題。
+# 與 PR #3（feat/civil-judgment-structuring）的 _SECTION_TITLES 取聯集：
+# 「犯罪事實及理由」是簡易判決常見寫法（本分支發現，該分支未列入）；
+# 「主文」「理由要領」「事實及理由要領」是該分支發現、本分支原本沒有的寫法。
 _PLAIN_HEADINGS = frozenset({
+    "主文",
     "犯罪事實及理由", "事實及理由", "事實暨理由", "事實與理由",
-    "犯罪事實", "事實", "理由", "結論", "據上論斷",
+    "犯罪事實", "事實",
+    "理由", "理由要領", "事實及理由要領", "認定犯罪事實所憑之證據及理由",
+    "結論", "據上論斷",
 })
 
 
@@ -460,9 +471,13 @@ def _extract_sections(container) -> Tuple[Dict[str, str], str, List[str]]:
             and len(text) <= 20                               # 標題不應太長
             and re.search(r'[主文事實理由結論法條犯罪據上聲明陳述附]', text)
         )
-        # 簡易判決的「犯罪事實及理由」等後段標題常是貼上的一般段落（無 notEdit），
-        # 過去會被併進主文；標題文字剛好等於已知標題時，在主文之後也視為標題。
-        if (not is_heading and not in_preamble
+        # 少數裁判書的段落標題是沒有任何 class 的純段落（無 notEdit），包含
+        # 主文本身（PR #3 實測 17 筆，多為民事）及簡易判決後段的「犯罪事實
+        # 及理由」等（本分支實測）。只靠 notEdit 判斷的話，這些標題不會被
+        # 認出，其後內容全部併入前一段（甚至留在 preamble，主文變空）。
+        # 這裡以「正規化後剛好等於已知標題」作為後備判準：比對完整字串而非
+        # 包含關係，因此不會把內文誤判成標題（不論是否已離開 preamble）。
+        if (not is_heading and "he-h1" not in classes
                 and _normalize_section_title(text) in _PLAIN_HEADINGS):
             is_heading = True
 
@@ -903,11 +918,13 @@ def parse_html(
         or sections.get("事實暨理由", "")
         or sections.get("事實與理由", "")
         or sections.get("犯罪事實及理由", "")
+        or sections.get("事實及理由要領", "")
     )
     facts_val   = sections.get("事實", "")
     reasons_val = (
         sections.get("理由", "")
         or sections.get("認定犯罪事實所憑之證據及理由", "")
+        or sections.get("理由要領", "")          # 簡易判決的寫法
     )
 
     # 裁定 or 判決：從裁判字號或案件類型末尾辨識
