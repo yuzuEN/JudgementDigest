@@ -941,3 +941,61 @@ class TestLawCitationIncludesFacts(unittest.TestCase):
         self.assertGreater(r["law_n_citations"], 0, "facts 段的法條必須被抽到")
         self.assertEqual(r["law_primary"], "民法")
         self.assertGreater(r["reasoning_length"], 0, "論理字數必須包含 facts")
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+class TestPartyPosture(unittest.TestCase):
+    """上訴審與非訟的當事人不能用 plaintiff/defendant 的語義解讀。"""
+
+    def _row(self, **kw):
+        base = {"case_number": "臺灣臺北地方法院 114 年度簡上字第 278 號民事判決",
+                "verdict": "上訴駁回。", "judges": "林某", "case_type": "損害賠償",
+                "full_text": "", "party_roles": ""}
+        base.update(kw)
+        return base
+
+    def test_posture_labels(self):
+        P = S.party_posture
+        self.assertEqual(P({"party_roles": "原告：甲；被告：乙"}), "第一審對審")
+        self.assertEqual(P({"party_roles": "上訴人：甲；被上訴人：乙"}), "上訴抗告")
+        # 複合稱謂寫出了原審地位，歸第一審對審
+        self.assertEqual(P({"party_roles": "上訴人即被告：甲"}), "第一審對審")
+        self.assertEqual(P({"party_roles": "抗告人：甲；相對人：乙"}), "上訴抗告")
+        self.assertEqual(P({"party_roles": "聲請人：甲"}), "非訟")
+        self.assertEqual(P({"party_roles": "公訴人：檢察官；被告：乙"}), "刑事")
+        # 「告訴人」不是「被告」
+        self.assertEqual(P({"party_roles": "聲請人即告訴人：甲"}), "非訟")
+        self.assertEqual(P({"party_roles": ""}), "")
+
+    def test_appeal_lawyer_read_from_appellant_columns(self):
+        """REGRESSION：上訴審的 *_has_lawyer 原本一律是 0。
+
+        derive_structured_fields 只讀 plaintiff_agent/defendant_agent，
+        上訴審的代理人存在 appellant_agent/appellee_agent，於是 0 是
+        「沒資料可算」而不是「沒有律師」。實測 582 + 481 筆被修正為 1。
+        """
+        d = S.derive_structured_fields(self._row(
+            appellant="甲股份有限公司", appellee="乙",
+            appellant_agent="王大明", appellee_agent="李小華",
+            party_roles="上訴人：甲股份有限公司；被上訴人：乙",
+            full_text="上訴人甲股份有限公司訴訟代理人王大明律師被上訴人乙訴訟代理人李小華律師"))
+        self.assertEqual(d["party_posture"], "上訴抗告")
+        self.assertEqual(d["plaintiff_has_lawyer"], 1)
+        self.assertEqual(d["defendant_has_lawyer"], 1)
+
+    def test_appeal_defendant_is_corp_is_not_applicable(self):
+        """上訴審沒有「被告」這一造，defendant_is_corp 為 None 而非 0。"""
+        d = S.derive_structured_fields(self._row(
+            appellant="甲", appellee="乙股份有限公司",
+            party_roles="上訴人：甲；被上訴人：乙股份有限公司"))
+        self.assertIsNone(d["defendant_is_corp"])
+
+    def test_first_instance_unchanged(self):
+        d = S.derive_structured_fields(self._row(
+            plaintiff="甲", defendant="乙股份有限公司", plaintiff_agent="張三",
+            party_roles="原告：甲；被告：乙股份有限公司",
+            full_text="原告甲訴訟代理人張三律師被告乙股份有限公司"))
+        self.assertEqual(d["party_posture"], "第一審對審")
+        self.assertEqual(d["defendant_is_corp"], 1)
+        self.assertEqual(d["plaintiff_has_lawyer"], 1)
+        self.assertEqual(d["defendant_has_lawyer"], 0)

@@ -98,8 +98,9 @@ L4（心證層）是另一位同學負責的範圍，規格列於下一節。
 | `case_kind` / `case_kind_category` | 字別（訴、重訴、除…）與層級（給付確認／非對審／上訴抗告／家事形成／裁定） |
 | `case_type_norm` / `case_type_category` | 案由正規化（717 種）與大類（17 類） |
 | `claimed_amount` + `claimed_source` | 請求金額與其**來源**（見下方警告） |
-| `defendant_is_corp` | 被告是否為法人 |
-| `plaintiff_has_lawyer` / `defendant_has_lawyer` | 兩造是否有律師 |
+| `party_posture` | 程序地位：第一審對審／上訴抗告／非訟／刑事（依當事人稱謂判定） |
+| `defendant_is_corp` | 被告是否為法人。**上訴抗告案件為 NULL**：上訴人可能是原審任一造，沒有「被告」可判斷 |
+| `plaintiff_has_lawyer` / `defendant_has_lawyer` | 兩造是否有律師（上訴審讀上訴人／被上訴人的代理人） |
 | `is_default_judgment` | 是否一造辯論判決 |
 | `reasoning_length` | 論理字數＝`reasons`＋`facts_and_reasons`＋`facts`（三者擇一撰寫，相加才是完整論理長度）|
 

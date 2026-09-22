@@ -1206,6 +1206,49 @@ _CORP_RE = re.compile(r"(股份有限公司|有限公司|公司|銀行|商業銀
 _AGENT_SPLIT_RE = re.compile(r"[；;、,，]+")
 
 
+# 程序地位。第一審用「原告／被告」，上訴審改用「上訴人／被上訴人」，
+# 而上訴人可能是原審原告也可能是原審被告——**看稱謂無法還原原審地位**。
+# 非訟（聲請人／相對人／債權人）則根本沒有原告被告的概念。
+#
+# html_parser 早就把這三族分別存在 plaintiff/defendant、appellant/appellee，
+# 但 derive_structured_fields 原本只讀前一對，於是上訴審與抗告案件的
+# defendant_is_corp、*_has_lawyer 一律算出 0——那是「沒有資料可算」，
+# 不是「查出來沒有」。實測 1,073 筆（8.6%）受影響，而這三欄正是
+# judge_analysis 用來控制案件組成的變數。
+_POSTURE_FIRST = "第一審對審"
+_POSTURE_APPEAL = "上訴抗告"
+_POSTURE_NON_ADVERSARIAL = "非訟"
+_POSTURE_CRIMINAL = "刑事"
+
+# 依 party_roles 的原始稱謂判定，順序即優先序。
+# 「上訴人即被告」這類複合稱謂寫出了原審地位，因此「原告／被告」優先於上訴族。
+# 「告訴人」含有「告」但不是被告，先剝除再比對。
+_POSTURE_RULES: List[Tuple[str, "re.Pattern"]] = [
+    # 刑事文書也有「被告」，必須先於第一審對審判定
+    (_POSTURE_CRIMINAL, re.compile(r"公訴人|自訴人|受刑人")),
+    (_POSTURE_FIRST, re.compile(r"原告|被告")),
+    (_POSTURE_APPEAL, re.compile(r"上訴人|抗告人|異議人")),
+    (_POSTURE_NON_ADVERSARIAL, re.compile(r"聲請人|相對人|債權人|債務人|受裁定人|申請人")),
+]
+
+
+def party_posture(row: Dict) -> str:
+    """
+    當事人的程序地位：第一審對審／上訴抗告／非訟／刑事。
+
+    只有「上訴抗告」是真正無法還原原告被告的一族（上訴人可能是原審的
+    任一造）；非訟則是本來就沒有原告被告。兩者都不能拿 plaintiff/defendant
+    的語義去解讀。
+    """
+    roles = (row.get("party_roles") or "").replace("告訴人", "")
+    if not roles.strip():
+        return ""
+    for label, rx in _POSTURE_RULES:
+        if rx.search(roles):
+            return label
+    return ""
+
+
 def _agent_has_lawyer(agents: str, full_text: str) -> int:
     """
     判斷某造的代理人中是否有律師。
@@ -1327,6 +1370,7 @@ STRUCTURED_COLUMNS: List[Tuple[str, str]] = [
     ("panel_key",              "TEXT"),
     ("case_type_norm",         "TEXT"),
     ("case_type_category",     "TEXT"),
+    ("party_posture",          "TEXT"),
     ("defendant_is_corp",      "INTEGER"),
     ("plaintiff_has_lawyer",   "INTEGER"),
     ("defendant_has_lawyer",   "INTEGER"),
@@ -1453,6 +1497,7 @@ def derive_structured_fields(row: Dict) -> Dict:
     # ── 當事人與程序特徵 ──
     defendant = g("defendant")
     full_text = g("full_text")
+    posture = party_posture(row)
 
     return {
         "case_kind":            kind,
@@ -1482,9 +1527,16 @@ def derive_structured_fields(row: Dict) -> Dict:
         "panel_key":            panel_key(g("judges")),
         "case_type_norm":       ct_norm,
         "case_type_category":   ct_cat,
-        "defendant_is_corp":    1 if _CORP_RE.search(defendant) else 0,
-        "plaintiff_has_lawyer": _agent_has_lawyer(g("plaintiff_agent"), full_text),
-        "defendant_has_lawyer": _agent_has_lawyer(g("defendant_agent"), full_text),
+        "party_posture":        posture,
+        # 上訴審沒有「被告」這一造（被上訴人可能是原審原告），
+        # 硬填 0 會讓分析誤以為上訴審的被告都不是法人。留 None 表示不適用。
+        "defendant_is_corp":    (None if posture == _POSTURE_APPEAL and not defendant
+                                 else (1 if _CORP_RE.search(defendant) else 0)),
+        # 有沒有律師與審級無關，上訴審讀 appellant/appellee 的代理人即可。
+        "plaintiff_has_lawyer": _agent_has_lawyer(
+            g("plaintiff_agent") or g("appellant_agent"), full_text),
+        "defendant_has_lawyer": _agent_has_lawyer(
+            g("defendant_agent") or g("appellee_agent"), full_text),
         "is_default_judgment":  1 if _DEFAULT_JUDGMENT_RE.search(full_text) else 0,
         "has_provisional_exec": 1 if _PROVISIONAL_RE.search(verdict) else 0,
         # 論理段落的總字數。判決書用「理由」「事實及理由」「事實」三種格式
