@@ -42,11 +42,23 @@ def compact(value) -> str:
 
 
 # 將中文大小寫數字或阿拉伯數字轉為整數，供刑期月份正規化使用。
+# 支援阿拉伯數字與中文單位混寫（如「10萬」「3萬6千」）：逐字掃描時，連續的
+# 阿拉伯數字要當成一個多位數整體讀入，不能像中文數字那樣一字一位，否則
+# 「10萬」會因為阿拉伯字元不在 CN_DIGITS 裡被忽略、算成 0。
 def chinese_number(value: str) -> int:
     if value.isdigit():
         return int(value)
     total = section = number = 0
-    for char in value:
+    i, length = 0, len(value)
+    while i < length:
+        char = value[i]
+        if char.isdigit():
+            j = i + 1
+            while j < length and value[j].isdigit():
+                j += 1
+            number = int(value[i:j])
+            i = j
+            continue
         if char in CN_DIGITS:
             number = CN_DIGITS[char]
         elif char in CN_UNITS:
@@ -58,6 +70,7 @@ def chinese_number(value: str) -> int:
             else:
                 section += (number or 1) * unit
                 number = 0
+        i += 1
     return total + section + number
 
 
