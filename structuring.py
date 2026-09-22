@@ -1129,8 +1129,16 @@ def split_judges(judges: str, full_text: str = "") -> List[Dict]:
 
 
 def panel_key(judges: str) -> str:
-    """合議庭組合鍵（姓名排序後串接），用來分析「哪些法官常同庭」。"""
-    parts = sorted(n.strip() for n in _JUDGE_SPLIT_RE.split(judges or "") if n.strip())
+    """
+    合議庭組合鍵（姓名排序後串接），用來分析「哪些法官常同庭」。
+
+    必須套用與 split_judges 相同的姓名過濾。原本直接切原始字串，
+    法官欄混入庭訊筆錄時（「王小明；今日筆錄記載；李大同」）會得到
+    judge_count=2 但 panel_key 有 3 人，同一列兩個欄位互相矛盾，
+    「誰跟誰同庭」的統計也混入不存在的成員。
+    """
+    parts = sorted(n.strip() for n in _JUDGE_SPLIT_RE.split(judges or "")
+                   if n.strip() and _is_plausible_judge_name(n.strip()))
     return "|".join(parts)
 
 

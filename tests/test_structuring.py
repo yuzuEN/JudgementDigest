@@ -585,6 +585,14 @@ class TestJudges(unittest.TestCase):
     def test_panel_key_is_order_independent(self):
         self.assertEqual(S.panel_key("甲；乙；丙"), S.panel_key("丙；甲；乙"))
 
+    def test_panel_key_agrees_with_split_judges(self):
+        """REGRESSION：panel_key 沒有套用姓名過濾，與 judge_count 互相矛盾。"""
+        j = "王小明；今日筆錄記載；李大同"
+        self.assertEqual(len(S.split_judges(j)), 2)
+        self.assertEqual(S.panel_key(j), "李大同|王小明")
+        # 整欄都是雜訊時兩者都應為空
+        self.assertEqual(S.panel_key("提示原證；當庭可否提供"), "")
+
     def test_empty(self):
         self.assertEqual(S.split_judges(""), [])
 
