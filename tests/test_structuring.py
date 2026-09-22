@@ -562,6 +562,24 @@ class TestLawCitations(unittest.TestCase):
         self.assertEqual(S.extract_law_citations("系爭契約第3條第1項約定"), [])
         self.assertEqual(S.extract_law_citations("違反會員條款第7條第2項"), [])
 
+    def test_contract_clause_breaks_the_chain(self):
+        """REGRESSION：契約條款後面串接的條號被錯接到前一個法規。
+
+        第3條因契約脈絡被正確排除，但緊接「、」的第7條沿用了前面的民法，
+        變成「民法§7」。全庫實測 652 筆受影響、移除 1,200 餘個假引用，
+        抽查皆為契約／辦法／工作規則的條號（如「操作辦法第20條第3項、第25條」
+        被當成民法§25）。
+        """
+        keys = lambda t: [c["key"] for c in S.extract_law_citations(t)]
+        self.assertEqual(
+            keys("原告依民法第179條請求返還，並主張系爭契約第3條第1項、第7條約定。"),
+            ["民法§179"])
+        # 契約之後再明示法規名，照常抽取
+        self.assertEqual(keys("依系爭契約第5條、第6條，及民法第227條規定。"), ["民法§227"])
+        # 沒有契約脈絡時，串接引用不受影響
+        self.assertEqual(keys("依民法第184條第1項前段、第185條規定。"),
+                         ["民法§184第1項前段", "民法§185"])
+
     def test_dedup(self):
         c = S.extract_law_citations("民法第184條第1項前段…民法第184條第1項前段")
         self.assertEqual(len(c), 1)

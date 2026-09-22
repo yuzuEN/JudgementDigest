@@ -1000,8 +1000,14 @@ def extract_law_citations(*texts: str) -> List[Dict]:
         t = re.sub(r"[ \t　]+", "", text)
         last_law: Optional[str] = None
         for m in _CITATION_RE.finditer(t):
-            law = _resolve_law_name(t[: m.start()], last_law)
+            prefix = t[: m.start()]
+            law = _resolve_law_name(prefix, last_law)
             if not law:
+                # 契約條款脈絡要切斷串接鏈。否則「原告依民法第179條…並主張系爭
+                # 契約第3條第1項、第7條約定」中，第3條被正確排除，但緊接「、」的
+                # 第7條會沿用前面的民法，變成「民法§7」（行為能力，完全無關）。
+                if _CONTRACT_CTX_RE.search(prefix[-_MAX_LAW_NAME:]):
+                    last_law = None
                 continue
             last_law = law
 
