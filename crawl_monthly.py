@@ -102,7 +102,7 @@ def save_state(path: str, state: Dict) -> None:
     os.replace(tmp, path)
 
 
-# ─── 防止系統睡眠（僅 Windows）──────────────────────────────────────────────
+# ─── 防止系統睡眠（Windows／macOS／Linux）─────────────────────────────────────
 def _spawn_inhibitor(cmd: List[str]) -> Optional[subprocess.Popen]:
     """
     啟動外部的睡眠抑制指令。指令不存在、或存在但立刻失敗，都回傳 None。
