@@ -43,8 +43,12 @@ _CN_DIGIT = {
 _CN_SMALL_UNIT = {"十": 10, "拾": 10, "百": 100, "佰": 100, "千": 1000, "仟": 1000}
 _CN_BIG_UNIT = {"萬": 10**4, "億": 10**8, "兆": 10**12}
 
-# 金額字串允許出現的字元（用來判斷一段文字是不是金額）
-_CN_NUM_CHARS = "".join(_CN_DIGIT) + "".join(_CN_SMALL_UNIT) + "".join(_CN_BIG_UNIT) + ",，"
+# 金額字串允許出現的字元（用來判斷一段文字是不是金額）。
+# 必須包含小數點：不含的話，「2,000,000.5元」的 token 只能從小數點後面起算，
+# 抓到的是「5元」——金額少了 40 萬倍，而且完全無聲（實測 13 筆主文含小數金額，
+# 其中一筆 43,009,039.5 元會變成 5 元）。
+_CN_NUM_CHARS = ("".join(_CN_DIGIT) + "".join(_CN_SMALL_UNIT)
+                 + "".join(_CN_BIG_UNIT) + ",，.．")
 
 
 def cn_numeral_to_int(raw: str) -> Optional[int]:
@@ -79,9 +83,29 @@ def cn_numeral_to_int(raw: str) -> Optional[int]:
     if not s:
         return None
 
+    s = s.replace("．", ".")
+
     # 純阿拉伯數字（含小數）
     if re.fullmatch(r"\d+(?:\.\d+)?", s):
         return int(float(s))
+
+    # 小數 + 單位（1.5億 / 2.5萬）。下面的中文位值解析是逐字累加的，
+    # 碰到小數點會判定「有無法辨識的字元」而回傳 None，所以這種寫法單獨換算。
+    m = re.fullmatch(r"(\d+(?:\.\d+)?)([萬億兆千百十仟佰拾])", s)
+    if m:
+        unit = _CN_BIG_UNIT.get(m.group(2)) or _CN_SMALL_UNIT[m.group(2)]
+        val = float(m.group(1)) * unit
+        # 「000萬」這種殘缺片段換算出來是 0。0 不是金額，往下交給位值解析，
+        # 由它回傳 None——回傳 0 等於憑空捏造一筆「0 元」的給付。
+        if val > 0:
+            return int(val)
+
+    # 混合寫法的角分（「92萬0084.19元」）：小數部分是元以下，捨去後
+    # 交給下面的位值解析處理整數部分。不特別處理的話整個 token 會因為
+    # 含有小數點而解析失敗，金額整筆消失。
+    m = re.fullmatch(r"(.+?)\.\d+", s)
+    if m:
+        s = m.group(1)
 
     # 全部字元都必須是可辨識的數字字元，否則視為無法解析
     if not all(ch in _CN_DIGIT or ch in _CN_SMALL_UNIT or ch in _CN_BIG_UNIT for ch in s):

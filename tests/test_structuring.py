@@ -62,6 +62,33 @@ class TestCnNumeral(unittest.TestCase):
         self.assertIsNone(S.cn_numeral_to_int(None))
         self.assertIsNone(S.cn_numeral_to_int("abc"))
 
+    def test_decimal_amounts(self):
+        """REGRESSION：小數金額。
+
+        `_AMOUNT_TOKEN` 的字元類原本不含小數點，「2,000,000.5元」的 token
+        只能從小數點後起算 →「5元」，金額少 40 萬倍且完全無聲。
+        實測全庫 13 筆主文含小數金額，最嚴重一筆 43,009,039.5 元 → 5 元。
+        """
+        # 純阿拉伯小數：元以下捨去
+        self.assertEqual(S.cn_numeral_to_int("2,000,000.5"), 2000000)
+        self.assertEqual(S.cn_numeral_to_int("10,000.00"), 10000)
+        self.assertEqual(S.cn_numeral_to_int("43,009,039.5"), 43009039)
+        # 小數 + 單位：位值解析處理不了小數點，需單獨換算
+        self.assertEqual(S.cn_numeral_to_int("1.5億"), 150000000)
+        self.assertEqual(S.cn_numeral_to_int("2.5萬"), 25000)
+        # 混合寫法的角分（實測 113 年度金字第 74 號：舊版得到 19）
+        self.assertEqual(S.cn_numeral_to_int("92萬0084.19"), 920084)
+        self.assertEqual(S.cn_numeral_to_int("1億4,991萬7.584"), 149910007)
+
+    def test_zero_fragment_is_not_an_amount(self):
+        """REGRESSION：「000萬」換算是 0，不可回傳 0 元。
+
+        支援小數 + 單位之後，`000萬` 會match 到該規則並算出 0。
+        0 不是金額，必須與「萬」一樣回 None，否則等於憑空捏造一筆 0 元給付。
+        """
+        self.assertIsNone(S.cn_numeral_to_int("000萬"))
+        self.assertIsNone(S.cn_numeral_to_int("0萬"))
+
 
 # ═══════════════════════════════════════════════════════════════════════════
 class TestCaseKind(unittest.TestCase):
@@ -288,6 +315,22 @@ class TestAmounts(unittest.TestCase):
         r = S.extract_awarded_amounts(v)
         self.assertEqual(r["awarded_currency"], "USD")
         self.assertEqual(r["awarded_total"], 26663)
+
+    def test_decimal_amount_is_not_truncated(self):
+        """REGRESSION：小數金額被截斷成小數點後的尾數。
+
+        實測 114 年度重訴字第 82 號：美金 225,739.99 元被抽成 99 元。
+        """
+        r = S.extract_awarded_amounts("被告應給付原告美金2,000,000.5元。")
+        self.assertEqual(r["awarded_total"], 2000000)
+        self.assertEqual(r["awarded_currency"], "USD")
+        self.assertEqual(
+            S.extract_awarded_amounts("被告應給付原告新臺幣1.5億元。")["awarded_total"],
+            150000000)
+        # 國字單位 + 阿拉伯小數（實測 113 年度金字第 74 號：舊版得到 19）
+        self.assertEqual(
+            S.extract_awarded_amounts("被告應給付原告美金92萬0084.19元。")["awarded_total"],
+            920084)
 
     def test_table_reference_is_flagged(self):
         v = "被告應連帶給付原告如附表「應給付金額」欄所示金額。訴訟費用由被告負擔。"
