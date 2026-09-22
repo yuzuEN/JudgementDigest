@@ -416,6 +416,15 @@ _PLAIN_HEADINGS = frozenset({
     "結論", "據上論斷",
 })
 
+# _extract_laws 依序搜尋的「可能含論罪法條」標題，依優先順序排列。
+# 與 _PLAIN_HEADINGS 共用同一份標題名稱，新增標題寫法時只需改一處，
+# 否則像「理由要領」這種簡易判決寫法，即使 _PLAIN_HEADINGS 認得出標題，
+# _extract_laws 若沒有同步更新候選清單，仍會抓不到法條（靜默漏值）。
+_LAW_SEARCH_SECTIONS = (
+    "據上論斷", "理由", "理由要領", "事實及理由", "事實及理由要領",
+    "事實暨理由", "事實與理由", "犯罪事實及理由", "認定犯罪事實所憑之證據及理由",
+)
+
 
 def _extract_sections(container) -> Tuple[Dict[str, str], str, List[str]]:
     """
@@ -749,7 +758,12 @@ _LAW_APPENDIX_RE = re.compile(
 )
 # 「據上論斷，依 ... 判決如主文」中的條文引用
 # (.{1,300}?) 限制長度，避免從段落中間的「依」一路撐到文末的「判決如主文」而抓到無關內容
-_YIJU_RE = re.compile(r"依\s*(.{1,300}?)\s*[,，]\s*(?:判決|裁定)如主文", re.DOTALL)
+# 逗號與「判決／裁定」之間允許「逕以簡易」等最多 12 字（簡易判決常見寫法）；
+# 「判決／裁定」與「如主文」之間允許「處刑」等最多 4 字，涵蓋「逕以簡易判決
+# 處刑如主文」——實測 400 筆「簡」字案件中 84.5% 是這個寫法，原本因為中間
+# 多了「逕以簡易」「處刑」而完全比對不到，法條欄位整批留空。
+_YIJU_RE = re.compile(
+    r"依\s*(.{1,300}?)\s*[,，]\s*.{0,12}?(?:判決|裁定).{0,4}?如主文", re.DOTALL)
 # 條文引用：「刑法第339條之4」「民法第148條」「刑事訴訟法第101條第1項」等
 # {1,15} 允許單字法律名（民法、刑法），避免 {2,15} 造成多字詞前綴（如「惟依民法」）被誤抓
 _LAW_CITE_RE = re.compile(
@@ -767,13 +781,9 @@ def _extract_laws(soup: BeautifulSoup, sections: Dict[str, str], full_text: str 
             return full_text[m.end():].strip()[:3000]
 
     # 2. 從「據上論斷」提取緊湊的條文引用
-    #    同時搜尋 sections["據上論斷"] 和 理由/事實及理由 的末尾
-    candidates = [
-        sections.get("據上論斷", ""),
-        sections.get("理由", ""),
-        sections.get("事實及理由", ""),
-    ]
-    for src in candidates:
+    #    依序搜尋 _LAW_SEARCH_SECTIONS 各標題（含「理由要領」等簡易判決寫法）
+    for title in _LAW_SEARCH_SECTIONS:
+        src = sections.get(title, "")
         if not src:
             continue
         # 找 "依...判決如主文" 子句
