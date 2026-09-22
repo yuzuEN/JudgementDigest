@@ -100,6 +100,14 @@ def cn_numeral_to_int(raw: str) -> Optional[int]:
         if val > 0:
             return int(val)
 
+    # 「856萬7.760元」：萬／億之後的餘數必然小於該單位，不可能再有小數，
+    # 這個點是千分位逗號打成點（實測 8 例，如 55萬3.784、1億4,991萬7.584）。
+    # 限定「有國字單位」且「小數恰為 3 位」才適用，才不會把匯率「1:4.415元」
+    # 或每股淨值「14.587元」這類真小數誤當成千分位。
+    m = re.fullmatch(r"(.*[萬億兆].*?)\.(\d{3})", s)
+    if m:
+        s = m.group(1) + m.group(2)
+
     # 混合寫法的角分（「92萬0084.19元」）：小數部分是元以下，捨去後
     # 交給下面的位值解析處理整數部分。不特別處理的話整個 token 會因為
     # 含有小數點而解析失敗，金額整筆消失。
@@ -720,13 +728,27 @@ def extract_awarded_amounts(verdict: str) -> Dict:
 # 於是抓到的是舊聲明或管轄權論述裡的數字，造成「判准大於請求」的矛盾。
 # 因此先找明確的錨點，找不到才退而求其次，且要求該段落後方真的出現金額。
 _CLAIM_ANCHORS = [
-    re.compile(r"訴之聲明\s*[:：]?"),
+    # (?<!反)：「反訴之聲明」裡面也含有「訴之聲明」，不擋掉的話錨點會定位到
+    # 反訴的聲明段，把反訴原告的請求當成本訴原告的請求。
+    re.compile(r"(?<!反)訴之聲明\s*[:：]?"),
     re.compile(r"變更後聲明\s*[:：]?"),
     re.compile(r"並\s*聲明\s*[:：]"),
     re.compile(r"聲明\s*[:：]"),
 ]
 # 錨點後方必須在合理距離內出現「給付…元」，否則視為誤命中
 _CLAIM_VALIDATE_RE = re.compile(r"(?:給付|返還|賠償|支付|清償)[^。]{0,60}?元")
+
+# 原告聲明的結束點。錨點後固定取 1500 字的話，會一路吃進被告答辯與反訴聲明，
+# 把對造主張的金額當成原告的請求：
+#   「㈤聲明：被告應給付原告856萬7,760元…二、被告則以：…金額為1,530萬2,606元
+#     …原告應分得680萬1,158元」-> claimed_total 把三個數字全加起來
+# 實測抽樣 1,192 筆 claimed_source=直接抽取 的案件，620 筆（52%）的視窗內
+# 出現對造答辯或反訴聲明的字樣。
+_CLAIM_STOP_RE = re.compile(
+    r"(?:被告|相對人|反訴原告|上訴人|被上訴人)[^。；，]{0,8}?(?:則以|則辯|辯稱|抗辯|答辯|置辯)"
+    r"|反訴(?:之)?聲明"
+    r"|等語(?:置辯|資為抗辯)"
+    r"|被告聲明\s*[:：]")
 _AS_VERDICT_RE = re.compile(r"如主文(?:第[一二三四五六七八九十\d]+項)?所示")
 # 聲明段落中的編號符號，先剝除才能正確判斷「如主文所示」是否為整段內容
 _ENUM_PREFIX_RE = re.compile(r"^[\s\d一二三四五六七八九十㈠-㈩\(（][\s\d一二三四五六七八九十㈠-㈩\)）.、,]*")
@@ -761,6 +783,14 @@ def extract_claimed_amount(
         for anchor in _CLAIM_ANCHORS:
             for am in anchor.finditer(text):
                 cand = text[am.end(): am.end() + 1500]
+                # 先在對造答辯／反訴聲明處截斷，再驗證與抽金額。
+                # 順序不能反過來：先驗證的話，被對造金額「補足」的假聲明段
+                # 也會通過驗證。
+                stop = _CLAIM_STOP_RE.search(cand)
+                if stop:
+                    cand = cand[: stop.start()]
+                if not cand:
+                    continue
                 # 錨點後 300 字內要看得到「給付…元」，才認定這是真的聲明段落
                 if _CLAIM_VALIDATE_RE.search(cand[:300]) or _AS_VERDICT_RE.search(cand[:200]):
                     seg = cand
@@ -768,7 +798,11 @@ def extract_claimed_amount(
             if seg:
                 break
         if not seg:
+            # 找不到可信的聲明錨點時才退回開頭 1500 字，同樣要在對造答辯處截斷
             seg = text[:1500]
+            stop = _CLAIM_STOP_RE.search(seg)
+            if stop:
+                seg = seg[: stop.start()]
         seg = _ENUM_PREFIX_RE.sub("", seg)
 
         default_cur = (detect_currency(seg) or "TWD").split("/")[0]

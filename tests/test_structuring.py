@@ -78,7 +78,22 @@ class TestCnNumeral(unittest.TestCase):
         self.assertEqual(S.cn_numeral_to_int("2.5萬"), 25000)
         # 混合寫法的角分（實測 113 年度金字第 74 號：舊版得到 19）
         self.assertEqual(S.cn_numeral_to_int("92萬0084.19"), 920084)
-        self.assertEqual(S.cn_numeral_to_int("1億4,991萬7.584"), 149910007)
+
+    def test_three_decimals_after_cn_unit_is_a_separator(self):
+        """REGRESSION：「856萬7.760元」的點是千分位逗號打成點。
+
+        萬／億之後的餘數必然小於該單位，不可能再有小數；而元以下只有
+        角分（2 位）。實測 8 例（55萬3.784、63萬9.534、1億4,991萬7.584…）。
+        限定「有國字單位」且「小數恰為 3 位」，才不會誤傷匯率「1:4.415元」
+        或每股淨值「14.587元」這類真小數。
+        """
+        self.assertEqual(S.cn_numeral_to_int("856萬7.760"), 8567760)
+        self.assertEqual(S.cn_numeral_to_int("1億4,991萬7.584"), 149917584)
+        self.assertEqual(S.cn_numeral_to_int("55萬3.784"), 553784)
+        # 沒有國字單位 -> 仍視為小數，元以下捨去
+        self.assertEqual(S.cn_numeral_to_int("4.415"), 4)
+        self.assertEqual(S.cn_numeral_to_int("2,419.584"), 2419)
+        self.assertEqual(S.cn_numeral_to_int("14.587"), 14)
 
     def test_zero_fragment_is_not_an_amount(self):
         """REGRESSION：「000萬」換算是 0，不可回傳 0 元。
@@ -596,6 +611,38 @@ class TestCaseTypeNormalisation(unittest.TestCase):
 # ═══════════════════════════════════════════════════════════════════════════
 class TestClaimedAmountProvenance(unittest.TestCase):
     """請求金額的來源標記——這是全部欄位裡最容易被誤用的一個。"""
+
+    def test_window_stops_at_opposing_pleading(self):
+        """REGRESSION：聲明後固定取 1500 字，會把被告答辯的金額算進請求。
+
+        實測抽樣 1,192 筆 claimed_source=直接抽取 的案件，620 筆（52%）的
+        視窗內出現對造答辯或反訴聲明字樣。
+        """
+        far = ("原告起訴主張：聲明：被告應給付原告新臺幣100萬元。"
+               + "事實理由略。" * 20
+               + "被告則以：原告尚積欠伊新臺幣300萬元等語置辯。"
+               + "反訴聲明：反訴被告應給付反訴原告新臺幣300萬元。")
+        r = S.extract_claimed_amount(far, "", 600000, "原告部分勝訴")
+        self.assertEqual(r["claimed_total"], 1000000)
+        self.assertEqual(r["claimed_source"], "直接抽取")
+
+    def test_window_stops_at_counterclaim_statement(self):
+        """反訴聲明的金額不是原告的請求。"""
+        far = ("聲明：被告應給付原告新臺幣50萬元。"
+               "反訴之聲明：反訴被告應給付反訴原告新臺幣80萬元。")
+        self.assertEqual(
+            S.extract_claimed_amount(far, "", None, "原告勝訴")["claimed_total"], 500000)
+
+    def test_fallback_window_also_stops(self):
+        """沒有聲明錨點而退回開頭 1500 字時，同樣要在對造答辯處截斷。
+
+        實測 112 年度訴字第 768 號：主文是「原告之訴駁回」、請求是返還登記
+        （非金錢），舊版卻從被告答辯段落湊出 812 萬的「請求金額」。
+        """
+        far = ("一、原告主張：被告應給付原告新臺幣20萬元。"
+               "二、被告則以：原告應給付伊新臺幣500萬元等語置辯。")
+        r = S.extract_claimed_amount(far, "", None, "原告勝訴")
+        self.assertEqual(r["claimed_total"], 200000)
 
     def test_direct_extraction(self):
         fr = "原告起訴主張：…並聲明：㈠被告應給付原告新臺幣500,000元。"
