@@ -653,6 +653,7 @@ def extract_awarded_amounts(verdict: str) -> Dict:
         "awarded_n_items": 0,
         "awarded_in_table": 0,
         "awarded_joint_release": 0,
+        "awarded_has_counter_items": 0,
     }
     if not verdict:
         return res
@@ -665,31 +666,49 @@ def extract_awarded_amounts(verdict: str) -> Dict:
     declared = detect_currency("".join(clauses)) or "TWD"
     default_cur = declared.split("/")[0]
 
+    # 本訴與反訴的金額必須分開。classify_outcome 早就依「反訴」字樣分邊，
+    # 金額卻一視同仁加總，於是「本訴 60 萬、反訴 30 萬」得到 awarded_total
+    # = 90 萬；若請求金額是 100 萬，grant_ratio 會算成 0.9，但本訴真正的
+    # 獲償比例是 0.6——而且因為比值仍小於 1，不會觸發任何品質旗標。
+    #
+    # 反訴金額不丟棄：仍記在 items 裡並標上 side，只是不計入 awarded_total。
+    # 下游要分析反訴時看 awarded_items_json 即可。
     items: List[Dict] = []
     for c in clauses:
         if _MONEY_VERB_RE.search(c):
             if _TABLE_REF_RE.search(c):
                 res["awarded_in_table"] = 1
-            items.extend(_iter_amounts_in_clause(c, default_cur))
+            side = "反訴" if _COUNTER_TOKEN_RE.search(c) else "本訴"
+            for it in _iter_amounts_in_clause(c, default_cur):
+                it["side"] = side
+                items.append(it)
 
     if not items:
         return res
 
+    main_items = [i for i in items if i["side"] == "本訴"]
     res["awarded_items"] = items
-    res["awarded_n_items"] = len(items)
-    currencies = dict.fromkeys(i["currency"] for i in items)
+    res["awarded_has_counter_items"] = 1 if len(main_items) != len(items) else 0
+
+    # 全部判項都屬反訴時（本訴無給付），本訴判准金額是「沒有」而不是反訴的金額
+    if not main_items:
+        res["awarded_n_items"] = 0
+        return res
+
+    res["awarded_n_items"] = len(main_items)
+    currencies = dict.fromkeys(i["currency"] for i in main_items)
     res["awarded_currency"] = "/".join(currencies)
 
     # 重複給付免責條款只有在抽到多筆金額時才造成重複計算：單筆時總額就是那一筆，
     # 沒有東西可加，作廢反而會丟掉好資料（實測 31 筆命中中有 5 筆是單筆）。
-    if len(items) > 1 and _JOINT_RELEASE_RE.search(re.sub(r"\s+", "", verdict)):
+    if len(main_items) > 1 and _JOINT_RELEASE_RE.search(re.sub(r"\s+", "", verdict)):
         res["awarded_joint_release"] = 1
 
     # 只有單一幣別才合計；混幣不做匯率換算，避免捏造數字。
     # 重複給付免責同理：實際總額取決於免責範圍（實測 26 筆中有 14 筆各判項
     # 金額不同，屬部分重疊），去重或取最大值都是猜測——留空並以旗標說明。
     if len(currencies) == 1 and not res["awarded_joint_release"]:
-        res["awarded_total"] = sum(i["amount"] for i in items)
+        res["awarded_total"] = sum(i["amount"] for i in main_items)
     return res
 
 
@@ -1352,6 +1371,10 @@ def derive_structured_fields(row: Dict) -> Dict:
         if aw["awarded_joint_release"]:
             # 總額是「刻意不算」而非「抽不到」，理由由 重複給付免責 旗標說明。
             pass
+        elif aw["awarded_has_counter_items"]:
+            # 主文裡只有反訴的給付判項，本訴沒有金錢給付。
+            # 這不是抽取失敗，反訴金額仍在 awarded_items_json 裡。
+            flags.append("僅反訴有給付")
         elif re.search(r"按(?:月|年|日|季)[^。；]{0,20}給付", verdict or ""):
             # 定期金給付（按月給付租金、薪資）沒有「總額」可言，
             # 總額取決於未定的終期。這不是抽取失敗，是本質上不存在的欄位。
@@ -1368,6 +1391,10 @@ def derive_structured_fields(row: Dict) -> Dict:
         flags.append("混合幣別未合計")
     if aw["awarded_joint_release"]:
         flags.append("重複給付免責")
+    if aw["awarded_has_counter_items"] and aw["awarded_total"]:
+        # awarded_amount 只計本訴。標出來，免得有人拿它跟主文上看得到的
+        # 反訴金額對不起來而以為抽漏了。
+        flags.append("反訴金額未計入")
 
     # ── 法條（從本文抽取，頁尾欄位作為補充來源）──
     # 必須包含 facts。部分判決（尤其銀行請求清償借款的一造辯論判決）只有

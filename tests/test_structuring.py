@@ -332,6 +332,35 @@ class TestAmounts(unittest.TestCase):
             S.extract_awarded_amounts("被告應給付原告美金92萬0084.19元。")["awarded_total"],
             920084)
 
+    def test_counterclaim_amount_is_not_summed_into_main(self):
+        """REGRESSION：反訴金額被併入本訴加總。
+
+        classify_outcome 早就依「反訴」字樣分邊，金額卻一視同仁加總：
+        本訴 60 萬 + 反訴 30 萬 -> awarded_total = 90 萬。若請求 100 萬，
+        grant_ratio 會算成 0.9（真值 0.6），而且比值仍 < 1，不觸發任何旗標。
+        """
+        v = ("本訴部分：被告應給付原告新臺幣60萬元。"
+             "反訴部分：反訴被告應給付反訴原告新臺幣30萬元。訴訟費用由被告負擔。")
+        r = S.extract_awarded_amounts(v)
+        self.assertEqual(r["awarded_total"], 600000)      # 只計本訴
+        self.assertEqual(r["awarded_n_items"], 1)
+        self.assertEqual(r["awarded_has_counter_items"], 1)
+        # 反訴金額不丟棄，仍記在 items 裡並標上 side
+        self.assertEqual([(i["amount"], i["side"]) for i in r["awarded_items"]],
+                         [(600000, "本訴"), (300000, "反訴")])
+
+    def test_counterclaim_only_award_is_not_main_award(self):
+        """REGRESSION：主文只有反訴的給付判項時，本訴判准金額是「沒有」。
+
+        實測 33 筆（如 114 年度重訴字第 280 號）本訴被駁回、只有反訴獲准，
+        舊版把反訴的 202 萬當成本訴判准，grant_ratio 因此完全是假的。
+        """
+        v = "一、原告之訴駁回。三、反訴被告應給付反訴原告新臺幣202萬0265元。"
+        r = S.extract_awarded_amounts(v)
+        self.assertIsNone(r["awarded_total"])
+        self.assertEqual(r["awarded_n_items"], 0)
+        self.assertEqual(r["awarded_has_counter_items"], 1)
+
     def test_table_reference_is_flagged(self):
         v = "被告應連帶給付原告如附表「應給付金額」欄所示金額。訴訟費用由被告負擔。"
         self.assertEqual(S.extract_awarded_amounts(v)["awarded_in_table"], 1)
