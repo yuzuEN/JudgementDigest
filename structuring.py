@@ -1405,8 +1405,22 @@ STRUCTURED_COLUMNS: List[Tuple[str, str]] = [
     ("structuring_version",    "TEXT"),
 ]
 
+# derive_structured_fields 會讀取的輸入欄位。backfill_structured.py 以此決定
+# SELECT 哪些欄位——兩份清單分開維護的話一定會漂移：曾經新增讀取 appellant /
+# party_roles 卻沒同步到回填腳本，結果回填時這些欄位全是空的，修正完全沒生效，
+# 而單元測試因為直接餵完整資料列而看不出來。
+# tests/test_structuring.py 會實際記錄推導時存取了哪些鍵，確保此清單完整。
+SOURCE_COLUMNS = [
+    "case_number", "court", "judgment_date", "case_type", "judgment_type",
+    "verdict", "facts", "facts_and_reasons", "reasons", "conclusion",
+    "applicable_laws", "judges", "full_text",
+    "plaintiff", "plaintiff_agent", "defendant", "defendant_agent",
+    "appellant", "appellant_agent", "appellee", "appellee_agent",
+    "party_roles",
+]
+
 # 規則版本。規則異動時遞增，讓回填過的資料可以辨識是用哪一版規則產生的。
-STRUCTURING_VERSION = "2.0.0"
+STRUCTURING_VERSION = "2.1.0"
 
 
 def derive_structured_fields(row: Dict) -> Dict:

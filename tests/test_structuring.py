@@ -1045,3 +1045,53 @@ class TestPartyPosture(unittest.TestCase):
         self.assertEqual(d["defendant_is_corp"], 1)
         self.assertEqual(d["plaintiff_has_lawyer"], 1)
         self.assertEqual(d["defendant_has_lawyer"], 0)
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+class TestSourceColumnsComplete(unittest.TestCase):
+    """REGRESSION：推導函式讀取的欄位必須全部列在 SOURCE_COLUMNS。
+
+    backfill_structured.py 只 SELECT SOURCE_COLUMNS 列出的欄位。曾經在推導
+    裡新增讀取 appellant / party_roles，卻沒同步到回填腳本的清單，結果回填
+    時這些欄位全是空的、修正完全沒生效——而其他單元測試都直接餵完整資料
+    列，看不出來。這裡實際記錄推導過程存取了哪些鍵。
+    """
+
+    class _Recorder(dict):
+        def __init__(self, *a, **kw):
+            super().__init__(*a, **kw)
+            self.seen = set()
+
+        def get(self, key, default=None):
+            self.seen.add(key)
+            return super().get(key, default)
+
+        def __getitem__(self, key):
+            self.seen.add(key)
+            return super().__getitem__(key)
+
+    def test_every_accessed_key_is_declared(self):
+        # 盡量走到每條分支：第一審、上訴審、有金額、有法條
+        rows = [
+            {"case_number": "臺灣臺北地方法院 113 年度訴字第 1 號民事判決",
+             "verdict": "被告應給付原告新臺幣10萬元。訴訟費用由被告負擔。",
+             "facts_and_reasons": "聲明：被告應給付原告新臺幣10萬元。依民法第184條規定。",
+             "judges": "王小明", "plaintiff": "甲", "defendant": "乙股份有限公司",
+             "party_roles": "原告：甲；被告：乙股份有限公司", "full_text": "一造辯論"},
+            {"case_number": "臺灣臺北地方法院 114 年度簡上字第 2 號民事判決",
+             "verdict": "上訴駁回。", "appellant": "甲", "appellee": "乙",
+             "appellant_agent": "王大明", "party_roles": "上訴人：甲；被上訴人：乙",
+             "full_text": "王大明律師"},
+        ]
+        seen = set()
+        for r in rows:
+            rec = self._Recorder(r)
+            S.derive_structured_fields(rec)
+            seen |= rec.seen
+        missing = seen - set(S.SOURCE_COLUMNS)
+        self.assertEqual(missing, set(),
+                         f"推導讀取了未列在 SOURCE_COLUMNS 的欄位：{missing}")
+
+    def test_backfill_uses_the_same_list(self):
+        import backfill_structured as B
+        self.assertEqual(B._SOURCE_COLUMNS, ["id"] + S.SOURCE_COLUMNS)

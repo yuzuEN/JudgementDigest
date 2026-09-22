@@ -39,19 +39,16 @@ if sys.stdout.encoding and sys.stdout.encoding.lower() != "utf-8":
     sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding="utf-8", errors="replace")
 
 from html_parser import DB_PATH, init_db
-from structuring import STRUCTURED_COLUMNS, STRUCTURING_VERSION, derive_structured_fields
+from structuring import (SOURCE_COLUMNS, STRUCTURED_COLUMNS, STRUCTURING_VERSION,
+                         derive_structured_fields)
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
 logger = logging.getLogger(__name__)
 
 # 讀取推導所需的欄位。只取需要的欄位而非 SELECT *，
 # 是為了避免把 full_text 以外的大欄位一次全載入造成記憶體壓力。
-_SOURCE_COLUMNS = [
-    "id", "case_number", "court", "judgment_date", "case_type", "judgment_type",
-    "verdict", "facts", "facts_and_reasons", "reasons", "conclusion",
-    "applicable_laws", "judges", "plaintiff", "plaintiff_agent",
-    "defendant", "defendant_agent", "full_text",
-]
+# 清單由 structuring.SOURCE_COLUMNS 提供，不在這裡另外維護一份。
+_SOURCE_COLUMNS = ["id"] + SOURCE_COLUMNS
 
 BATCH = 500
 
