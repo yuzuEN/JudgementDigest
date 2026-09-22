@@ -13,12 +13,19 @@ from structure_tasks import NUM, SINGLE_RE, chinese_number
 _HEADER_HINT = re.compile(r"編號|宣告刑|主文|罪名")
 _SENT_HEADER = re.compile(r"宣告刑|主文|判處|罪刑")
 _CHARGE_HEADER = re.compile(r"罪名")
-_CHARGE_IN_CELL = re.compile(r"犯([^，。；]{2,60}?罪)")
+_DEFENDANT_HEADER = re.compile(r"被告|姓名")
+# 貪婪：遇到罪名本身含「犯罪」兩字（如「…犯罪組織罪」）時，非貪婪會在第一個「罪」
+# 字就停下、漏掉後半段；貪婪會找到子句內最後一個「罪」，含「、」分隔的多罪名也保留。
+_CHARGE_IN_CELL = re.compile(r"犯([^，。；]{2,60}罪)")
 _FINE = re.compile(rf"併科罰金(?:新臺幣)?([{NUM},]+)元")
 _MAIN_FINE = re.compile(rf"罰金(?:新臺幣)?([{NUM},]+)元")
-_MARK = re.compile(r"^(?:[⑴-⒛①-⑳㈠-㈩]|[\(（][\d一二三四五六七八九十]+[\)）]|[\dIVXivx]{1,3}[.．、])+")
+_MARK = re.compile(
+    r"^(?:[⑴-⒛①-⑳㈠-㈩]|[\(（][\d一二三四五六七八九十]+[\)）]|[\dIVXivx]{1,3}[.．、]|"
+    r"[一二三四五六七八九十百]+[、.．])+"
+)
+# 法條前綴：法規名稱至少 1 字，涵蓋「刑法」「民法」這類雙字全名（「法」本身佔 1 字）。
 _LAW_PREFIX = re.compile(
-    rf"^(?P<law>[^，、；。]{{2,25}}?(?:法|條例)第[{NUM}]+條(?:之[{NUM}]+)?(?:第[{NUM}]+項)?"
+    rf"^(?P<law>[^，、；。]{{1,25}}?(?:法|條例)第[{NUM}]+條(?:之[{NUM}]+)?(?:第[{NUM}]+項)?"
     rf"(?:第[{NUM}]+款)?(?:前段|後段|但書)?)之?(?P<charge>.+罪)$"
 )
 
@@ -85,54 +92,73 @@ def _days(sentence: str) -> Optional[int]:
     return chinese_number(m.group(1)) if m else None
 
 
-def parse_sentence_cell(text: str, charge_hint: str = "", names=()) -> List[Dict]:
-    """把一個「罪名及宣告刑／主文」儲存格拆成多個 (被告, 罪名, 宣告刑)。"""
+def _split_defendant(before: str, names) -> tuple:
+    """從「被告…犯」之前的文字切出被告名。回傳 (defendant, charge_from_rest_or_None)。"""
+    cm = _CHARGE_IN_CELL.search(before) if "犯" in before else None
+    if cm:
+        head = before[:before.index(cm.group(0))]
+        head = _MARK.sub("", re.sub(r"(?:共同|幫助|教唆)$", "", head)).strip()
+        head = re.sub(r"^被告", "", head)
+        ascii_name = bool(re.fullmatch(r"[A-Za-z .\-·,]+", head))
+        who = head if 0 < len(head) <= (40 if ascii_name else 12) else ""
+        return who, cm.group(1)
+    # 沒有「犯」字（例如「許元鴻販賣第二級毒品，處…」）：用已知被告名或遮蔽名（○○）切出被告
+    rest = _MARK.sub("", before).strip()
+    rest = re.sub(r"^被告", "", rest)
+    who = ""
+    for nm in sorted(names, key=len, reverse=True):
+        if nm and rest.startswith(nm):
+            who, rest = nm, rest[len(nm):]
+            break
+    else:
+        nm = re.match(r"^(?:[A-Za-z][A-Za-z .\-·]*[（(][^）)]+[）)]|[A-Za-z][A-Za-z .\-·]{3,}|[一-鿿]○+)", rest)
+        if nm:
+            who, rest = nm.group(0), rest[nm.end():]
+    rest = re.sub(r"^(?:共同|共犯|幫助|教唆)", "", rest)
+    rest = re.sub(r"[，,].*$", "", rest).strip()
+    return who, (rest if who and rest else None)
+
+
+def parse_sentence_cell(text: str, charge_hint: str = "", names=(), column_defendant: str = "") -> List[Dict]:
+    """把一個「罪名及宣告刑／主文」儲存格拆成多個 (被告, 罪名, 宣告刑)。
+
+    同一子句內可能有多個被告各自的「處…刑」（用逗號而非句號分隔，例如
+    「甲○○犯…罪，處有期徒刑陸月，乙○○犯…罪，處有期徒刑肆月」），逐一
+    掃描該子句內每個宣告刑，而不是只取第一個，否則後面被告的刑期會整段消失。
+    """
+    names = [re.sub(r"\s+", "", n) for n in names if n]
     out = []
     for clause in re.split(r"[。；]", text):
-        m = SINGLE_RE.search(clause)
-        if not m:
+        matches = list(SINGLE_RE.finditer(clause))
+        if not matches:
             continue
-        sentence = m.group(1)
-        before = clause[:m.start()]
-        cm = _CHARGE_IN_CELL.search(before)
-        charge = cm.group(1) if cm else charge_hint
-        who = ""
-        if not cm:
-            # 沒有「犯」字（例如「許元鴻販賣第二級毒品，處…」）：用已知被告名或遮蔽名（○○）切出被告
-            rest = _MARK.sub("", before).strip()
-            for nm in sorted(names, key=len, reverse=True):
-                if nm and rest.startswith(nm):
-                    who, rest = nm, rest[len(nm):]
-                    break
+        for idx, m in enumerate(matches):
+            sentence = m.group(1)
+            seg_start = matches[idx - 1].end() if idx > 0 else 0
+            before = clause[seg_start:m.start()].lstrip("，,")
+            who, rest_charge = _split_defendant(before, names)
+            charge = rest_charge or charge_hint
+            if not who and column_defendant and len(matches) == 1:
+                # 表格本身有「被告」欄且整格只有一個宣告刑時，用該欄位當備援
+                who = column_defendant
+            seg_end = matches[idx + 1].start() if idx + 1 < len(matches) else len(clause)
+            tail = clause[m.end():seg_end]
+            if sentence.startswith("罰金"):          # 主刑罰金：金額就在宣告刑本身
+                fm = _MAIN_FINE.match(sentence)
+                fine, fine_type = (_amount(fm.group(1)) if fm else None), "主刑"
             else:
-                nm = re.match(r"^(?:[A-Za-z][A-Za-z .\-·]*[（(][^）)]+[）)]|[A-Za-z][A-Za-z .\-·]{3,}|[一-鿿]○+)", rest)
-                if nm:
-                    who, rest = nm.group(0), rest[nm.end():]
-            rest = re.sub(r"^(?:共同|共犯|幫助|教唆)", "", rest)
-            rest = re.sub(r"[，,].*$", "", rest).strip()
-            if who and not charge:
-                charge = rest
-        if cm:
-            head = before[:cm.start()]
-            head = _MARK.sub("", re.sub(r"(?:共同|幫助|教唆)$", "", head)).strip()
-            ascii_name = bool(re.fullmatch(r"[A-Za-z .\-·,]+", head))
-            who = head if 0 < len(head) <= (40 if ascii_name else 12) else ""
-        if sentence.startswith("罰金"):          # 主刑罰金：金額就在宣告刑本身
-            fm = _MAIN_FINE.match(sentence)
-            fine, fine_type = (_amount(fm.group(1)) if fm else None), "主刑"
-        else:
-            fm = _FINE.search(clause[m.end():])
-            fine, fine_type = (_amount(fm.group(1)) if fm else None), ("併科" if fm else "")
-        law = ""
-        lm = _LAW_PREFIX.match(charge or "")
-        if lm:
-            law, charge = lm.group("law"), lm.group("charge")
-        out.append({
-            "raw": clause,
-            "defendant": who, "law": law, "charge": charge, "sentence": sentence,
-            "months": _months(sentence), "days": _days(sentence),
-            "fine": fine, "fine_type": fine_type,
-        })
+                fm = _FINE.search(tail)
+                fine, fine_type = (_amount(fm.group(1)) if fm else None), ("併科" if fm else "")
+            law = ""
+            lm = _LAW_PREFIX.match(charge or "")
+            if lm:
+                law, charge = lm.group("law"), lm.group("charge")
+            out.append({
+                "raw": clause[seg_start:seg_end],
+                "defendant": who, "law": law, "charge": charge, "sentence": sentence,
+                "months": _months(sentence), "days": _days(sentence),
+                "fine": fine, "fine_type": fine_type,
+            })
     return out
 
 
@@ -157,12 +183,16 @@ def extract_appendix_offenses(html: str, names=()) -> List[Dict]:
         if not sent_cols:
             continue
         charge_cols = [j for j, h in enumerate(header) if _CHARGE_HEADER.search(h) and not _SENT_HEADER.search(h)]
+        defendant_cols = [j for j, h in enumerate(header)
+                           if _DEFENDANT_HEADER.search(h) and not _SENT_HEADER.search(h) and not _CHARGE_HEADER.search(h)]
         for r in grid[h_end:]:
             if len(r) < len(header):
                 continue
             hint = r[charge_cols[0]] if charge_cols else ""
+            col_defendant = r[defendant_cols[0]] if defendant_cols else ""
             for j in sent_cols:
-                for off in parse_sentence_cell(r[j], charge_hint=hint, names=names):
+                for off in parse_sentence_cell(r[j], charge_hint=hint, names=names,
+                                                column_defendant=col_defendant):
                     off.update(table=ti, no=r[0])
                     results.append(off)
     return results
