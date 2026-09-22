@@ -326,9 +326,8 @@ def _find_content_container(soup: BeautifulSoup):
 
 
 # ─── Step 3a：text-pre 格式（憲法法庭等）的段落切割 ──────────────────────────
-_TP_HEADING_RE = re.compile(
-    r'^(?:主文|理由|事實及理由|事實|犯罪事實|結論|據上論斷)$'
-)
+# 標題判斷與 div 版型共用同一份 _PLAIN_HEADINGS（定義於下方），避免像先前
+# 那樣兩份清單各自維護、新增標題寫法時只改到一邊。
 
 
 def _extract_sections_text_pre(text_pre_elem) -> Tuple[Dict[str, str], str, List[str]]:
@@ -366,9 +365,9 @@ def _extract_sections_text_pre(text_pre_elem) -> Tuple[Dict[str, str], str, List
         current_buf = []
 
     for ln in lines:
-        norm = _SPACES.sub("", ln)
+        norm = _SPACES.sub("", _ZERO_WIDTH_RE.sub("", ln))
 
-        if _TP_HEADING_RE.match(norm):
+        if norm in _PLAIN_HEADINGS:
             flush()
             in_preamble = False
             current_title = norm
@@ -757,13 +756,17 @@ _LAW_APPENDIX_RE = re.compile(
     r"(?!分敘)",          # 排除「所犯法條分敘如下」（那是正文，不是附錄）
 )
 # 「據上論斷，依 ... 判決如主文」中的條文引用
-# (.{1,300}?) 限制長度，避免從段落中間的「依」一路撐到文末的「判決如主文」而抓到無關內容
+# (.{1,300}) 限制長度，避免從段落中間的「依」一路撐到文末的「判決如主文」而抓到無關內容。
+# 用貪婪（非 lazy）：段落中可能有多個「依…，」子句，貪婪會讓 group(1) 盡量往後延伸，
+# 比對到「最靠近判決如主文的那個逗號」為止，才不會在半路一個較早的逗號就提前收尾，
+# 把真正的法條引用留在被捨棄的 filler 裡（實測會漏掉，例如「依前開說明，本件應予
+# 駁回，爰依民事訴訟法第78條，判決如主文」若用 lazy 只會撐到第一個逗號就收手）。
 # 逗號與「判決／裁定」之間允許「逕以簡易」等最多 12 字（簡易判決常見寫法）；
 # 「判決／裁定」與「如主文」之間允許「處刑」等最多 4 字，涵蓋「逕以簡易判決
 # 處刑如主文」——實測 400 筆「簡」字案件中 84.5% 是這個寫法，原本因為中間
 # 多了「逕以簡易」「處刑」而完全比對不到，法條欄位整批留空。
 _YIJU_RE = re.compile(
-    r"依\s*(.{1,300}?)\s*[,，]\s*.{0,12}?(?:判決|裁定).{0,4}?如主文", re.DOTALL)
+    r"依\s*(.{1,300})\s*[,，]\s*.{0,12}?(?:判決|裁定).{0,4}?如主文", re.DOTALL)
 # 條文引用：「刑法第339條之4」「民法第148條」「刑事訴訟法第101條第1項」等
 # {1,15} 允許單字法律名（民法、刑法），避免 {2,15} 造成多字詞前綴（如「惟依民法」）被誤抓
 _LAW_CITE_RE = re.compile(
@@ -786,8 +789,11 @@ def _extract_laws(soup: BeautifulSoup, sections: Dict[str, str], full_text: str 
         src = sections.get(title, "")
         if not src:
             continue
-        # 找 "依...判決如主文" 子句
-        m = _YIJU_RE.search(src[-3000:])   # 只搜結尾部分，效率較高
+        # 找 "依...判決如主文" 子句。理由段落內可能不只一處「依…如主文」
+        # （例如先有一句附帶裁示「…爰裁定如主文」，最後才是真正的論罪依據），
+        # 取最後一個（finditer 最後一筆）而非第一個，較貼近實際判決依據。
+        ms = list(_YIJU_RE.finditer(src[-3000:]))   # 只搜結尾部分，效率較高
+        m = ms[-1] if ms else None
         if m:
             cited = _LAW_CITE_RE.findall(m.group(1))
             if cited:
