@@ -214,3 +214,27 @@ class TestExplode(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)
+
+
+class TestLoaderOnLegacyDatabase(unittest.TestCase):
+    """REGRESSION：從未結構化的舊資料庫，應給出可操作的提示而非 traceback。
+
+    load_cases 的 SELECT 直接列出 35 個結構化欄位，舊資料庫沒有這些欄位時
+    會拋出 `no such column: case_kind`，下方「結構化欄位全為空」的友善
+    SystemExit 只在「欄位存在但為空」時才摸得到。
+    """
+
+    def test_missing_columns_raise_friendly_system_exit(self):
+        import sqlite3
+        import tempfile
+        from src.loader import load_cases
+        with tempfile.TemporaryDirectory() as d:
+            p = str(Path(d) / "old.db")
+            conn = sqlite3.connect(p)
+            conn.execute("CREATE TABLE judgments (id INTEGER, case_number TEXT, court TEXT,"
+                         " judgment_date TEXT, judgment_type TEXT)")
+            conn.commit()
+            conn.close()
+            with self.assertRaises(SystemExit) as cm:
+                load_cases(p)
+            self.assertIn("backfill_structured.py", str(cm.exception))

@@ -79,10 +79,21 @@ def load_cases(
         params.append("判決")
 
     conn = sqlite3.connect(db_path)
-    df = pd.read_sql_query(
-        f"SELECT {','.join(CASE_COLUMNS)} FROM judgments WHERE {' AND '.join(where)}",
-        conn, params=params)
-    conn.close()
+    try:
+        df = pd.read_sql_query(
+            f"SELECT {','.join(CASE_COLUMNS)} FROM judgments WHERE {' AND '.join(where)}",
+            conn, params=params)
+    except (pd.errors.DatabaseError, sqlite3.OperationalError) as e:
+        # 從未跑過結構化的舊資料庫連欄位都沒有，SELECT 會直接失敗，
+        # 下面「結構化欄位全為空」的友善提示根本摸不到。
+        if "no such column" in str(e) or "no such table" in str(e):
+            raise SystemExit(
+                "資料庫缺少結構化欄位（這是尚未升級的舊資料庫）。請先執行：\n"
+                "  python backfill_structured.py\n"
+                f"（原始錯誤：{e}）") from None
+        raise
+    finally:
+        conn.close()
 
     if df.empty:
         raise SystemExit("查無資料。請確認 judgments.db 存在且已執行 backfill_structured.py。")
