@@ -14,10 +14,16 @@ DB_PATH = "judgments.db"
 
 
 def build(keyword: str = "ADV:TPD:M") -> None:
+    """重建 offenses 表。
+
+    建在暫存表 offenses_new，全部寫入成功後才 DROP 舊表、改名頂替，
+    這樣中途出錯（例如某份 HTML 解析炸掉）不會讓既有的 offenses 表被清空；
+    單一檔案的錯誤只跳過該檔並計入 errors，不會中斷整批。
+    """
     conn = sqlite3.connect(DB_PATH)
     conn.executescript("""
-        DROP TABLE IF EXISTS offenses;
-        CREATE TABLE offenses (
+        DROP TABLE IF EXISTS offenses_new;
+        CREATE TABLE offenses_new (
             id          INTEGER PRIMARY KEY AUTOINCREMENT,
             crawl_id    INTEGER REFERENCES crawl_records(id),
             case_number TEXT,
@@ -33,32 +39,43 @@ def build(keyword: str = "ADV:TPD:M") -> None:
             fine_type   TEXT,
             raw         TEXT
         );
-        CREATE INDEX idx_offenses_case ON offenses(case_number);
     """)
     rows = conn.execute(
         "SELECT c.id, c.case_number, c.html_file, j.defendant FROM crawl_records c "
         "LEFT JOIN judgments j ON j.crawl_id = c.id "
         "WHERE c.keyword LIKE ? AND c.case_number LIKE '%判決' "
         "AND instr(COALESCE(j.full_text, ''), '判決') > 0", (keyword + "%",)).fetchall()
-    hit = n = 0
+    hit = n = errors = 0
     for crawl_id, case_number, html_file, defendants in rows:
-        try:
-            html = open(html_file, encoding="utf-8").read()
-        except OSError:
+        if not html_file:
+            errors += 1
             continue
-        offs = extract_appendix_offenses(html, names=[n.strip() for n in (defendants or "").split("；") if n.strip()])
+        try:
+            with open(html_file, encoding="utf-8") as f:
+                html = f.read()
+            offs = extract_appendix_offenses(
+                html, names=[nm.strip() for nm in (defendants or "").split("；") if nm.strip()])
+        except (OSError, UnicodeDecodeError, ValueError) as exc:
+            errors += 1
+            print(f"  [WARN] 解析失敗，略過：{html_file}（{exc}）")
+            continue
         if offs:
             hit += 1
-        for o in offs:
-            conn.execute(
-                "INSERT INTO offenses (crawl_id, case_number, table_idx, row_no, defendant, law, charge,"
-                " sentence, months, days, fine, fine_type, raw) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)",
-                (crawl_id, case_number, o["table"], o["no"], o["defendant"], o["law"], o["charge"],
-                 o["sentence"], o["months"], o["days"], o["fine"], o["fine_type"], o["raw"]))
-            n += 1
+        conn.executemany(
+            "INSERT INTO offenses_new (crawl_id, case_number, table_idx, row_no, defendant, law, charge,"
+            " sentence, months, days, fine, fine_type, raw) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)",
+            [(crawl_id, case_number, o["table"], o["no"], o["defendant"], o["law"], o["charge"],
+              o["sentence"], o["months"], o["days"], o["fine"], o["fine_type"], o["raw"]) for o in offs])
+        n += len(offs)
+    conn.executescript("""
+        DROP TABLE IF EXISTS offenses;
+        ALTER TABLE offenses_new RENAME TO offenses;
+        CREATE INDEX idx_offenses_case ON offenses(case_number);
+    """)
     conn.commit()
     conn.close()
-    print(f"判決 {len(rows)} 筆，其中 {hit} 筆有附表宣告刑，共寫入 {n} 列")
+    err_note = f"，{errors} 筆解析失敗已略過" if errors else ""
+    print(f"判決 {len(rows)} 筆，其中 {hit} 筆有附表宣告刑，共寫入 {n} 列{err_note}")
 
 
 EXPORT_COLUMNS = [
@@ -75,6 +92,10 @@ def export_excel(path: str) -> int:
     from openpyxl.styles import Alignment, Font, PatternFill
 
     conn = sqlite3.connect(DB_PATH)
+    if not conn.execute(
+            "SELECT 1 FROM sqlite_master WHERE type='table' AND name='offenses'").fetchone():
+        conn.close()
+        raise SystemExit("offenses 表不存在，請先不加 --export-only 跑一次建表。")
     cols = ", ".join(f"o.{c}" if c != "judgment_date" else "j.judgment_date" for _, c in EXPORT_COLUMNS)
     rows = conn.execute(
         f"SELECT {cols} FROM offenses o LEFT JOIN judgments j ON j.crawl_id = o.crawl_id "
