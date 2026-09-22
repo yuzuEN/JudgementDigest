@@ -331,6 +331,26 @@ class TestAmounts(unittest.TestCase):
         self.assertEqual(r["awarded_currency"], "USD")
         self.assertEqual(r["awarded_total"], 26663)
 
+    def test_enumerated_line_break_splits_clauses(self):
+        """REGRESSION：「換行＋判項編號」卻沒有句號時，兩個判項被黏成一句。
+
+        split_verdict_clauses 先清掉所有空白（含換行）才切句，_CLAUSE_SPLIT_RE
+        裡的換行字元永遠切不到東西。實測 114 年度訴字第 4473 號：
+        「…違約金⏎二、原告其餘之訴駁回」黏成一句，整句含「駁回」而被判成
+        敗訴（實為一部勝訴一部敗訴）；另有 4 筆判准金額因此整筆消失。
+        """
+        v = "一、被告應給付原告新臺幣10萬元\n二、原告其餘之訴駁回。"
+        self.assertEqual(S.split_verdict_clauses(v),
+                         ["一、被告應給付原告新臺幣10萬元", "二、原告其餘之訴駁回"])
+        self.assertEqual(S.extract_awarded_amounts(v)["awarded_total"], 100000)
+
+    def test_mid_sentence_line_break_is_not_a_clause_boundary(self):
+        """換行本身不是句界：實測 321 筆主文有句子中間斷行。"""
+        v = "被告如以新臺幣貳佰貳拾伍萬參仟零參拾捌元\n為原告預供擔保後，得免為假執行。"
+        self.assertEqual(len(S.split_verdict_clauses(v)), 1)
+        v2 = "被告應給付原告10萬元，及自民國113年\n1月1日起算之利息。"
+        self.assertEqual(len(S.split_verdict_clauses(v2)), 1)
+
     def test_decimal_amount_is_not_truncated(self):
         """REGRESSION：小數金額被截斷成小數點後的尾數。
 

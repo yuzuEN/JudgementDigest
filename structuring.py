@@ -227,7 +227,14 @@ _OUTCOME_EXCLUDE_RE = re.compile(
     r"本判決|[一二三四五六七八九十\d、.]*本?判決第)")
 _PURE_SECURITY_RE = re.compile(r"(供擔保|預供擔保|免為假執行|得假執行)")
 
-_CLAUSE_SPLIT_RE = re.compile(r"[。；\n]+")
+_CLAUSE_SPLIT_RE = re.compile(r"[。；]+")
+
+# 換行本身不能當成句界：實測 321 筆主文有句子中間斷行（「…參拾捌元⏎為原告
+# 預供擔保」），以換行切句會把一句話切成兩半。只有「換行後緊接判項編號」
+# 才一定是新判項——這種位置不可能是句子中間。
+_ENUM_LINE_BREAK_RE = re.compile(
+    r"\n(?=[ \t　]*(?:[一二三四五六七八九十壹貳參肆伍陸柒捌玖拾]+[、.．]|"
+    r"\d+[、．](?!\d)|\d+\.(?!\d)|[㈠-㈩]|[（(][一二三四五六七八九十\d]+[)）]))")
 
 # 少數判決的「主文」欄位混入了後續的理由段落（段落標題辨識失敗所致）。
 # 這些文字會帶進大量「應給付」「駁回」而汙染分類與金額抽取，
@@ -249,7 +256,10 @@ def split_verdict_clauses(verdict: str) -> List[str]:
     """把主文切成子句。判項編號（一、二、1.）本身不切，靠句號切即可。"""
     if not verdict:
         return []
-    text = re.sub(r"\s+", "", clean_verdict(verdict))
+    # 先把「換行＋判項編號」標成句界，再清空白。_CLAUSE_SPLIT_RE 原本含 \n，
+    # 但這裡的 \s+ 早就把換行清掉了，那個 \n 永遠切不到東西。
+    text = _ENUM_LINE_BREAK_RE.sub("。", clean_verdict(verdict))
+    text = re.sub(r"\s+", "", text)
     return [c for c in _CLAUSE_SPLIT_RE.split(text) if c]
 
 
