@@ -116,8 +116,12 @@ def fetch_judgments(
         params.append(normalize_date(end_date) or end_date)
 
     if exclude_mislabeled:
-        # 案號標「判決」但全文不含「判決」者實為裁定（附民移送、單獨宣告沒收、再開辯論等）
-        sql += " AND NOT (judgment_type = '判決' AND instr(full_text, '判決') = 0)"
+        # 案號標「判決」但全文不含「判決」者實為裁定（附民移送、單獨宣告沒收、再開辯論等）。
+        # full_text 為 NULL 或空字串時 instr(...) 回傳 0／NULL，NOT(...) 也會是 NULL 而被
+        # 當成排除，等同把「解析出空全文」的正常列也濾掉了——這裡改用 COALESCE 先排除掉
+        # 「full_text 本身就是空的」情況，只在真的有全文可查時才套用這條排除規則。
+        sql += (" AND NOT (judgment_type = '判決' AND COALESCE(full_text, '') <> ''"
+                " AND instr(full_text, '判決') = 0)")
 
     sql += " ORDER BY parsed_at DESC"
     if limit:
