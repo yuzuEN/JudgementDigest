@@ -124,6 +124,14 @@ _AGENT_RE = re.compile(
 )
 # 其他輔助角色（輔佐人），不提取姓名，直接跳過
 _AUX_SKIP_RE = re.compile(r"^(?:輔佐)")
+# 「兼輔助人」「兼法定代理人」等：當事人本身身兼另一訴訟角色時，另一角色的
+# 姓名會以「兼 <角色> <姓名>」另起一行（例："兼 輔助 人　才仁多杰"）。這些
+# 角色詞不在 _PARTY_ROLES 裡（不是獨立當事人角色，是依附既有當事人的身分），
+# 若不先剝除，整串（含「兼」與角色詞）會被當成姓名存進欄位（例如存成「兼
+# 輔助人才仁多杰」而非「才仁多杰」），汙染 defendant 等姓名欄位。
+_ROLE_PREFIX_STRIP_RE = re.compile(
+    r"^兼\s*(?:法定\s*代理\s*人|特別\s*代理\s*人|輔助\s*人|輔佐\s*人|管理\s*人)\s*"
+)
 # 地址行識別：以數字或英文開頭
 _ADDR_ONLY_RE = re.compile(r"^[\d\sA-Za-z]")
 # 前言頁尾標記：出現即停止擷取當事人（裁定類文件無段落標題時前言會包含頁尾）
@@ -616,6 +624,7 @@ def _extract_parties(preamble_lines: List[str]) -> Dict[str, str]:
     current_actual_role: List[str] = [""]   # mutable，讓 _add_name 閉包可讀取
 
     def _add_name(field: str, raw: str, check_len: bool = True) -> None:
+        raw = _ROLE_PREFIX_STRIP_RE.sub("", raw)
         stop = _NAME_STOP_RE.search(raw)
         name = raw[: stop.start()].strip() if stop else raw.strip()
         if not name or re.search(r"律師|辯護", name):
