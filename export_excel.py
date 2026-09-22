@@ -121,18 +121,30 @@ STRUCTURED_EXPORT_COLUMNS: List[tuple] = [
 #
 # 易讀欄直接串接 JSON 每筆現成的 `key`（例：「民法§767第1項前段」），
 # 不另立一套抽取規則：人看易讀欄、程式讀 JSON 欄，兩者永遠一致不會漂移。
+# 但 JSON 欄只有跑過本版 parse_html 或 backfill_structured.py 之後才有值。
+# 直接改成「只讀 JSON」的話，**還沒回填的舊資料庫匯出後整欄空白、而且沒有
+# 任何警告**——合併前這一欄是有資料的（雖然截斷率高）。因此 JSON 欄取不到
+# 值時退回原始欄，並在值後標註來源，讓讀表的人知道那是未回填的舊值。
+_LEGACY_LAWS_SUFFIX = "（未結構化）"
+
+
 def _applicable_laws_text(row: Dict) -> str:
     raw = row.get("applicable_laws_json")
-    if not raw:
-        return ""
-    try:
-        items = json.loads(raw)
-    except (TypeError, ValueError):
-        return ""
-    if not isinstance(items, list):
-        return ""
-    keys = (it.get("key", "") for it in items if isinstance(it, dict))
-    return "；".join(dict.fromkeys(k for k in keys if k))
+    items = None
+    if raw:
+        try:
+            items = json.loads(raw)
+        except (TypeError, ValueError):
+            items = None
+    if isinstance(items, list):
+        keys = (it.get("key", "") for it in items if isinstance(it, dict))
+        text = "；".join(dict.fromkeys(k for k in keys if k))
+        if text:
+            return text
+
+    # 退回原始欄：資料庫尚未回填時，有截斷的舊值仍遠勝於整欄空白
+    legacy = (row.get("applicable_laws") or "").strip()
+    return legacy + _LEGACY_LAWS_SUFFIX if legacy else ""
 
 
 # 欄位名 → 取值函式。值不存在於 DB，於匯出時即時計算。

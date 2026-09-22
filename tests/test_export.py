@@ -143,6 +143,26 @@ class ApplicableLawsTextTests(unittest.TestCase):
             [{"key": "民事訴訟法§436之1第3項"}], ensure_ascii=False)}
         self.assertEqual(export_excel._applicable_laws_text(row), "民事訴訟法§436之1第3項")
 
+    def test_falls_back_to_legacy_column(self):
+        """REGRESSION：舊資料庫尚未回填時，適用法條欄不可整欄空白。
+
+        BASE_COLUMNS 改成只讀 applicable_laws_json 之後，還沒跑過
+        backfill_structured.py 的資料庫（例如刑事那邊現有的一萬多筆）
+        匯出後這一欄會全空，而且沒有任何警告——合併前它是有資料的。
+        """
+        row = {"applicable_laws": "民法第179條、第184條", "applicable_laws_json": ""}
+        self.assertEqual(export_excel._applicable_laws_text(row),
+                         "民法第179條、第184條（未結構化）")
+        # JSON 壞掉時同樣退回原始欄
+        self.assertEqual(
+            export_excel._applicable_laws_text(
+                {"applicable_laws": "民法第5條", "applicable_laws_json": "{壞掉"}),
+            "民法第5條（未結構化）")
+        # 兩者皆空才是空字串
+        self.assertEqual(
+            export_excel._applicable_laws_text(
+                {"applicable_laws": "", "applicable_laws_json": ""}), "")
+
     def test_bad_input_returns_empty_not_raises(self):
         for bad in (None, "", "[]", "not json", "{}", json.dumps([1, 2])):
             with self.subTest(bad=bad):
