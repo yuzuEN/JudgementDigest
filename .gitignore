@@ -9,14 +9,18 @@ __pycache__/
 # 資料（不入版控）
 html_cache/
 judgments.db*
+# 舊版 backfill_structured.py 產生的備份命名（judgments.bak-*.db），
+# 不符合上面的 judgments.db* 規則，補一條避免 290 MB 的檔案被 git add 進來
+judgments.bak-*.db
 *.xlsx
 *.log
 
 # 除錯用暫存頁面
 *_page.html
 
-# 簡報（不上傳）
+# 簡報與交付文件（不上傳）
 *.pptx
+*.pdf
 
 # 暫時用的腳本（不屬於核心功能）
 check_html.py
@@ -27,6 +31,16 @@ update_pptx.py
 
 # 測試 fixture 不受上面 *_page.html 規則影響
 !tests/fixtures/*.html
+
+# 報告書與其產出（4 MB 圖檔，可由 docs/ 內的腳本重新產生，不入版控）
+docs/
+
+# PR 描述草稿（只給自己貼到 GitHub 用）
+pr_body.md
+
+# 分析產出（可由程式重新產生，不入版控）
+judge_analysis/output/
+judge_analysis/slides/*.png
 
 # 逐月爬取的進度狀態檔（本機執行紀錄）
 crawl_state_*.json

@@ -22,7 +22,7 @@ import random
 import re
 import argparse
 import logging
-from datetime import datetime
+from datetime import date, datetime
 from typing import Optional, List, Dict, Tuple
 from urllib.parse import unquote
 
@@ -612,13 +612,79 @@ def _sys_code(name: str) -> str:
     return _CASE_SYS_CODES.get(raw, "")
 
 
-def _roc_parts(date_str: str) -> Optional[Tuple[int, int, int]]:
-    """西元 YYYY/MM/DD（或 YYYY-MM-DD）→ (民國年, 月, 日)。"""
+def _parse_ad_date(date_str: str) -> Optional[date]:
+    """
+    西元 YYYY/MM/DD（或 YYYY-MM-DD）→ date；無法解析時回傳 None。
+
+    用 date() 建構而非單純 split，是為了連「不存在的日期」一起擋掉：
+    2024/13/45、2025/02/30 原本都會被拆成數字送進查詢表單。年份 <= 1911
+    則多半是誤把民國年填進來（114/03/01 會算出 -1797 年）。
+    """
     try:
         y, m, d = re.split(r"[/-]", date_str.strip())
-        return int(y) - 1911, int(m), int(d)
+        g = date(int(y), int(m), int(d))
     except Exception:
         return None
+    return g if g.year > 1911 else None
+
+
+def _roc_parts(date_str: str) -> Optional[Tuple[int, int, int]]:
+    """西元 YYYY/MM/DD（或 YYYY-MM-DD）→ (民國年, 月, 日)。"""
+    g = _parse_ad_date(date_str)
+    return (g.year - 1911, g.month, g.day) if g else None
+
+
+def parse_date_arg(value: str) -> date:
+    """
+    CLI 的日期參數 → date。不合法時拋 ValueError，訊息可直接交給 argparse 顯示。
+
+    日期參數若被靜默忽略，查詢會變成「沒有日期範圍」—— 使用者以為在抓一週，
+    實際上在抓全部。所以寧可在開瀏覽器之前就中止。
+    """
+    g = _parse_ad_date(value)
+    if g is None:
+        raise ValueError(f"日期格式錯誤：{value}（應為西元 YYYY/MM/DD，例如 2025/01/07）")
+    return g
+
+
+def resolve_date_range(
+    start_date: str = "",
+    end_date:   str = "",
+    start_year: int = 2015,
+    end_year:   Optional[int] = None,
+    today:      Optional[date] = None,
+) -> Tuple[date, date]:
+    """
+    把 CLI 的四個日期參數收斂成 (起日, 迄日)。任何一項不合法都拋 ValueError。
+
+    --start-date / --end-date 各自覆蓋對應的 --start-year / --end-year；
+    年份參數展開為該年的 1/1 與 12/31。未指定 --end-year 時迄日是「今天」
+    而非當年 12/31 —— 爬未來日期沒有意義。
+    """
+    today = today or date.today()
+
+    if start_date:
+        sd = parse_date_arg(start_date)
+    else:
+        try:
+            sd = date(start_year, 1, 1)
+        except ValueError:
+            raise ValueError(f"起始年份無效：{start_year}")
+
+    if end_date:
+        ed = parse_date_arg(end_date)
+    elif end_year:
+        try:
+            ed = date(end_year, 12, 31)
+        except ValueError:
+            raise ValueError(f"結束年份無效：{end_year}")
+    else:
+        ed = today
+
+    if sd > ed:
+        raise ValueError(
+            f"起始日期 {sd:%Y/%m/%d} 晚於結束日期 {ed:%Y/%m/%d}")
+    return sd, ed
 
 
 def _dismiss_alert(driver: webdriver.Chrome) -> str:
@@ -671,6 +737,18 @@ def _ad_search(
     法院與案件類別同樣是查詢條件（非結果頁分群），故各條件組合都有自己的 500 額度。
     回傳 (結果列表 URL, 總筆數)；查詢失敗回傳 (None, None)。
     """
+    # 日期先驗證再開瀏覽器。無法解析的日期若只印 warning 就跳過，查詢會變成
+    # 「沒有日期範圍」——使用者以為在抓一週，實際在抓全部，而且不會有任何錯誤訊息。
+    values: Dict[str, int] = {}
+    for label, ds in (("1", start_date), ("2", end_date)):
+        if not ds:
+            continue
+        parts = _roc_parts(ds)
+        if parts is None:
+            logger.error("Invalid date %r (expected YYYY/MM/DD) — search aborted", ds)
+            return None, None
+        values[f"dy{label}"], values[f"dm{label}"], values[f"dd{label}"] = parts
+
     driver.get(BASE_URL_AD)
     time.sleep(2.5)
     _dismiss_alert(driver)
@@ -707,16 +785,6 @@ def _ad_search(
     if court or wanted_sys:
         # 勾選法院／案件類別會觸發「常用字別」的 AJAX，稍候再送出以免競態
         time.sleep(1.0)
-
-    values = {}
-    for label, ds in (("1", start_date), ("2", end_date)):
-        if not ds:
-            continue
-        parts = _roc_parts(ds)
-        if parts is None:
-            logger.warning("Cannot parse date %r — ignored", ds)
-            continue
-        values[f"dy{label}"], values[f"dm{label}"], values[f"dd{label}"] = parts
 
     for fid in _AD_DATE_FIELDS:
         el = driver.find_element(By.ID, fid)
@@ -1392,6 +1460,18 @@ if __name__ == "__main__":
     args = ap.parse_args()
 
     case_types = tuple(t.strip() for t in args.case_type.split(",") if t.strip())
+
+    # 日期在開瀏覽器之前就驗證；本檔把日期當字串傳給查詢表單，
+    # 不擋的話打錯一個字就會静默變成「沒有日期範圍」的查詢。
+    for _flag, _raw in (("--start-date", args.start_date), ("--end-date", args.end_date)):
+        if _raw:
+            try:
+                parse_date_arg(_raw)
+            except ValueError as exc:
+                ap.error(f"{_flag}：{exc}")
+    if args.start_date and args.end_date:
+        if parse_date_arg(args.start_date) > parse_date_arg(args.end_date):
+            ap.error(f"起始日期 {args.start_date} 晚於結束日期 {args.end_date}")
 
     if args.recrawl_stubs:
         n = recrawl_stubs(headless=not args.no_headless)
