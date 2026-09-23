@@ -643,8 +643,11 @@ def _extract_parties(preamble_lines: List[str]) -> Dict[str, str]:
         name = raw[: stop.start()].strip() if stop else raw.strip()
         if not name or re.search(r"律師|辯護", name):
             return
-        # Reject pure connector strings even when check_len=False
-        if re.fullmatch(r"[即及與，,、；;。\s]+", name):
+        # Reject pure connector strings even when check_len=False.
+        # 「兼」「共同」也算連接詞：容嫣於 PR #4 留言回報，"兼　共　同" 這種
+        # 獨立一行、後面沒接名字的殘留片段會被當成一個假的當事人姓名存進去
+        # （例：113 年度簡上字第 394 號的 appellant 存成「A男；A男之母；兼 共 同」）。
+        if re.fullmatch(r"[即及與兼共同，,、；;。\s]+", name):
             return
         if check_len:
             core = re.sub(r"[（(][^）)]*[）)]", "", name).strip()
@@ -788,14 +791,22 @@ _LAW_APPENDIX_RE = re.compile(
 # 「判決／裁定」與「如主文」之間允許「處刑」等最多 4 字，涵蓋「逕以簡易判決
 # 處刑如主文」——實測 400 筆「簡」字案件中 84.5% 是這個寫法，原本因為中間
 # 多了「逕以簡易」「處刑」而完全比對不到，法條欄位整批留空。
+# filler 不允許出現「依」或「條」：容嫣於 PR #4 留言實測民事語料時發現，若
+# filler 剛好能吞下一整段「依◯◯法第◯條，」，group(1) 就會在更早的逗號處
+# 收尾，把真正的法條引用留在被捨棄的 filler 裡（23 筆退步，5 筆變成空白）。
 _YIJU_RE = re.compile(
-    r"依\s*(.{1,300})\s*[,，]\s*.{0,12}?(?:判決|裁定).{0,4}?如主文", re.DOTALL)
+    r"依\s*(.{1,300})\s*[,，]\s*[^依條]{0,12}?(?:判決|裁定).{0,4}?如主文", re.DOTALL)
 # 條文引用：「刑法第339條之4」「民法第148條」「刑事訴訟法第101條第1項」等
 # {1,15} 允許單字法律名（民法、刑法），避免 {2,15} 造成多字詞前綴（如「惟依民法」）被誤抓
 _LAW_CITE_RE = re.compile(
     r"(?:[^\s，；、（\(]{1,15}(?:法|條例|規則))"
     r"\s*第\s*[\d百千一二三四五六七八九十]+\s*條[之第\d\s]*"
 )
+# 找「依」後緊接法規名＋「第…條」（中間不能有逗號、頓號、句號、分號）的最後一個位置：
+# 只當「依」字真的是在起一段法條引用時才當作切點，避免像「最後一個依」這種只看字元
+# 位置的判準，誤把括號內附注文字裡的另一個「依」（例：「（依法院辦理刑事訴訟案件
+# 應行注意事項第159點…）」）當成切點，反而把前面真正的法條引用切掉。
+_LAST_LAW_ANCHOR_RE = re.compile(r"依(?=[^，、；。]{0,20}?(?:法|條例|規則)第)")
 
 
 def _extract_laws(soup: BeautifulSoup, sections: Dict[str, str], full_text: str = "") -> str:
@@ -818,7 +829,15 @@ def _extract_laws(soup: BeautifulSoup, sections: Dict[str, str], full_text: str 
         ms = list(_YIJU_RE.finditer(src[-3000:]))   # 只搜結尾部分，效率較高
         m = ms[-1] if ms else None
         if m:
-            cited = _LAW_CITE_RE.findall(m.group(1))
+            # group(1) 貪婪比對可能整段從更早的敘述文字（原告主張、答辯等）開始，
+            # 只取最後一個「起法條引用」的「依」之後的文字，避免把「原告援引民法
+            # 第179條」這類敘述句也當成法院實際適用的法條（容嫣於 PR #4 留言實測
+            # 101 筆）。
+            clause = m.group(1)
+            anchors = list(_LAST_LAW_ANCHOR_RE.finditer(clause))
+            if anchors:
+                clause = clause[anchors[-1].end():]
+            cited = _LAW_CITE_RE.findall(clause)
             if cited:
                 return "；".join(dict.fromkeys(cited))[:1000]
 
