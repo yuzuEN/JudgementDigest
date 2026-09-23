@@ -2,14 +2,14 @@ import pandas as pd
 import re
 
 files_prefix = 'judgments_ADV_TPD_M_'
-files_suffix = ['20260914_222828.xlsx', '20260914_050629.xlsx']
-final_name = '25_07-12.xlsx'
+files_suffix = ['20260918_021954.xlsx']
+final_name = '24_07-12.xlsx'
 result = pd.DataFrame()
 
 for file_suffix in files_suffix:
     file_path = files_prefix + file_suffix
     df = pd.read_excel(file_path)
-    
+    print('this df: ', len(df))
     
     result = pd.concat([result, df], ignore_index=True)
     result.drop_duplicates(subset=['裁判書連結'], keep='first', inplace=True)

@@ -28,6 +28,11 @@ check_html2.py
 diagnose.py
 add_role_stats_slide.py
 update_pptx.py
+merge.py
+
+*.ipynb
+
+finaldata/
 
 # 測試 fixture 不受上面 *_page.html 規則影響
 !tests/fixtures/*.html
