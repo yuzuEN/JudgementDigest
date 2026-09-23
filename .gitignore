@@ -45,3 +45,4 @@ judge_analysis/slides/*.png
 # 逐月爬取的進度狀態檔（本機執行紀錄）
 crawl_state_*.json
 crawl_state_*.json.tmp
+罪名頻率表.csv
