@@ -45,6 +45,18 @@ def build(keyword: str = "ADV:TPD:M") -> None:
         "LEFT JOIN judgments j ON j.crawl_id = c.id "
         "WHERE c.keyword LIKE ? AND c.case_number LIKE '%判決' "
         "AND instr(COALESCE(j.full_text, ''), '判決') > 0", (keyword + "%",)).fetchall()
+    if not rows:
+        # --keyword 沒對到任何資料時直接中止、不動既有的 offenses 表：main 合併後
+        # 爬蟲標籤格式已改成「臺灣臺北地方法院-刑事-判決」，此函式預設的
+        # ADV:TPD:M 是我們早期爬蟲用的標籤，兩者不通用。若不擋在這裡，下面的
+        # DROP + RENAME 仍會把既有的 offenses 表換成一張空表（容嫣於 PR #4
+        # 留言回報：合併 main 後不加 --keyword 執行會把 offenses 表清空）。
+        conn.execute("DROP TABLE IF EXISTS offenses_new")
+        conn.commit()
+        conn.close()
+        raise SystemExit(
+            f"--keyword {keyword!r} 查無符合的判決，未動既有的 offenses 表。"
+            "請確認標籤格式（例如新版爬蟲用「臺灣臺北地方法院-刑事-判決」）。")
     hit = n = errors = 0
     for crawl_id, case_number, html_file, defendants in rows:
         if not html_file:
