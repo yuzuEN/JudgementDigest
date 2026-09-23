@@ -34,6 +34,10 @@ from typing import Dict, List, Tuple
 
 from bs4 import BeautifulSoup, Tag, NavigableString
 
+# 結構化欄位推導規則（純函式模組）。爬蟲解析與事後回填共用同一份規則，
+# 確保兩條路徑產生的欄位完全一致、可重現。
+from structuring import STRUCTURED_COLUMNS, derive_structured_fields
+
 # ─── 設定 ────────────────────────────────────────────────────────────────────
 DB_PATH  = "judgments.db"
 HTML_DIR = "html_cache"
@@ -229,6 +233,12 @@ def init_db() -> None:
     """)
     # 對舊版資料庫補齊新增欄位
     existing_cols = {row[1] for row in conn.execute("PRAGMA table_info(judgments)")}
+    # 結構化欄位一律以 ALTER TABLE 增補，新舊資料庫走同一條路徑，
+    # 不必為了新欄位重建資料表。
+    for col, sqltype in STRUCTURED_COLUMNS:
+        if col not in existing_cols:
+            conn.execute(f"ALTER TABLE judgments ADD COLUMN {col} {sqltype}")
+            existing_cols.add(col)
     for col, typedef in (
         ("source_url",        "TEXT DEFAULT ''"),
         ("facts_and_reasons", "TEXT DEFAULT ''"),
@@ -420,6 +430,9 @@ _PLAIN_HEADINGS = frozenset({
     "犯罪事實及理由", "事實及理由", "事實暨理由", "事實與理由",
     "犯罪事實", "事實",
     "理由", "理由要領", "事實及理由要領", "認定犯罪事實所憑之證據及理由",
+    # 張容嫣於 PR #3 留言回報：18 份刑事文書中以獨立標題出現，卻不在白名單
+    # 裡，其中 17 份的內容因此沒有落進任何欄位，只存在 full_text。
+    "證據並所犯法條",
     "結論", "據上論斷",
 })
 
@@ -430,6 +443,7 @@ _PLAIN_HEADINGS = frozenset({
 _LAW_SEARCH_SECTIONS = (
     "據上論斷", "理由", "理由要領", "事實及理由", "事實及理由要領",
     "事實暨理由", "事實與理由", "犯罪事實及理由", "認定犯罪事實所憑之證據及理由",
+    "證據並所犯法條",
 )
 
 
@@ -948,8 +962,9 @@ def parse_html(
     facts_val   = sections.get("事實", "")
     reasons_val = (
         sections.get("理由", "")
-        or sections.get("認定犯罪事實所憑之證據及理由", "")
         or sections.get("理由要領", "")          # 簡易判決的寫法
+        or sections.get("認定犯罪事實所憑之證據及理由", "")
+        or sections.get("證據並所犯法條", "")     # 張容嫣回報的第三種寫法，併入理由
     )
 
     # 裁定 or 判決：從裁判字號或案件類型末尾辨識
@@ -963,7 +978,7 @@ def parse_html(
     else:
         judgment_type = ""
 
-    return {
+    parsed = {
         "crawl_id":           crawl_id,
         "case_number":        meta["case_number"],
         "court":              meta["court"],
@@ -994,38 +1009,34 @@ def parse_html(
         "keyword":            keyword,
     }
 
+    # 解析當下就推導結構化欄位，新爬的資料不需要額外的回填步驟。
+    parsed.update(derive_structured_fields(parsed))
+    return parsed
+
 
 # ─── DB 寫入 ──────────────────────────────────────────────────────────────────
+# 基礎欄位（解析器直接產出）。結構化欄位由 STRUCTURED_COLUMNS 動態接在後面，
+# 因此 structuring.py 新增欄位時，這裡不需要同步修改——舊版做法要同時改
+# 四個地方（建表、升級清單、INSERT、匯出），漏改任何一處欄位就會悄悄變空。
+_BASE_INSERT_COLUMNS = [
+    "crawl_id", "case_number", "court", "judgment_date", "case_type", "judgment_type",
+    "source_url", "verdict", "facts", "facts_and_reasons", "criminal_facts", "reasons",
+    "conclusion", "applicable_laws", "judges", "clerk",
+    "plaintiff", "plaintiff_agent", "defendant", "defendant_agent",
+    "appellant", "appellant_agent", "appellee", "appellee_agent",
+    "party_roles", "other_parties", "full_text", "keyword",
+]
+
+
 def save_judgment(data: Dict) -> bool:
     conn = sqlite3.connect(DB_PATH)
     c    = conn.cursor()
     try:
+        cols = _BASE_INSERT_COLUMNS + [col for col, _ in STRUCTURED_COLUMNS]
+        placeholders = ",".join("?" * len(cols))
         c.execute(
-            """INSERT OR REPLACE INTO judgments (
-                   crawl_id, case_number, court, judgment_date, case_type, judgment_type,
-                   source_url,
-                   verdict, facts, facts_and_reasons, criminal_facts, reasons,
-                   conclusion, applicable_laws, judges, clerk,
-                   plaintiff, plaintiff_agent,
-                   defendant, defendant_agent,
-                   appellant, appellant_agent,
-                   appellee,  appellee_agent,
-                   party_roles, other_parties, full_text, keyword
-               ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)""",
-            (
-                data["crawl_id"], data["case_number"], data["court"],
-                data["judgment_date"], data["case_type"], data["judgment_type"],
-                data["source_url"],
-                data["verdict"], data["facts"], data["facts_and_reasons"],
-                data["criminal_facts"], data["reasons"], data["conclusion"],
-                data["applicable_laws"], data["judges"], data["clerk"],
-                data["plaintiff"],       data["plaintiff_agent"],
-                data["defendant"],       data["defendant_agent"],
-                data["appellant"],       data["appellant_agent"],
-                data["appellee"],        data["appellee_agent"],
-                data["party_roles"],
-                data["other_parties"], data["full_text"], data["keyword"],
-            ),
+            f"INSERT OR REPLACE INTO judgments ({','.join(cols)}) VALUES ({placeholders})",
+            tuple(data.get(col) for col in cols),
         )
         c.execute("UPDATE crawl_records SET parsed=1 WHERE id=?", (data["crawl_id"],))
         conn.commit()

@@ -4,6 +4,7 @@ export_excel.py 的離線測試：篩選條件（關鍵字／法院／裁判日�
 全部在暫存 DB 與暫存目錄進行，不碰真正的 judgments.db。
 """
 
+import json
 import os
 import sqlite3
 import sys
@@ -114,6 +115,70 @@ class TestExportToExcel(_TempDbCase):
         conn.close()
         for db_col, _label in BASE_COLUMNS:
             self.assertIn(db_col, cols, msg=db_col)
+
+
+class ApplicableLawsTextTests(unittest.TestCase):
+    """
+    「適用法條」易讀欄是 applicable_laws_json 的呈現，不是另一套抽取規則。
+    這些測試鎖住兩件事：渲染忠於 JSON，以及壞輸入不會讓整批匯出失敗。
+    """
+
+    def test_joins_keys_in_order(self):
+        row = {"applicable_laws_json": json.dumps([
+            {"key": "民法§767第1項前段"}, {"key": "民法§470第2項"},
+        ], ensure_ascii=False)}
+        self.assertEqual(export_excel._applicable_laws_text(row),
+                         "民法§767第1項前段；民法§470第2項")
+
+    def test_deduplicates_preserving_order(self):
+        # 同一條文常在主文與理由各出現一次，重複輸出只會讓欄位更難讀
+        row = {"applicable_laws_json": json.dumps([
+            {"key": "民法§179"}, {"key": "民法§767"}, {"key": "民法§179"},
+        ], ensure_ascii=False)}
+        self.assertEqual(export_excel._applicable_laws_text(row), "民法§179；民法§767")
+
+    def test_keeps_sub_article_and_paragraph(self):
+        # 這正是原始 applicable_laws 欄會截斷成「第436條之1第3」的情形
+        row = {"applicable_laws_json": json.dumps(
+            [{"key": "民事訴訟法§436之1第3項"}], ensure_ascii=False)}
+        self.assertEqual(export_excel._applicable_laws_text(row), "民事訴訟法§436之1第3項")
+
+    def test_falls_back_to_legacy_column(self):
+        """REGRESSION：舊資料庫尚未回填時，適用法條欄不可整欄空白。
+
+        BASE_COLUMNS 改成只讀 applicable_laws_json 之後，還沒跑過
+        backfill_structured.py 的資料庫（例如刑事那邊現有的一萬多筆）
+        匯出後這一欄會全空，而且沒有任何警告——合併前它是有資料的。
+        """
+        row = {"applicable_laws": "民法第179條、第184條", "applicable_laws_json": ""}
+        self.assertEqual(export_excel._applicable_laws_text(row),
+                         "民法第179條、第184條（未結構化）")
+        # JSON 壞掉時同樣退回原始欄
+        self.assertEqual(
+            export_excel._applicable_laws_text(
+                {"applicable_laws": "民法第5條", "applicable_laws_json": "{壞掉"}),
+            "民法第5條（未結構化）")
+        # 兩者皆空才是空字串
+        self.assertEqual(
+            export_excel._applicable_laws_text(
+                {"applicable_laws": "", "applicable_laws_json": ""}), "")
+
+    def test_bad_input_returns_empty_not_raises(self):
+        for bad in (None, "", "[]", "not json", "{}", json.dumps([1, 2])):
+            with self.subTest(bad=bad):
+                self.assertEqual(
+                    export_excel._applicable_laws_text({"applicable_laws_json": bad}), "")
+
+    def test_law_columns_are_adjacent(self):
+        # 易讀欄與 JSON 欄若相隔數十欄，讀表的人得左右橫跨整張表才能對照
+        labels = [l for _, l in export_excel.STRUCTURED_EXPORT_COLUMNS]
+        self.assertEqual(
+            labels[labels.index("主要法規"):labels.index("主要法規") + 4],
+            ["主要法規", "法條引用數", "適用法條", "適用法條（結構化JSON）"])
+
+    def test_raw_applicable_laws_not_exported(self):
+        # 原始欄 85.7% 被截斷且無獨佔資訊，留在 Excel 裡只會誤導
+        self.assertNotIn("applicable_laws", [c for c, _ in BASE_COLUMNS])
 
 
 if __name__ == "__main__":

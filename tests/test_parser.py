@@ -156,3 +156,74 @@ class TestSaveJudgment(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TestSectionHeadingFallback(unittest.TestCase):
+    """
+    段落標題辨識的後備判準。
+
+    兩個缺陷都會造成**靜默的資料缺漏**：標題沒被認出來，其後的內容全部
+    留在 preamble，verdict 欄位變空，而且不會有任何錯誤訊息。實測 12,416
+    筆裡有 17 筆中招，其中 14 筆落在臺北地院 2025 民事判決。
+    """
+
+    # _find_content_container 要求 .htmlcontent 的文字超過 100 字元才認定為正文容器，
+    # 所以理由段要有足夠長度，否則整份文件會被當成未載入完成而降級處理。
+    _REASONS = (
+        "一、被告經合法通知，未於言詞辯論期日到場，爰依原告之聲請，由其一造辯論而為判決。"
+        "二、原告主張兩造間就系爭房地有借名登記關係，惟未能舉證以實其說，其請求為無理由。"
+    )
+
+    @staticmethod
+    def _page(heading_html: str) -> str:
+        return (
+            '<div id="jud"><div class="htmlcontent">'
+            '<div class="he-h1">臺灣臺北地方法院民事判決</div>'
+            '<div>114年度重訴字第486號</div>'
+            '<div>原　告　黃○○</div>'
+            '<div>上列當事人間請求事件，本院判決如下︰</div>'
+            f'{heading_html}'
+            '<div>原告之訴及假執行之聲請均駁回。</div>'
+            '<div>訴訟費用由原告負擔。</div>'
+            '<div class="notEdit">理　由</div>'
+            f'<div>{TestSectionHeadingFallback._REASONS}</div>'
+            '</div></div>'
+        )
+
+    def test_heading_with_notedit_class_still_works(self):
+        """原本就支援的格式不能被改壞。"""
+        d = parse_html(self._page('<div class="notEdit">主　文</div>'), crawl_id=-1)
+        self.assertIn("原告之訴", d["verdict"])
+
+    def test_heading_without_any_class(self):
+        """REGRESSION：標題 div 沒有 notEdit class 時，舊規則整段漏抓。"""
+        d = parse_html(self._page('<div>主　文</div>'), crawl_id=-1)
+        self.assertIn("原告之訴", d["verdict"],
+                      "沒有 class 的「主　文」也必須被認成段落標題")
+
+    def test_heading_with_zero_width_characters(self):
+        """REGRESSION：司法院頁面的標題偶爾夾帶 U+200B，空白正規化清不掉。"""
+        d = parse_html(self._page('<div>主 文 \u200b\u200b\u200b\u200b</div>'), crawl_id=-1)
+        self.assertIn("原告之訴", d["verdict"])
+
+    def test_body_text_is_not_mistaken_for_heading(self):
+        """後備判準比對完整字串，不能把提到「主文」的內文當成標題。"""
+        page = (
+            '<div id="jud"><div class="htmlcontent">'
+            '<div class="he-h1">臺灣臺北地方法院民事判決</div>'
+            '<div class="notEdit">主　文</div>'
+            '<div>被告應給付原告新臺幣100萬元。</div>'
+            '<div class="notEdit">理　由</div>'
+            '<div>本件原判決主文第一項應予維持，爰判決如主文所示。</div>'
+            f'<div>{TestSectionHeadingFallback._REASONS}</div>'
+            '</div></div>'
+        )
+        d = parse_html(page, crawl_id=-1)
+        self.assertIn("被告應給付", d["verdict"])
+        self.assertNotIn("爰判決如主文所示", d["verdict"],
+                         "內文提到「主文」不得被當成新的段落標題")
+
+    def test_normalize_section_title(self):
+        self.assertEqual(html_parser._normalize_section_title("主　文"), "主文")
+        self.assertEqual(html_parser._normalize_section_title("主 文 \u200b\u200b"), "主文")
+        self.assertEqual(html_parser._normalize_section_title("事　實　及　理　由"), "事實及理由")

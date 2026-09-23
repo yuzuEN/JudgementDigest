@@ -1,0 +1,40 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="900" viewBox="0 0 1600 900" font-family="'Microsoft JhengHei','微軟正黑體','PingFang TC','Noto Sans TC','Heiti TC',sans-serif">
+<defs><marker id="ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#8a8880"/></marker></defs>
+<rect width="1600" height="900" fill="#fcfcfb"/>
+<text x="64" y="84" font-size="44" font-weight="700" fill="#0b0b0b">法條覆蓋率從 34.8% 提升到 99.8%</text>
+<text x="64" y="134" font-size="27" fill="#52514e">臺北地院 2025 年民事判決 10,547 筆；「修正前」為同學交付版本的實測值</text>
+<rect x="64" y="174" width="28" height="28" rx="6" fill="#eb6834"/>
+<text x="104" y="196" font-size="26" fill="#52514e">修正前</text>
+<rect x="238.1" y="174" width="28" height="28" rx="6" fill="#2a78d6"/>
+<text x="278.1" y="196" font-size="26" fill="#52514e">修正後</text>
+<text x="490" y="314" font-size="29" fill="#0b0b0b" text-anchor="end">法條覆蓋率（全體）</text>
+<rect x="520" y="262" width="257.5" height="40" rx="4" fill="#eb6834"/>
+<text x="795.52" y="293" font-size="30" font-weight="600" fill="#0b0b0b">34.8%</text>
+<rect x="520" y="306" width="738.5" height="40" rx="4" fill="#2a78d6"/>
+<text x="1276.52" y="337" font-size="30" font-weight="600" fill="#0b0b0b">99.8%</text>
+<line x1="520" y1="362" x2="1536" y2="362" stroke="#e6e5e1" stroke-width="1.5"/>
+<text x="490" y="432" font-size="29" fill="#0b0b0b" text-anchor="end">法條覆蓋率（對審案件）</text>
+<rect x="520" y="380" width="115.4" height="40" rx="4" fill="#eb6834"/>
+<text x="653.44" y="411" font-size="30" font-weight="600" fill="#0b0b0b">15.6%</text>
+<rect x="520" y="424" width="738.5" height="40" rx="4" fill="#2a78d6"/>
+<text x="1276.52" y="455" font-size="30" font-weight="600" fill="#0b0b0b">99.8%</text>
+<line x1="520" y1="480" x2="1536" y2="480" stroke="#e6e5e1" stroke-width="1.5"/>
+<text x="490" y="550" font-size="29" fill="#0b0b0b" text-anchor="end">法條含「項」層級</text>
+<rect x="520" y="498" width="5.0" height="40" rx="4" fill="#eb6834"/>
+<text x="543" y="529" font-size="30" font-weight="600" fill="#0b0b0b">0%</text>
+<rect x="520" y="542" width="336.7" height="40" rx="4" fill="#2a78d6"/>
+<text x="874.7" y="573" font-size="30" font-weight="600" fill="#0b0b0b">45.5%</text>
+<line x1="520" y1="598" x2="1536" y2="598" stroke="#e6e5e1" stroke-width="1.5"/>
+<text x="490" y="668" font-size="29" fill="#0b0b0b" text-anchor="end">金額覆蓋率（金錢給付）</text>
+<rect x="520" y="616" width="684.5" height="40" rx="4" fill="#eb6834"/>
+<text x="1222.5" y="647" font-size="30" font-weight="600" fill="#0b0b0b">92.5%</text>
+<rect x="520" y="660" width="719.3" height="40" rx="4" fill="#2a78d6"/>
+<text x="1257.28" y="691" font-size="30" font-weight="600" fill="#0b0b0b">97.2%</text>
+<line x1="520" y1="716" x2="1536" y2="716" stroke="#e6e5e1" stroke-width="1.5"/>
+<text x="490" y="786" font-size="29" fill="#0b0b0b" text-anchor="end">原告有律師（可用率）</text>
+<rect x="520" y="734" width="5.0" height="40" rx="4" fill="#eb6834"/>
+<text x="543" y="765" font-size="30" font-weight="600" fill="#0b0b0b">0%</text>
+<rect x="520" y="778" width="222.7" height="40" rx="4" fill="#2a78d6"/>
+<text x="760.74" y="809" font-size="30" font-weight="600" fill="#0b0b0b">30.1%</text>
+<text x="64" y="866" font-size="23" fill="#8a8880">「原告有律師」修正前恆為 0——欄位看起來有值，實際上毫無資訊</text>
+</svg>

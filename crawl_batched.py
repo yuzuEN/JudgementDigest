@@ -36,7 +36,7 @@ from typing import List, Optional, Tuple
 
 from crawler import (
     search_and_crawl, build_driver, DB_PATH, init_db, Pacer, _RESULT_LIMIT,
-    _DEFAULT_DELAY, _JUDGMENT_TYPES,
+    _DEFAULT_DELAY, _JUDGMENT_TYPES, resolve_date_range,
 )
 
 # ─── Logging ─────────────────────────────────────────────────────────────────
@@ -355,18 +355,11 @@ if __name__ == "__main__":
 
     today = date.today()
 
-    if args.start_date:
-        sd = date.fromisoformat(args.start_date.replace("/", "-"))
-    else:
-        sd = date(args.start_year, 1, 1)
-
-    if args.end_date:
-        ed = date.fromisoformat(args.end_date.replace("/", "-"))
-    else:
-        ed = date(args.end_year, 12, 31) if args.end_year else today
-
-    if sd > ed:
-        ap.error(f"起始日期 {_fmt(sd)} 晚於結束日期 {_fmt(ed)}")
+    try:
+        sd, ed = resolve_date_range(
+            args.start_date, args.end_date, args.start_year, args.end_year, today)
+    except ValueError as exc:
+        ap.error(str(exc))
 
     total = batched_crawl(
         keyword=args.keyword,

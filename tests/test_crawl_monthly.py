@@ -24,7 +24,8 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 import crawl_monthly  # noqa: E402
 import html_parser  # noqa: E402
 from crawl_monthly import (  # noqa: E402
-    crawl_months, load_state, month_bounds, parse_months, select_rows,
+    _span_label, crawl_months, export_months, load_state, month_bounds,
+    parse_months, select_rows,
 )
 
 LABEL = "臺灣臺北地方法院-民事-判決"
@@ -232,6 +233,54 @@ class TestSelectRows(unittest.TestCase):
     def test_court_code_is_accepted(self):
         self.assertEqual(len(self._select(list(range(3, 13)), court="TPD")), 3)
 
+    def test_filename_reflects_months_with_data_not_months_requested(self):
+        """
+        REGRESSION：`--export-all` 要求 1~12 月時，檔名原本一律寫「全年」，
+        即使其中好幾個月從來沒爬過。檔名要說實話，否則三個月後沒人分得出來。
+        本組資料只有 1、3、4、12 月有判決。
+        """
+        import export_excel
+        orig, cwd = export_excel.DB_PATH, os.getcwd()
+        export_excel.DB_PATH = self.db
+        os.chdir(self.tmp.name)                 # 檔名未指定時會寫進 CWD
+        try:
+            with redirect_stdout(io.StringIO()):
+                out = export_months(2025, list(range(1, 13)), COURT, ("民事",),
+                                    "判決", LABEL)
+        finally:
+            os.chdir(cwd)
+            export_excel.DB_PATH = orig
+
+        self.assertIsNotNone(out, "應該有資料可匯出")
+        self.assertIn("_2025_01+03-04+12_", out)
+        self.assertNotIn("全年", out)
+
+
+class TestSpanLabel(unittest.TestCase):
+    """檔名的月份標記。"""
+
+    def test_full_year(self):
+        self.assertEqual(_span_label(list(range(1, 13))), "全年")
+
+    def test_contiguous_run(self):
+        self.assertEqual(_span_label(list(range(3, 13))), "03-12")
+
+    def test_single_month(self):
+        self.assertEqual(_span_label([5]), "05")
+
+    def test_gaps_are_spelled_out(self):
+        self.assertEqual(_span_label([1, 3, 4, 12]), "01+03-04+12")
+        self.assertEqual(_span_label([1, 2, 5, 8, 9, 10]), "01-02+05+08-10")
+
+    def test_empty(self):
+        self.assertEqual(_span_label([]), "無資料")
+
+    def test_is_filename_safe(self):
+        # Windows 禁用字元一個都不能出現，否則檔案開不起來
+        for covered in ([1, 3, 4, 12], list(range(1, 13)), [7]):
+            self.assertFalse(set(_span_label(covered)) & set('\\/*?:"<>|'),
+                             msg=covered)
+
 
 class TestDryRun(_Base):
     def test_dry_run_does_not_crawl(self):
@@ -249,13 +298,97 @@ class TestDryRun(_Base):
                 crawl_monthly.main(["--dry-run", "--court", "不存在的法院"])
 
 
+class _FakeProc:
+    """假的抑制子行程：活著（poll() 為 None），並記錄是否被收掉。"""
+
+    def __init__(self):
+        self.terminated = False
+        self.waited = False
+
+    def poll(self):
+        return None
+
+    def terminate(self):
+        self.terminated = True
+
+    def wait(self, timeout=None):
+        self.waited = True
+        return 0
+
+
 class TestKeepAwake(unittest.TestCase):
+    """
+    長時間爬取途中機器睡著，任務就斷了。這一組確保：三個平台各自用對的機制、
+    找不到機制時安靜降級（而不是拋錯或謊稱成功）、離開時一定把子行程收掉。
+    """
+
+    def setUp(self):
+        # 觀察時間在測試中沒有意義，設為 0 以免每個案例多等 0.2 秒
+        self._probe = crawl_monthly._INHIBITOR_PROBE_SEC
+        crawl_monthly._INHIBITOR_PROBE_SEC = 0
+
+    def tearDown(self):
+        crawl_monthly._INHIBITOR_PROBE_SEC = self._probe
+
     def test_context_manager_is_safe(self):
         # 非 Windows 為 no-op；Windows 上會設定並在結束時還原，兩者都不應拋錯
         with crawl_monthly.keep_awake(True):
             pass
         with crawl_monthly.keep_awake(False) as active:
             self.assertFalse(active)
+
+    def _run_on(self, platform, popen):
+        with unittest.mock.patch.object(crawl_monthly.sys, "platform", platform), \
+             unittest.mock.patch.object(crawl_monthly.subprocess, "Popen", popen):
+            with crawl_monthly.keep_awake(True) as active:
+                pass
+        return active
+
+    def test_macos_uses_caffeinate_bound_to_our_pid(self):
+        proc, seen = _FakeProc(), []
+        active = self._run_on("darwin", lambda cmd, **kw: (seen.append(cmd), proc)[1])
+        self.assertTrue(active)
+        self.assertEqual(seen[0][:3], ["caffeinate", "-i", "-w"])
+        self.assertEqual(seen[0][3], str(os.getpid()))
+        self.assertTrue(proc.terminated, "離開時必須收掉 caffeinate")
+
+    def test_linux_uses_systemd_inhibit_on_idle_and_sleep(self):
+        proc, seen = _FakeProc(), []
+        active = self._run_on("linux", lambda cmd, **kw: (seen.append(cmd), proc)[1])
+        self.assertTrue(active)
+        self.assertEqual(seen[0][0], "systemd-inhibit")
+        self.assertIn("--what=idle:sleep", seen[0])
+        # 抑制效力只存在於它執行的指令期間，所以必須帶一個長命的指令
+        self.assertEqual(seen[0][-2:], ["sleep", "infinity"])
+        self.assertTrue(proc.terminated)
+
+    def test_missing_command_degrades_to_noop(self):
+        def boom(cmd, **kw):
+            raise FileNotFoundError(cmd[0])
+        self.assertFalse(self._run_on("darwin", boom))
+
+    def test_command_that_dies_immediately_is_not_reported_as_active(self):
+        """REGRESSION：systemd-inhibit 在沒有 systemd 的環境會裝得起來卻跑不動。"""
+        class _DeadProc(_FakeProc):
+            def poll(self):
+                return 1
+        self.assertFalse(self._run_on("linux", lambda cmd, **kw: _DeadProc()))
+
+    def test_allow_sleep_spawns_nothing(self):
+        def fail(cmd, **kw):
+            raise AssertionError("--allow-sleep 時不應啟動任何抑制指令")
+        with unittest.mock.patch.object(crawl_monthly.sys, "platform", "darwin"), \
+             unittest.mock.patch.object(crawl_monthly.subprocess, "Popen", fail):
+            with crawl_monthly.keep_awake(False) as active:
+                self.assertFalse(active)
+
+    def test_unknown_platform_is_noop(self):
+        def fail(cmd, **kw):
+            raise AssertionError("未知平台不應啟動任何指令")
+        with unittest.mock.patch.object(crawl_monthly.sys, "platform", "freebsd13"), \
+             unittest.mock.patch.object(crawl_monthly.subprocess, "Popen", fail):
+            with crawl_monthly.keep_awake(True) as active:
+                self.assertFalse(active)
 
 
 if __name__ == "__main__":

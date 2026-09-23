@@ -205,19 +205,14 @@ if __name__ == "__main__":
     if not args.keyword and not args.court and not case_types and not args.skip_crawl:
         ap.error("請至少指定 關鍵字、--court 或 --case-type 其中之一")
 
-    # 解析日期
-    if args.start_date:
-        sd = date.fromisoformat(args.start_date.replace("/", "-"))
-    else:
-        sd = date(args.start_year, 1, 1)
-
-    if args.end_date:
-        ed = date.fromisoformat(args.end_date.replace("/", "-"))
-    else:
-        ed = date(args.end_year, 12, 31) if args.end_year else today
-
-    if sd > ed:
-        ap.error(f"起始日期 {sd} 晚於結束日期 {ed}")
+    # 解析日期。格式錯誤要在這裡就擋下來——不然不是噴 traceback，
+    # 就是到了查詢表單才被静默忽略成「沒有日期範圍」。
+    from crawler import resolve_date_range
+    try:
+        sd, ed = resolve_date_range(
+            args.start_date, args.end_date, args.start_year, args.end_year, today)
+    except ValueError as exc:
+        ap.error(str(exc))
 
     run(
         keyword=args.keyword,

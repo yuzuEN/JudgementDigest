@@ -22,6 +22,7 @@ README = (ROOT / "README.md").read_text(encoding="utf-8")
 SCRIPTS = [
     "pipeline.py", "crawl_batched.py", "crawl_monthly.py", "crawler.py",
     "html_parser.py", "export_excel.py", "tests/live_check.py",
+    "backfill_structured.py", "judge_analysis/run_analysis.py",
 ]
 
 # 只看 argparse 的參數；`opts.add_argument("--headless=new")` 那些是 Chrome 啟動旗標
@@ -60,8 +61,9 @@ class TestReadmeDocumentsEveryFlag(unittest.TestCase):
         actual = set()
         for script in SCRIPTS:
             actual |= _long_flags_of(ROOT / script)
-        # 安裝說明裡的 pip 參數等外部指令不在比對範圍
-        external = {"--upgrade"}
+        # 外部指令的參數不在比對範圍：pip（安裝說明）、
+        # systemd-inhibit（「保持喚醒」章節說明 Linux 用的機制）
+        external = {"--upgrade", "--what", "--mode"}
         bogus = documented - actual - external
         self.assertEqual(bogus, set(), f"README 提到但程式沒有的參數：{bogus}")
 
