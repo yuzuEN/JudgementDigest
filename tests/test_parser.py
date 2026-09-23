@@ -81,6 +81,15 @@ class TestParseCivilJudgment(unittest.TestCase):
     def test_keyword_label_carried(self):
         self.assertEqual(self.data["keyword"], "臺灣臺北地方法院-民事-判決")
 
+    def test_reasons_heading_not_merged_into_verdict(self):
+        # 「事實及理由」單獨成行（非 notEdit 標題）時，曾被併進主文、事實及理由欄變空
+        verdict = self.data["verdict"]
+        self.assertLess(len(verdict), 300)
+        self.assertNotIn("為有理由", verdict)
+        self.assertNotIn("爰判決如主文", verdict)
+        self.assertGreater(len(self.data["facts_and_reasons"]), 300)
+        self.assertIn("爰判決如主文", self.data["facts_and_reasons"])
+
 
 class TestParseConstitutionalCourtRuling(unittest.TestCase):
     """憲法法庭是 text-pre 版型，欄位切法與一般法院不同。"""
@@ -218,3 +227,71 @@ class TestSectionHeadingFallback(unittest.TestCase):
         self.assertEqual(html_parser._normalize_section_title("主　文"), "主文")
         self.assertEqual(html_parser._normalize_section_title("主 文 \u200b\u200b"), "主文")
         self.assertEqual(html_parser._normalize_section_title("事　實　及　理　由"), "事實及理由")
+
+
+class TestExtractLaws(unittest.TestCase):
+    """
+    _extract_laws / _YIJU_RE 的回歸測試。
+
+    容嫣於 PR #4 留言用她本機 12,417 份民事判決做全量比對回報：
+    - 案例一（filler 吞掉法條）：23 筆從有值退步成空白（其中 5 筆完全空白）。
+    - 案例二（敘述文字混入）：101 筆把原告主張／答辯的法條也一併抓進來。
+    第三個案例是修第一、二點時，自己在本庫實測發現的退步：只取「最後一個依」
+    的簡單做法，會被括號附注裡另一個不相干的「依」（例如引用辦案應行注意事項）
+    誤切，反而把前面真正的法條引用切掉。
+    """
+
+    def _laws(self, reasons: str) -> str:
+        return html_parser._extract_laws(None, {"理由": reasons}, "")
+
+    def test_filler_does_not_swallow_the_real_citation(self):
+        """案例一：逗號後的 filler 不能貪走緊接在後的法條引用。"""
+        text = (
+            "本院依調查證據之結果，認定兩造間之借款關係屬實，"
+            "原告之訴為有理由，依民事訴訟法第78條，判決如主文。"
+        )
+        self.assertEqual(self._laws(text), "民事訴訟法第78條")
+
+    def test_narrative_law_mentions_are_excluded(self):
+        """案例二：只取最後一個起法條引用的「依」之後的文字，不把原告主張的法條也抓進來。"""
+        text = (
+            "原告主張，原告援引民法第179條請求返還，並依民法第244條第1項規定聲明撤銷。"
+            "被告則以罹於時效置辯。本院審酌全案卷證，認原告之訴為無理由，"
+            "依民事訴訟法第78條，判決如主文。"
+        )
+        laws = self._laws(text)
+        self.assertEqual(laws, "民事訴訟法第78條")
+        self.assertNotIn("民法第179條", laws)
+        self.assertNotIn("民法第244條", laws)
+
+    def test_unrelated_yi_inside_parenthetical_note_is_not_the_anchor(self):
+        """REGRESSION：括號附注裡的另一個「依」不能切掉前面真正的法條引用。"""
+        text = (
+            "依刑事訴訟法第449條第2項、第3項、第454條第2項"
+            "（依法院辦理刑事訴訟案件應行注意事項第159點，"
+            "判決書據上論結部分，得僅引用應適用之程序法條），判決如主文。"
+        )
+        self.assertIn("刑事訴訟法第449條", self._laws(text))
+
+    def test_simplified_judgment_wording_still_works(self):
+        """今天稍早的修正（逕以簡易判決處刑如主文）不能被這次收緊的 filler 擋掉。"""
+        text = "依刑事訴訟法第449條第1項前段、第3項，逕以簡易判決處刑如主文。"
+        self.assertIn("刑事訴訟法第449條", self._laws(text))
+
+
+class TestPartyNameCleanup(unittest.TestCase):
+    """當事人姓名擷取的殘留字元清理。"""
+
+    def test_jian_gongtong_residue_is_dropped(self):
+        """
+        REGRESSION：「兼　共　同」這種獨立成行、後面沒接名字的殘留片段，
+        不能被當成一個假的當事人姓名存進去（容嫣於 PR #4 留言回報，
+        113 年度簡上字第 394 號的 appellant 存成「A男；A男之母；兼 共 同」）。
+        """
+        result = html_parser._extract_parties(["被告 甲○○", "　兼　共　同"])
+        self.assertEqual(result["defendant"], "甲○○")
+
+    def test_jian_role_prefix_still_stripped(self):
+        """既有行為不能被這次的連接詞過濾改壞：「兼輔助人」前綴仍要剝除。"""
+        result = html_parser._extract_parties(["被告 王哲西", "兼 輔助 人　才仁多杰"])
+        self.assertEqual(result["defendant"], "王哲西；才仁多杰")

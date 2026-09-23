@@ -55,6 +55,9 @@ logger = logging.getLogger(__name__)
 
 # 全形空格 U+3000 + 一般空格
 _SPACES = re.compile(r"[　  \t]+")
+# 零寬字元。司法院頁面的標題偶爾夾帶這些不可見字元（PR #3 實測「主　文」
+# 後面接了六個 U+200B），它們不是空白，_SPACES 清不掉，會讓標題比對整個失效。
+_ZERO_WIDTH_RE = re.compile("[​‌‍⁠﻿]")
 
 # 從「裁判字號」全文解析法院名稱
 _COURT_RE = re.compile(
@@ -125,6 +128,14 @@ _AGENT_RE = re.compile(
 )
 # 其他輔助角色（輔佐人），不提取姓名，直接跳過
 _AUX_SKIP_RE = re.compile(r"^(?:輔佐)")
+# 「兼輔助人」「兼法定代理人」等：當事人本身身兼另一訴訟角色時，另一角色的
+# 姓名會以「兼 <角色> <姓名>」另起一行（例："兼 輔助 人　才仁多杰"）。這些
+# 角色詞不在 _PARTY_ROLES 裡（不是獨立當事人角色，是依附既有當事人的身分），
+# 若不先剝除，整串（含「兼」與角色詞）會被當成姓名存進欄位（例如存成「兼
+# 輔助人才仁多杰」而非「才仁多杰」），汙染 defendant 等姓名欄位。
+_ROLE_PREFIX_STRIP_RE = re.compile(
+    r"^兼\s*(?:法定\s*代理\s*人|特別\s*代理\s*人|輔助\s*人|輔佐\s*人|管理\s*人)\s*"
+)
 # 地址行識別：以數字或英文開頭
 _ADDR_ONLY_RE = re.compile(r"^[\d\sA-Za-z]")
 # 前言頁尾標記：出現即停止擷取當事人（裁定類文件無段落標題時前言會包含頁尾）
@@ -254,26 +265,9 @@ def _t(elem) -> str:
     return _SPACES.sub(" ", raw).strip()
 
 
-# 零寬字元。司法院頁面的標題偶爾夾帶這些不可見字元（實測「主 文」後面接了
-# 六個 U+200B），它們不是空白，_SPACES 清不掉，會讓標題比對整個失效。
-_ZERO_WIDTH_RE = re.compile(r"[​‌‍⁠﻿]")
-
-
 def _normalize_section_title(text: str) -> str:
     """移除空白與零寬字元，取得純標題文字。例：'主　文' → '主文'"""
     return _SPACES.sub("", _ZERO_WIDTH_RE.sub("", text).strip())
-
-
-# 下游真正會取用的段落標題（見 parse_html 的 sections.get(...)）。
-# 用於「標題 div 沒有 notEdit class」時的後備辨識，比對完整字串。
-_SECTION_TITLES = frozenset({
-    "主文",
-    "事實", "犯罪事實",
-    "事實及理由", "事實暨理由", "事實與理由",
-    # 簡易判決的理由段常寫成「理由要領」，不列入的話整段論理都抓不到
-    "理由", "理由要領", "事實及理由要領", "認定犯罪事實所憑之證據及理由",
-    "據上論斷", "結論",
-})
 
 
 def _cap(s: str, n: int = 30000) -> str:
@@ -350,9 +344,8 @@ def _find_content_container(soup: BeautifulSoup):
 
 
 # ─── Step 3a：text-pre 格式（憲法法庭等）的段落切割 ──────────────────────────
-_TP_HEADING_RE = re.compile(
-    r'^(?:主文|理由|事實及理由|事實|犯罪事實|結論|據上論斷)$'
-)
+# 標題判斷與 div 版型共用同一份 _PLAIN_HEADINGS（定義於下方），避免像先前
+# 那樣兩份清單各自維護、新增標題寫法時只改到一邊。
 
 
 def _extract_sections_text_pre(text_pre_elem) -> Tuple[Dict[str, str], str, List[str]]:
@@ -390,9 +383,9 @@ def _extract_sections_text_pre(text_pre_elem) -> Tuple[Dict[str, str], str, List
         current_buf = []
 
     for ln in lines:
-        norm = _SPACES.sub("", ln)
+        norm = _SPACES.sub("", _ZERO_WIDTH_RE.sub("", ln))
 
-        if _TP_HEADING_RE.match(norm):
+        if norm in _PLAIN_HEADINGS:
             flush()
             in_preamble = False
             current_title = norm
@@ -427,6 +420,33 @@ def _extract_sections_text_pre(text_pre_elem) -> Tuple[Dict[str, str], str, List
 
 
 # ─── Step 3：將正文容器依段落標題切割成 sections ──────────────────────────────
+# 下游真正會取用的段落標題。用於「標題 div 沒有 notEdit class」時的後備辨識，
+# 比對正規化後的完整字串（而非包含關係），所以不會把內文誤判成標題。
+# 與 PR #3（feat/civil-judgment-structuring）的 _SECTION_TITLES 取聯集：
+# 「犯罪事實及理由」是簡易判決常見寫法（本分支發現，該分支未列入）；
+# 「主文」「理由要領」「事實及理由要領」是該分支發現、本分支原本沒有的寫法。
+_PLAIN_HEADINGS = frozenset({
+    "主文",
+    "犯罪事實及理由", "事實及理由", "事實暨理由", "事實與理由",
+    "犯罪事實", "事實",
+    "理由", "理由要領", "事實及理由要領", "認定犯罪事實所憑之證據及理由",
+    # 張容嫣於 PR #3 留言回報：18 份刑事文書中以獨立標題出現，卻不在白名單
+    # 裡，其中 17 份的內容因此沒有落進任何欄位，只存在 full_text。
+    "證據並所犯法條",
+    "結論", "據上論斷",
+})
+
+# _extract_laws 依序搜尋的「可能含論罪法條」標題，依優先順序排列。
+# 與 _PLAIN_HEADINGS 共用同一份標題名稱，新增標題寫法時只需改一處，
+# 否則像「理由要領」這種簡易判決寫法，即使 _PLAIN_HEADINGS 認得出標題，
+# _extract_laws 若沒有同步更新候選清單，仍會抓不到法條（靜默漏值）。
+_LAW_SEARCH_SECTIONS = (
+    "據上論斷", "理由", "理由要領", "事實及理由", "事實及理由要領",
+    "事實暨理由", "事實與理由", "犯罪事實及理由", "認定犯罪事實所憑之證據及理由",
+    "證據並所犯法條",
+)
+
+
 def _extract_sections(container) -> Tuple[Dict[str, str], str, List[str]]:
     """
     回傳:
@@ -475,21 +495,21 @@ def _extract_sections(container) -> Tuple[Dict[str, str], str, List[str]]:
 
         full_parts.append(text)
 
-        is_heading = (
+        is_heading = bool(
             "notEdit" in classes                              # 新舊格式都有
             and "he-h1" not in classes                        # 排除法院名稱大標
             and len(text) <= 20                               # 標題不應太長
             and re.search(r'[主文事實理由結論法條犯罪據上聲明陳述附]', text)
         )
-
-        # 少數裁判書的段落標題是沒有任何 class 的純 <div>（實測 17 筆，
-        # 其中 14 筆落在臺北地院 2025 民事判決）。只靠 notEdit class 判斷的話，
-        # 「主　文」不會被當成標題，其後的內容全部留在 preamble，
-        # verdict 欄位變成空的——而且不會有任何錯誤訊息。
-        # 這裡以「正規化後剛好等於已知段落標題」作為後備判準：比對的是
-        # 完整字串而非包含關係，因此不會把內文誤判成標題。
-        if not is_heading and "he-h1" not in classes:
-            is_heading = _normalize_section_title(text) in _SECTION_TITLES
+        # 少數裁判書的段落標題是沒有任何 class 的純段落（無 notEdit），包含
+        # 主文本身（PR #3 實測 17 筆，多為民事）及簡易判決後段的「犯罪事實
+        # 及理由」等（本分支實測）。只靠 notEdit 判斷的話，這些標題不會被
+        # 認出，其後內容全部併入前一段（甚至留在 preamble，主文變空）。
+        # 這裡以「正規化後剛好等於已知標題」作為後備判準：比對完整字串而非
+        # 包含關係，因此不會把內文誤判成標題（不論是否已離開 preamble）。
+        if (not is_heading and "he-h1" not in classes
+                and _normalize_section_title(text) in _PLAIN_HEADINGS):
+            is_heading = True
 
         if is_heading:
             flush()
@@ -618,12 +638,16 @@ def _extract_parties(preamble_lines: List[str]) -> Dict[str, str]:
     current_actual_role: List[str] = [""]   # mutable，讓 _add_name 閉包可讀取
 
     def _add_name(field: str, raw: str, check_len: bool = True) -> None:
+        raw = _ROLE_PREFIX_STRIP_RE.sub("", raw)
         stop = _NAME_STOP_RE.search(raw)
         name = raw[: stop.start()].strip() if stop else raw.strip()
         if not name or re.search(r"律師|辯護", name):
             return
-        # Reject pure connector strings even when check_len=False
-        if re.fullmatch(r"[即及與，,、；;。\s]+", name):
+        # Reject pure connector strings even when check_len=False.
+        # 「兼」「共同」也算連接詞：容嫣於 PR #4 留言回報，"兼　共　同" 這種
+        # 獨立一行、後面沒接名字的殘留片段會被當成一個假的當事人姓名存進去
+        # （例：113 年度簡上字第 394 號的 appellant 存成「A男；A男之母；兼 共 同」）。
+        if re.fullmatch(r"[即及與兼共同，,、；;。\s]+", name):
             return
         if check_len:
             core = re.sub(r"[（(][^）)]*[）)]", "", name).strip()
@@ -758,14 +782,31 @@ _LAW_APPENDIX_RE = re.compile(
     r"(?!分敘)",          # 排除「所犯法條分敘如下」（那是正文，不是附錄）
 )
 # 「據上論斷，依 ... 判決如主文」中的條文引用
-# (.{1,300}?) 限制長度，避免從段落中間的「依」一路撐到文末的「判決如主文」而抓到無關內容
-_YIJU_RE = re.compile(r"依\s*(.{1,300}?)\s*[,，]\s*(?:判決|裁定)如主文", re.DOTALL)
+# (.{1,300}) 限制長度，避免從段落中間的「依」一路撐到文末的「判決如主文」而抓到無關內容。
+# 用貪婪（非 lazy）：段落中可能有多個「依…，」子句，貪婪會讓 group(1) 盡量往後延伸，
+# 比對到「最靠近判決如主文的那個逗號」為止，才不會在半路一個較早的逗號就提前收尾，
+# 把真正的法條引用留在被捨棄的 filler 裡（實測會漏掉，例如「依前開說明，本件應予
+# 駁回，爰依民事訴訟法第78條，判決如主文」若用 lazy 只會撐到第一個逗號就收手）。
+# 逗號與「判決／裁定」之間允許「逕以簡易」等最多 12 字（簡易判決常見寫法）；
+# 「判決／裁定」與「如主文」之間允許「處刑」等最多 4 字，涵蓋「逕以簡易判決
+# 處刑如主文」——實測 400 筆「簡」字案件中 84.5% 是這個寫法，原本因為中間
+# 多了「逕以簡易」「處刑」而完全比對不到，法條欄位整批留空。
+# filler 不允許出現「依」或「條」：容嫣於 PR #4 留言實測民事語料時發現，若
+# filler 剛好能吞下一整段「依◯◯法第◯條，」，group(1) 就會在更早的逗號處
+# 收尾，把真正的法條引用留在被捨棄的 filler 裡（23 筆退步，5 筆變成空白）。
+_YIJU_RE = re.compile(
+    r"依\s*(.{1,300})\s*[,，]\s*[^依條]{0,12}?(?:判決|裁定).{0,4}?如主文", re.DOTALL)
 # 條文引用：「刑法第339條之4」「民法第148條」「刑事訴訟法第101條第1項」等
 # {1,15} 允許單字法律名（民法、刑法），避免 {2,15} 造成多字詞前綴（如「惟依民法」）被誤抓
 _LAW_CITE_RE = re.compile(
     r"(?:[^\s，；、（\(]{1,15}(?:法|條例|規則))"
     r"\s*第\s*[\d百千一二三四五六七八九十]+\s*條[之第\d\s]*"
 )
+# 找「依」後緊接法規名＋「第…條」（中間不能有逗號、頓號、句號、分號）的最後一個位置：
+# 只當「依」字真的是在起一段法條引用時才當作切點，避免像「最後一個依」這種只看字元
+# 位置的判準，誤把括號內附注文字裡的另一個「依」（例：「（依法院辦理刑事訴訟案件
+# 應行注意事項第159點…）」）當成切點，反而把前面真正的法條引用切掉。
+_LAST_LAW_ANCHOR_RE = re.compile(r"依(?=[^，、；。]{0,20}?(?:法|條例|規則)第)")
 
 
 def _extract_laws(soup: BeautifulSoup, sections: Dict[str, str], full_text: str = "") -> str:
@@ -777,19 +818,26 @@ def _extract_laws(soup: BeautifulSoup, sections: Dict[str, str], full_text: str 
             return full_text[m.end():].strip()[:3000]
 
     # 2. 從「據上論斷」提取緊湊的條文引用
-    #    同時搜尋 sections["據上論斷"] 和 理由/事實及理由 的末尾
-    candidates = [
-        sections.get("據上論斷", ""),
-        sections.get("理由", ""),
-        sections.get("事實及理由", ""),
-    ]
-    for src in candidates:
+    #    依序搜尋 _LAW_SEARCH_SECTIONS 各標題（含「理由要領」等簡易判決寫法）
+    for title in _LAW_SEARCH_SECTIONS:
+        src = sections.get(title, "")
         if not src:
             continue
-        # 找 "依...判決如主文" 子句
-        m = _YIJU_RE.search(src[-3000:])   # 只搜結尾部分，效率較高
+        # 找 "依...判決如主文" 子句。理由段落內可能不只一處「依…如主文」
+        # （例如先有一句附帶裁示「…爰裁定如主文」，最後才是真正的論罪依據），
+        # 取最後一個（finditer 最後一筆）而非第一個，較貼近實際判決依據。
+        ms = list(_YIJU_RE.finditer(src[-3000:]))   # 只搜結尾部分，效率較高
+        m = ms[-1] if ms else None
         if m:
-            cited = _LAW_CITE_RE.findall(m.group(1))
+            # group(1) 貪婪比對可能整段從更早的敘述文字（原告主張、答辯等）開始，
+            # 只取最後一個「起法條引用」的「依」之後的文字，避免把「原告援引民法
+            # 第179條」這類敘述句也當成法院實際適用的法條（容嫣於 PR #4 留言實測
+            # 101 筆）。
+            clause = m.group(1)
+            anchors = list(_LAST_LAW_ANCHOR_RE.finditer(clause))
+            if anchors:
+                clause = clause[anchors[-1].end():]
+            cited = _LAW_CITE_RE.findall(clause)
             if cited:
                 return "；".join(dict.fromkeys(cited))[:1000]
 
@@ -927,6 +975,7 @@ def parse_html(
         sections.get("事實及理由", "")
         or sections.get("事實暨理由", "")
         or sections.get("事實與理由", "")
+        or sections.get("犯罪事實及理由", "")
         or sections.get("事實及理由要領", "")
     )
     facts_val   = sections.get("事實", "")
@@ -934,6 +983,7 @@ def parse_html(
         sections.get("理由", "")
         or sections.get("理由要領", "")          # 簡易判決的寫法
         or sections.get("認定犯罪事實所憑之證據及理由", "")
+        or sections.get("證據並所犯法條", "")     # 張容嫣回報的第三種寫法，併入理由
     )
 
     # 裁定 or 判決：從裁判字號或案件類型末尾辨識

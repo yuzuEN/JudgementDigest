@@ -225,6 +225,7 @@ python export_excel.py [選項]
 | `--start-date <日期>` | 篩選裁判日期起（`YYYY/MM/DD` 或民國格式皆可） |
 | `--end-date <日期>` | 篩選裁判日期迄（`YYYY/MM/DD` 或民國格式皆可） |
 | `--offset <N>` | 略過前 N 筆 |
+| `--exclude-mislabeled` | 排除案號標「判決」但全文不含「判決」的裁定（附民移送、單獨宣告沒收、再開辯論等） |
 | `--full-text` | 含完整全文欄位（檔案較大） |
 | `-o <檔名>` | 指定輸出檔名 |
 
@@ -526,3 +527,45 @@ python judge_analysis/run_analysis.py --min-cases 30   # 納入統計檢定的�
   - 改善方式是修改 `html_parser.py` 後執行 `python html_parser.py --reparse`，
     會從 `html_cache/` 重建，**不需重爬**
 - **`export_excel.py` 的排序固定為解析時間**；依裁判日期排序請用 `crawl_monthly.py --export-only`
+- **「證據並所犯法條」標題的內容會併入 `reasons` 欄，但這段有時是判決簽名之後附的
+  檢察官聲請書／起訴書全文，不是法院的論理**（容嫣於 PR #4 留言回報，例：基隆地院
+  115 年度基簡字第 109 號）。使用 `reasons` 欄做文字分析時請留意這個混雜情形
+- **`judgment_date` 篩選僅對「已用新版 `normalize_date` 重新正規化過」的資料有效**：
+  資料庫裡舊資料的 `judgment_date` 仍是「民國 114 年 01 月 06 日」原始格式，
+  `export_excel.py --start-date`/`--end-date` 會把輸入轉成西元 ISO 格式再比對，
+  跟舊格式的原始值對不上，篩選會回傳 0 筆。對整庫跑一次
+  `python html_parser.py --reparse` 可重新正規化這個欄位
+
+---
+
+## 附表宣告刑（`offenses` 表）
+
+多被告、多罪的刑事判決，主文只寫「如附表所示」時，`build_offenses.py` 會讀 HTML 附表，
+一列一個「被告 × 罪 × 宣告刑」寫入 `offenses` 表（每次執行整張重建）。
+
+```bash
+python build_offenses.py --keyword "臺灣臺北地方法院-刑事-判決" -o offenses.xlsx
+python build_offenses.py --export-only -o offenses.xlsx   # 不重建，只匯出現有內容
+```
+
+| 參數 | 說明 |
+|---|---|
+| `--keyword <標籤>` | 處理 `crawl_records.keyword` 以此開頭的判決（預設 `ADV:TPD:M`，這是舊版進階搜尋爬蟲用的標籤；用 `pipeline.py`/`crawl_monthly.py` 新抓的資料標籤格式是「臺灣臺北地方法院-刑事-判決」，執行前請先確認資料庫實際的 `keyword` 值） |
+| `-o` / `--output <檔名>` | 匯出 Excel（欄位：裁判字號、裁判日期、被告、法條、罪名、宣告刑、宣告刑（月）、拘役（日）、罰金（元）、罰金類型（主刑／併科）、附表列號、原文） |
+| `--export-only` | 不重建表，只匯出（需搭配 `-o`） |
+
+只處理全文含「判決」的案件（排除案號標「判決」實為裁定者）。`--keyword` 查無符合資料時會直接中止、
+不會動到既有的 `offenses` 表（避免標籤打錯字時把已建好的表換成空表）。
+
+## 刑事罪法刑結構化（`structure_tasks.py`）
+
+從 `export_excel.py` 匯出的 Excel 讀「裁判書資料」分頁，一案一列輸出「罪法刑結構化」分頁
+（罪名／法條／總執行刑／萃取狀態）。跟 `offenses` 表不同：這裡不分被告，多被告案件只取整體結果。
+
+```bash
+python structure_tasks.py <輸入.xlsx> -o <輸出.xlsx>
+```
+
+`<輸入.xlsx>` 沒帶時預設讀 `25_07-12.xlsx`（開發時的本機檔名），實際使用時請務必帶入正確路徑。
+`merge.py` 同樣是寫死本機檔名的一次性小工具（合併多個批次匯出的 Excel），使用前請先打開檔案改成
+自己的檔名清單。
