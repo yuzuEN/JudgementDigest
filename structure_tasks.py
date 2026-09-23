@@ -3,6 +3,7 @@
 import argparse
 import re
 from pathlib import Path
+from typing import Optional
 
 from openpyxl import load_workbook
 from openpyxl.styles import Alignment, Font, PatternFill
@@ -140,17 +141,21 @@ def extract_sentences(verdict: str) -> tuple[list[str], str]:
     return [], "需人工核對" if declared or "如附表" in verdict else "無刑期"
 
 
-# 將有期徒刑換算成月；死刑、無期徒刑、拘役與罰金不硬轉成不相容單位。
+# 將單一「有期徒刑…」宣告刑換算成月數；死刑、無期徒刑、拘役與罰金不硬轉成
+# 不相容單位，回傳 None。appendix_parser.py 的附表逐列換算也共用這支，
+# 避免兩邊各自維護一份「年×12+月」的算法而逐漸不一致。
+def sentence_to_months(sentence: str) -> Optional[int]:
+    if not sentence.startswith("有期徒刑"):
+        return None
+    year = re.search(rf"([{NUM}]+)年", sentence)
+    month = re.search(rf"([{NUM}]+)月", sentence)
+    return (chinese_number(year.group(1)) * 12 if year else 0) + (
+        chinese_number(month.group(1)) if month else 0)
+
+
+# 將整案的宣告刑清單換算成月，供「總執行刑（月）」欄使用。
 def sentence_months(sentences: list[str]) -> list[str]:
-    months = []
-    for sentence in sentences:
-        if not sentence.startswith("有期徒刑"):
-            continue
-        year = re.search(rf"([{NUM}]+)年", sentence)
-        month = re.search(rf"([{NUM}]+)月", sentence)
-        months.append(str((chinese_number(year.group(1)) * 12 if year else 0)
-                          + (chinese_number(month.group(1)) if month else 0)))
-    return months
+    return [str(m) for s in sentences if (m := sentence_to_months(s)) is not None]
 
 
 # 結合主文、理由與適用法條，產生單一案件的一列結構化資料。

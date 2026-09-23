@@ -8,7 +8,7 @@ from typing import Dict, List, Optional
 
 from bs4 import BeautifulSoup
 
-from structure_tasks import NUM, SINGLE_RE, chinese_number
+from structure_tasks import NUM, SINGLE_RE, chinese_number, compact, sentence_to_months
 
 _HEADER_HINT = re.compile(r"編號|宣告刑|主文|罪名")
 _SENT_HEADER = re.compile(r"宣告刑|主文|判處|罪刑")
@@ -28,10 +28,6 @@ _LAW_PREFIX = re.compile(
     rf"^(?P<law>[^，、；。]{{1,25}}?(?:法|條例)第[{NUM}]+條(?:之[{NUM}]+)?(?:第[{NUM}]+項)?"
     rf"(?:第[{NUM}]+款)?(?:前段|後段|但書)?)之?(?P<charge>.+罪)$"
 )
-
-
-def _clean(text: str) -> str:
-    return re.sub(r"\s+", "", text or "")
 
 
 def _is_data_row(row: List[str]) -> bool:
@@ -62,7 +58,7 @@ def table_grid(table) -> List[List[str]]:
                 continue
             cell = cells[ci]
             ci += 1
-            txt = _clean(cell.get_text(" ", strip=True))
+            txt = compact(cell.get_text(" ", strip=True))
             rowspan = int(cell.get("rowspan") or 1)
             colspan = int(cell.get("colspan") or 1)
             for _ in range(colspan):
@@ -72,15 +68,6 @@ def table_grid(table) -> List[List[str]]:
                 col += 1
         grid.append(row)
     return grid
-
-
-def _months(sentence: str) -> Optional[int]:
-    if not sentence.startswith("有期徒刑"):
-        return None
-    year = re.search(rf"([{NUM}]+)年", sentence)
-    month = re.search(rf"([{NUM}]+)月", sentence)
-    return (chinese_number(year.group(1)) * 12 if year else 0) + (
-        chinese_number(month.group(1)) if month else 0)
 
 
 def _amount(text: str) -> Optional[int]:
@@ -156,7 +143,7 @@ def parse_sentence_cell(text: str, charge_hint: str = "", names=(), column_defen
             out.append({
                 "raw": clause[seg_start:seg_end],
                 "defendant": who, "law": law, "charge": charge, "sentence": sentence,
-                "months": _months(sentence), "days": _days(sentence),
+                "months": sentence_to_months(sentence), "days": _days(sentence),
                 "fine": fine, "fine_type": fine_type,
             })
     return out

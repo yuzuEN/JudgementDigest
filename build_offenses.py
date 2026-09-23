@@ -87,9 +87,13 @@ EXPORT_COLUMNS = [
 
 
 def export_excel(path: str) -> int:
-    """把 offenses 表匯出成 Excel（一列一個被告×罪×宣告刑），回傳列數。"""
+    """把 offenses 表匯出成 Excel（一列一個被告×罪×宣告刑），回傳列數。
+
+    樣式沿用 export_excel.py 的共用輔助（標題列樣式／斑馬紋／欄寬），
+    不重寫一份幾乎一樣的 openpyxl 設定，兩邊的 Excel 外觀才不會各自漂移。
+    """
     from openpyxl import Workbook
-    from openpyxl.styles import Alignment, Font, PatternFill
+    from export_excel import _header_style, _data_style, _set_col_widths
 
     conn = sqlite3.connect(DB_PATH)
     if not conn.execute(
@@ -102,22 +106,18 @@ def export_excel(path: str) -> int:
         "ORDER BY j.judgment_date, o.case_number, o.id").fetchall()
     conn.close()
 
+    col_names = [name for name, _ in EXPORT_COLUMNS]
     wb = Workbook()
     ws = wb.active
     ws.title = "附表宣告刑"
-    ws.append([name for name, _ in EXPORT_COLUMNS])
+    ws.append(col_names)
     for row in rows:
         ws.append(list(row))
-    for cell in ws[1]:
-        cell.font = Font(color="FFFFFF", bold=True)
-        cell.fill = PatternFill("solid", fgColor="1F3864")
+    _header_style(ws)
+    _data_style(ws, len(rows))
+    _set_col_widths(ws, col_names)
     ws.freeze_panes = "A2"
     ws.auto_filter.ref = ws.dimensions
-    for col, width in zip("ABCDEFGHIJKL", (38, 14, 16, 30, 28, 20, 12, 10, 14, 10, 10, 60)):
-        ws.column_dimensions[col].width = width
-    for row in ws.iter_rows(min_row=2):
-        for cell in row:
-            cell.alignment = Alignment(vertical="top", wrap_text=True)
     wb.save(path)
     return len(rows)
 
