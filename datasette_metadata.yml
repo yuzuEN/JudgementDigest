@@ -26,9 +26,10 @@ databases:
         description: 只列民事分析常用欄位，捲動與篩選比原表快。法院欄位留空即為全部法院（部分比對，例如「臺中」）。
         sql: |-
           SELECT id, case_number, court, judgment_date, judgment_type,
-                 case_type_norm, case_type_category, case_kind_category,
+                 case_type_norm, case_type_category, case_type_mid, case_kind_category,
+                 claim_basis_group, claim_basis_primary,
                  outcome, relief_type, claimed_amount, claimed_source,
-                 awarded_amount, grant_ratio, law_primary, judges,
+                 awarded_amount, grant_ratio, grant_ratio_source, law_primary, judges,
                  is_default_judgment, plaintiff_has_lawyer, defendant_has_lawyer,
                  defendant_is_corp, quality_flags, source_url
           FROM judgments

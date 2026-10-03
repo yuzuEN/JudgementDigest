@@ -446,7 +446,7 @@ crawl_batched.py
 | 資料表 | 內容 |
 |--------|------|
 | `crawl_records` | 爬取紀錄（URL、HTML 路徑、是否已解析） |
-| `judgments` | 解析結果（原始欄位 30 欄＋結構化欄位 35 欄，另有記錄規則版本的 `structuring_version`） |
+| `judgments` | 解析結果（原始欄位 30 欄＋結構化欄位 44 欄，另有記錄規則版本的 `structuring_version`） |
 | `offenses` | 刑事判決附表的「被告 × 罪 × 宣告刑」，由 `build_offenses.py` 建立（沒執行過就不存在） |
 
 `browse_db.py` 會在 `judgments` 上建立 `idx_judgments_*` 索引（見上方
@@ -487,14 +487,10 @@ python backfill_structured.py --no-backup        # 略過資料庫備份（不�
 `--court`（法院名稱部分比對）與 `--year`（裁判日期的西元年）都不給時處理全庫。
 備份是整個資料庫檔案的複本，目前約 2 GB，執行前請確認磁碟空間。
 
-> ⚠ 使用 `grant_ratio`（獲償比例）前務必先看 `claimed_source`。
-> 值為「主文回推」的列，請求金額是用判准金額代入的，比例恆為 100%，
-> 拿去平均是循環論證。程式已強制只在「直接抽取」時計算比例。
->
-> ⚠ **全部敗訴的判決沒有 `grant_ratio`，不是 0**。主文只有「原告之訴駁回」時
-> `relief_type` 會判成「其他」、判准金額為空，比例因此不計算——即使已抽到請求
-> 金額。給付確認類的 14,233 件敗訴中只有 11 件有 `grant_ratio`。直接對
-> `grant_ratio` 取平均只涵蓋「至少判准一部分」的案件，會高估獲償程度。
+> ⚠ 使用 `grant_ratio`（獲償比例）前先看 `grant_ratio_source`。
+> 全部勝訴＝1、敗訴＝0 是依判決結果定義的值，一部勝訴才是判准 ÷ 請求的「計算」值。
+> `claimed_source` 為「主文回推」的請求金額只出現在全部勝訴的案件，不能當分析變數。
+> 詳見 [docs/欄位說明.md](docs/欄位說明.md)。
 
 ## 注意事項
 
