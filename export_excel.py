@@ -28,6 +28,7 @@ from typing import Optional, List, Dict
 from html_parser import normalize_date   # 日期正規化（西元 ISO）共用同一套實作
 import pandas as pd
 from openpyxl import load_workbook
+from openpyxl.cell.cell import ILLEGAL_CHARACTERS_RE
 from openpyxl.styles import (
     Font, Alignment, PatternFill, Border, Side, GradientFill
 )
@@ -303,7 +304,8 @@ def export_to_excel(
                 # 這樣 Excel 的平均值/樞紐分析才會正確忽略缺值。
                 entry[label] = raw if isinstance(raw, (int, float)) else None
                 continue
-            val = str(raw if raw is not None else "")
+            # 原始裁判文字偶爾含 Excel XML 禁止的控制字元，寫入前統一移除。
+            val = ILLEGAL_CHARACTERS_RE.sub("", str(raw if raw is not None else ""))
             # Excel 單格上限 32767 字
             if len(val) > 32700:
                 val = val[:32700] + "…(截斷)"
