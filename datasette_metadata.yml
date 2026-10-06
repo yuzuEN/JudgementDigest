@@ -1,0 +1,51 @@
+# Datasette 瀏覽設定（由 browse_db.py 載入）。只影響網頁呈現，不會寫入資料庫。
+# 這裡只放簡短、民事刑事通用的說明；各欄位的詳細說明集中寫在 docs/欄位說明.md。
+title: 裁判書資料庫
+description_html: |-
+  <p>司法院裁判書的解析與結構化結果（唯讀）。各資料表與欄位的說明請見專案中的 <code>docs/欄位說明.md</code>。</p>
+  <p>下方的「judgments」是整個資料庫檔案（<code>judgments.db</code>），點進去可以看到裡面的資料表，並直接寫 SQL 查詢。</p>
+databases:
+  judgments:
+    description_html: |-
+      <p>平常看 <strong>judgments</strong> 表（一列一份裁判書）；<strong>crawl_records</strong> 是爬取紀錄。
+      欄位說明見 <code>docs/欄位說明.md</code>。</p>
+    tables:
+      judgments:
+        description: 一列一份裁判書。長文字欄位在列表頁會截斷，點進單筆可看完整內容。
+        facets:
+          - court
+          - judgment_type
+          - case_type
+        sort_desc: judgment_date
+        size: 50
+      crawl_records:
+        description: 爬取紀錄，一列一份抓下來的裁判書。
+    queries:
+      structured_only:
+        title: 民事：結構化欄位（不含判決內文）
+        description: 只列民事分析常用欄位，捲動與篩選比原表快。法院欄位留空即為全部法院（部分比對，例如「臺中」）。
+        sql: |-
+          SELECT id, case_number, court, judgment_date, judgment_type,
+                 case_type_norm, case_type_category, case_type_mid, case_kind_category,
+                 claim_basis_group, claim_basis_primary,
+                 outcome, relief_type, claimed_amount, claimed_source,
+                 awarded_amount, grant_ratio, grant_ratio_source, law_primary, judges,
+                 is_default_judgment, plaintiff_has_lawyer, defendant_has_lawyer,
+                 defendant_is_corp, quality_flags, source_url
+          FROM judgments
+          WHERE court LIKE '%' || :court || '%'
+          ORDER BY judgment_date DESC
+      outcome_by_court:
+        title: 民事：各法院勝敗分布（給付確認類）
+        description: outcome 只對給付確認類有意義，所以這裡只算 case_kind_category = 給付確認。
+        sql: |-
+          SELECT court,
+                 COUNT(*) AS 件數,
+                 ROUND(100.0 * SUM(outcome = '勝訴') / COUNT(*), 1) AS 勝訴百分比,
+                 ROUND(100.0 * SUM(outcome = '一部勝訴一部敗訴') / COUNT(*), 1) AS 一部勝訴百分比,
+                 ROUND(100.0 * SUM(outcome = '敗訴') / COUNT(*), 1) AS 敗訴百分比
+          FROM judgments
+          WHERE case_kind_category = '給付確認'
+          GROUP BY court
+          HAVING COUNT(*) >= 100
+          ORDER BY 件數 DESC

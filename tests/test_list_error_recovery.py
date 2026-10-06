@@ -185,6 +185,54 @@ class TestRecoveryDuringPagination(unittest.TestCase):
         self.assertEqual(fakes.searches, 1)
 
 
+class TestNextPageTimeout(unittest.TestCase):
+    """
+    「下一頁」載入逾時不等於翻完。舊版把兩者都回傳 False，2022/05/16~23 翻到
+    第 13 頁逾時就結束（應有 23 頁），5/16~18 的判決整批遺漏，月份仍標成 done。
+    """
+
+    @staticmethod
+    def _next_raising_once():
+        calls = []
+
+        def _next(driver):
+            calls.append(1)
+            if len(calls) == 1:
+                raise crawler.NextPageLoadError("page load timed out twice")
+            return False
+        return _next
+
+    def test_timeout_jumps_to_next_page_and_keeps_collecting(self):
+        driver = _FakeDriver()
+        with tempfile.TemporaryDirectory() as tmp, \
+                _Fakes(tmp, [[_item(1)], [_item(2)]], driver):
+            crawler._go_next_page = self._next_raising_once()
+            res = crawler.search_and_crawl(keyword="x", max_results=5, driver=driver)
+        self.assertEqual(res["collected"], 2)
+        self.assertEqual(res["page_errors"], 0)
+        # 以頁碼網址直接跳到第 2 頁，而不是重新從第 1 頁翻
+        self.assertTrue(any("page=2" in u for u in driver.visited), driver.visited)
+
+    def test_timeout_that_cannot_recover_is_reported(self):
+        # get #1 = 導向清單頁；#2~#4 = 三次重載；#5 = 重送查詢後跳頁 —— 全部失敗
+        driver = _FakeDriver(error_gets={2, 3, 4, 5})
+        with tempfile.TemporaryDirectory() as tmp, \
+                _Fakes(tmp, [[_item(1)], [_item(2)]], driver):
+            crawler._go_next_page = self._next_raising_once()
+            res = crawler.search_and_crawl(keyword="x", max_results=5, driver=driver)
+        self.assertEqual(res["collected"], 1)
+        self.assertEqual(res["page_errors"], 1)
+
+    def test_empty_page_after_jump_is_reported_not_treated_as_end(self):
+        """上一頁有「下一頁」，跳過去卻是空的 → 是沒載到，不是翻完。"""
+        driver = _FakeDriver()
+        with tempfile.TemporaryDirectory() as tmp, _Fakes(tmp, [[_item(1)]], driver):
+            crawler._go_next_page = self._next_raising_once()
+            res = crawler.search_and_crawl(keyword="x", max_results=5, driver=driver)
+        self.assertEqual(res["collected"], 1)
+        self.assertEqual(res["page_errors"], 1)
+
+
 class TestBatchReportsIncompleteSegments(unittest.TestCase):
     def test_segment_with_page_errors_is_logged(self):
         """區段有未復原的錯誤時，批次層要留下可重跑的紀錄（不是靜靜跳過）。"""

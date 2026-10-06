@@ -153,6 +153,29 @@ class TestSaveJudgment(unittest.TestCase):
         self.assertEqual(rows[0][1], "判決")
         self.assertEqual(rows[0][2], "測試標籤")
 
+    def test_parse_all_unparsed_batches(self):
+        """批次寫入：跨批次全部寫入、缺檔只跳過該筆、parsed 旗標同步更新。"""
+        src = str(FIXTURES / "tpd_civil_judgment.html")
+        conn = sqlite3.connect(html_parser.DB_PATH)
+        conn.executemany(
+            "INSERT INTO crawl_records (case_number, html_file, keyword) VALUES (?,?,?)",
+            [(f"案號{i}", src, "批次") for i in range(5)]
+            + [("缺檔", os.path.join(self.tmp.name, "nope.html"), "批次")])
+        conn.commit()
+        conn.close()
+        old = html_parser._COMMIT_EVERY
+        html_parser._COMMIT_EVERY = 2      # 6 筆 → 3 批，覆蓋跨批次
+        try:
+            n = html_parser.parse_all_unparsed()
+        finally:
+            html_parser._COMMIT_EVERY = old
+        self.assertEqual(n, 5)
+        conn = sqlite3.connect(html_parser.DB_PATH)
+        self.assertEqual(conn.execute("SELECT COUNT(*) FROM judgments").fetchone()[0], 5)
+        self.assertEqual(conn.execute(
+            "SELECT case_number FROM crawl_records WHERE parsed=0").fetchall(), [("缺檔",)])
+        conn.close()
+
 
 if __name__ == "__main__":
     unittest.main()
@@ -228,6 +251,144 @@ class TestSectionHeadingFallback(unittest.TestCase):
         self.assertEqual(html_parser._normalize_section_title("主 文 \u200b\u200b"), "主文")
         self.assertEqual(html_parser._normalize_section_title("事　實　及　理　由"), "事實及理由")
 
+    def test_heading_with_trailing_punctuation(self):
+        """REGRESSION：「事 實 及 理 由、」「理由要領。」多了結尾標點，段落
+        被存成 sections["事實及理由、"]，下游取不到，事實理由欄全空（士林實測）。"""
+        self.assertEqual(html_parser._normalize_section_title("事 實 及 理 由、"), "事實及理由")
+        self.assertEqual(html_parser._normalize_section_title("理由要領。"), "理由要領")
+        d = parse_html(self._page('<div class="notEdit">主　文</div>').replace(
+            '<div class="notEdit">理　由</div>', '<div class="notEdit">理　由：</div>'),
+            crawl_id=-1)
+        self.assertIn("借名登記", d["reasons"])
+
+
+class TestInlineTermTags(unittest.TestCase):
+    """
+    司法院把法律名詞包成 <abbr class="termhover">，幾乎每份裁判書都有。
+    以空格串接文字節點時「被告<abbr>應</abbr>將」會變成「被告 應將」，
+    讓「得假執行」「一造辯論」這類規則比對不到（實測樣本 25% 的判決
+    has_provisional_exec 被誤判為 0）。
+    """
+
+    _PAGE = (
+        '<div id="jud"><div class="htmlcontent">'
+        '<div class="he-h1">臺灣士林地方法院民事判決</div>'
+        '<div>上列當事人間請求事件，本院判決如下︰</div>'
+        '<div class="notEdit">主　文</div>'
+        '<div><abbr class="termhover">被告</abbr>應給付原告新臺幣壹萬元。</div>'
+        '<div><abbr class="termhover">訴訟費用</abbr>由<abbr class="termhover">被告</abbr>負擔。</div>'
+        '<div>本判決得<abbr class="termhover">假執行</abbr>。</div>'
+        '<div class="notEdit">理　由</div>'
+        '<div>一、被告經合法通知，未於言詞辯論期日到場，爰依原告之聲請，由其'
+        '<abbr class="termhover">一造辯論</abbr>而為判決。二、原告請求為有理由，應予准許。</div>'
+        '<div>三、依民事訴訟法第385條第1項前段、第78條、第389條第1項第3款，'
+        '<abbr class="termhover">判決如主文</abbr>。</div>'
+        '<div>中　華　民　國　114　年　1　月　2　日</div>'
+        '<div><span>民事第一庭　法　官</span><span>王小明</span></div>'
+        '<div><span>書記官</span><span>李小華</span></div>'
+        '</div></div>'
+    )
+
+    def setUp(self):
+        self.d = parse_html(self._PAGE, crawl_id=-1)
+
+    def test_no_space_inside_words(self):
+        self.assertIn("被告應給付", self.d["verdict"])
+        self.assertIn("訴訟費用由被告負擔", self.d["verdict"])
+
+    def test_rules_depending_on_contiguous_terms(self):
+        self.assertEqual(self.d["has_provisional_exec"], 1)
+        self.assertEqual(self.d["is_default_judgment"], 1)
+        self.assertEqual(self.d["awarded_amount"], 10000)
+
+    def test_cited_clause_keeps_paragraphs(self):
+        # 舊 regex 會把「第1項」切成「第1」，且漏掉承前省略法律名稱的條文
+        self.assertEqual(self.d["applicable_laws"],
+                         "民事訴訟法第385條第1項前段、第78條、第389條第1項第3款")
+
+    def test_signature_names_in_separate_spans(self):
+        # 職稱與姓名分在兩個 <span>，拆掉行內標籤後中間沒有空白
+        self.assertEqual(self.d["judges"], "王小明")
+        self.assertEqual(self.d["clerk"], "李小華")
+
+    def test_judge_word_in_reasoning_is_not_a_signature(self):
+        page = self._PAGE.replace(
+            "二、原告請求為有理由",
+            "二、本院法官審酌全案事證後認原告請求為有理由，此有卷附資料可稽")
+        self.assertEqual(parse_html(page, crawl_id=-1)["judges"], "王小明")
+
+
+class TestJianCompoundParties(unittest.TestCase):
+    """
+    「兼法定代理人 高景炎」：此人同時是當事人與上列當事人的代理人。舊規則
+    只取到「兼」字，真正的姓名漏掉（實測士林 20%、臺北 12% 的判決當事人欄
+    混有這類雜訊）。
+    """
+
+    def _p(self, lines):
+        return html_parser._extract_parties(lines)
+
+    def test_single_line(self):
+        r = self._p(["被 告 數微系統科技股份有限公司", "兼法定代理人 高景炎"])
+        self.assertEqual(r["defendant"], "數微系統科技股份有限公司；高景炎")
+        self.assertEqual(r["defendant_agent"], "高景炎")
+
+    def test_prefix_on_its_own_line(self):
+        r = self._p(["被 告 大邱國際有限公司", "兼", "法定代理人 邱正遠", "被 告 黃彥婷"])
+        self.assertEqual(r["defendant"], "大邱國際有限公司；邱正遠；黃彥婷")
+
+    def test_role_split_across_lines(self):
+        r = self._p(["被 告 吏聲有限公司", "兼法定代理", "人 林長生"])
+        self.assertEqual(r["defendant"], "吏聲有限公司；林長生")
+        r = self._p(["被 告 益煬塑膠股份有限公司", "兼 法 定", "代 理 人 吳家豪（原名吳吉祥）"])
+        self.assertEqual(r["defendant"], "益煬塑膠股份有限公司；吳家豪")
+
+    def test_group_prefix(self):
+        r = self._p(["原 告 楊怡慧", "楊怡萩", "兼上二人共同", "訴訟代理人 楊怡軒"])
+        self.assertEqual(r["plaintiff"], "楊怡慧；楊怡萩；楊怡軒")
+        self.assertEqual(r["plaintiff_agent"], "楊怡軒")
+
+    def test_service_agent_annotation_is_not_a_party(self):
+        # 「兼送達代收人」是前一位代理人的附註，不能吃掉下一行的代理人
+        r = self._p(["原 告 陳振文", "訴訟代理人 王聖舜律師", "兼送達代收", "人",
+                     "訴訟代理人 楊敦元律師"])
+        self.assertEqual(r["plaintiff"], "陳振文")
+        self.assertEqual(r["plaintiff_agent"], "王聖舜；楊敦元")
+        r = self._p(["聲 請 人 林勳槍", "代 理 人", "兼", "送達代收人 林政嘉"])
+        self.assertEqual(r["plaintiff"], "林勳槍")
+        self.assertEqual(r["plaintiff_agent"], "林政嘉")
+
+    def test_spaced_agent_role_is_not_a_party(self):
+        r = self._p(["原 告 第一商業銀行股份有限公司", "法 定代理人 甲○○", "訴 訟代理人 戊○○"])
+        self.assertEqual(r["plaintiff"], "第一商業銀行股份有限公司")
+        self.assertEqual(r["plaintiff_agent"], "甲○○；戊○○")
+
+    def test_intervenor_is_not_attached_to_previous_party(self):
+        r = self._p(["被 告 財政部國有財產署", "法定代理人 曾國基",
+                     "受 告知人 臺北市政府工務局水利工程處", "法定代理人 陳郭正"])
+        self.assertEqual(r["defendant"], "財政部國有財產署")
+        self.assertEqual(r["defendant_agent"], "曾國基")
+
+
+class TestHeadingGluedToIntro(unittest.TestCase):
+    def test_verdict_heading_in_same_div_as_intro(self):
+        """REGRESSION：「本院判決如下： 主 文」同一個 div 時 verdict 全空
+        （臺北地院 2022 年除權判決 45 筆）。"""
+        page = (
+            '<div id="jud"><div class="htmlcontent">'
+            '<div class="he-h1">臺灣臺北地方法院民事判決</div>'
+            '<div>聲 請 人 高瑞霞</div>'
+            '<div>上列聲請人聲請除權判決（股票）事件，本院判決如下：　主　文</div>'
+            '<div>如附表所示之證券無效。</div>'
+            '<div>訴訟費用由聲請人負擔。</div>'
+            '<div class="notEdit">理　由</div>'
+            '<div>一、如附表所示之證券，業經本院公示催告，申報權利期間已屆滿，迄今無人申報權利，'
+            '聲請人聲請除權判決，與法相符，應予准許。二、依民事訴訟法第564條第1項，判決如主文。</div>'
+            '</div></div>'
+        )
+        d = parse_html(page, crawl_id=-1)
+        self.assertIn("證券無效", d["verdict"])
+        self.assertEqual(d["plaintiff"], "高瑞霞")
 
 class TestExtractLaws(unittest.TestCase):
     """

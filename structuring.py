@@ -200,7 +200,10 @@ def case_kind_category(kind: str) -> str:
     # 字尾推定：新字別（如「勞小上」）也能落到正確分類，不會掉進「未知」
     if kind.endswith(("簡上", "上", "抗")) and kind not in ("上",):
         return "上訴抗告"
-    if kind.startswith("司消債") or kind.startswith("消債"):
+    # 「司」字頭是司法事務官處理的程序事項（司聲：確定訴訟費用額、司他：
+    # 命繳訴訟費用、司家他…）。網站把其中一些標成「民事判決」，但內容是
+    # 裁定、沒有對造輸贏，主文的「相對人應給付…訴訟費用額」會被誤判成勝訴。
+    if kind.startswith("司") or kind.startswith("消債"):
         return "非對審"
     if kind.startswith("家") and kind.endswith(("婚", "親")):
         return "家事形成"
@@ -232,9 +235,15 @@ _CLAUSE_SPLIT_RE = re.compile(r"[。；]+")
 # 換行本身不能當成句界：實測 321 筆主文有句子中間斷行（「…參拾捌元⏎為原告
 # 預供擔保」），以換行切句會把一句話切成兩半。只有「換行後緊接判項編號」
 # 才一定是新判項——這種位置不可能是句子中間。
+#
+# 「換行後緊接訴訟費用／本判決的固定句型」同理：判項漏打句號時
+# （「…新臺幣75萬7,436元⏎訴訟費用由被告負擔」），不切開的話給付判項會
+# 和訴訟費用併成一句，被 _AMOUNT_EXCLUDE_RE 整句排除而抽不到金額。
 _ENUM_LINE_BREAK_RE = re.compile(
     r"\n(?=[ \t　]*(?:[一二三四五六七八九十壹貳參肆伍陸柒捌玖拾]+[、.．]|"
-    r"\d+[、．](?!\d)|\d+\.(?!\d)|[㈠-㈩]|[（(][一二三四五六七八九十\d]+[)）]))")
+    r"\d+[、．](?!\d)|\d+\.(?!\d)|[㈠-㈩]|[（(][一二三四五六七八九十\d]+[)）]|"
+    r"(?:第[一二三]審)?訴訟費用(?:[（(][^）)]{0,12}[）)])?(?:由|新臺幣|[\d０-９])|"
+    r"本判決(?:第|於|得|所命|原告)))")
 
 # 少數判決的「主文」欄位混入了後續的理由段落（段落標題辨識失敗所致）。
 # 這些文字會帶進大量「應給付」「駁回」而汙染分類與金額抽取，
@@ -300,8 +309,11 @@ def outcome_clauses(verdict: str) -> List[str]:
 # ═══════════════════════════════════════════════════════════════════════════
 
 # 准許類判項的動詞
-_GRANT_VERBS = (r"給付|返還|交付|移轉|塗銷|遷讓|遷出|騰空|拆除|拆除|移除|辦理|履行|"
-                r"協同|容忍|停止|除去|回復|支付|賠償|清償|開立|提出|登記|變賣|分配")
+_GRANT_VERBS = (r"給付|返還|交付|移轉|塗銷|遷讓|遷出|遷離|騰空|拆除|移除|辦理|履行|"
+                r"協同|容忍|停止|除去|回復|支付|賠償|清償|開立|提出|登記|變賣|分配|"
+                # 士林／新北樣本補上的寫法：遷離住所、分割後的找補、保留通道、
+                # 變更要保人、供查閱帳簿、調整租金（實測共 17 筆落入「其他/不明確」）
+                r"補償|保留|變更為|供[^。；]{0,6}查閱|調整為")
 
 # 「應」與動詞之間的最大間隔。不動產類主文的受詞極長，例如
 # 「應將臺北市○○區○○段000000000地號土地（權利範圍：10000分之435）及其上
@@ -322,8 +334,11 @@ _GRANT_RE = re.compile(
 # 「確認甲對被告有新臺幣381,192元…之債權」這種不帶「存在」二字的寫法。
 # 只認前者會讓後者掉進「其他/不明確」。判項若以「確認」開頭且非駁回，
 # 一律視為確認勝訴判項。
+# 兩種寫法都要排除同一子句出現駁回：「原告請求確認債權不存在之訴駁回」
+# 是確認之訴被駁回，舊規則只看到「確認…不存在」就算准許，整件敗訴的案子
+# 被記成「一部勝訴一部敗訴」。
 _CONFIRM_GRANT_RE = re.compile(
-    r"(?:確認.{0,100}?(?:存在|不存在|無效|有效|成立|不成立|為真正)|"
+    r"(?:確認(?![^。；]{0,120}駁回).{0,100}?(?:存在|不存在|無效|有效|成立|不成立|為真正)|"
     r"^[一二三四五六七八九十\d、.㈠-㈩]*確認(?![^。；]{0,60}駁回))")
 # 分割共有物／分割遺產的主文寫法極為分歧，只認「准予分割」會漏掉
 # 「准予合併分割」「分割由原告單獨取得」「分配予○○」等常見寫法。
@@ -332,12 +347,19 @@ _PARTITION_RE = re.compile(
     r"應予(?:變價|原物|變賣)|分割由|分割為|分配予|分配與|分割如(?:附圖|附表|下)|"
     r"所示之?(?:不動產|土地|遺產)分割|所示方法分割|方法分割|分割方式|"
     r"欄所示分割|應分割如|應按.{0,40}?分割|應依.{0,40}?方法分割|"
-    r"所得價金由.{0,30}分配)")
+    r"所得價金由.{0,30}分配|"
+    # 「…分歸被告取得」「合併分割」「應以如附圖所示之方式分割」
+    r"分歸[^。；]{0,60}?取得|合併分割|以[^。；]{0,60}?方式分割)")
 # 只認「明確准許」的寫法。早期版本用裸的「撤銷」「准許」會把
 # 「原告請求撤銷…之訴駁回」「不予准許」誤判成勝訴判項。
 _OTHER_GRANT_RE = re.compile(
     r"(?:准予(?!分割)|准[^。；]{0,12}(?:離婚|終止收養|認領)|應予准許|應予撤銷|"
-    r"(?:執行)?程序.{0,8}應予撤銷|不得執[^。]{0,40}強制執行)")
+    r"(?:執行)?程序.{0,8}應予撤銷|不得執[^。]{0,40}強制執行|"
+    # 撤銷決議、解任董事、確認決議無效、禁止被告妨害——形成或不作為判項。
+    # 一律排除同一子句裡出現駁回的情形（「原告請求撤銷決議之訴駁回」）。
+    r"(?:均|應)?予(?:以)?(?:撤銷|解任)(?![^。；]{0,30}駁回)|"
+    r"決議(?:均)?(?:無效|不存在|不成立)(?![^。；]{0,30}駁回)|"
+    r"被告[^。；]{0,30}不得(?:拒絕|妨害|阻止|干擾)(?![^。；]{0,30}駁回))")
 
 # 駁回類判項
 _DISMISS_REST_RE = re.compile(r"(?:其餘|其他|逾此範圍|超過部分|其餘部分).{0,12}?(?:之訴)?.{0,8}?駁回")
@@ -545,7 +567,9 @@ def extract_relief_type(verdict: str) -> str:
         types.append("金錢給付")
     if _NON_MONEY_VERB_RE.search(joined):
         types.append("非金錢給付")
-    if _CONFIRM_GRANT_RE.search(joined):
+    # 逐子句比對：_CONFIRM_GRANT_RE 會排除「同一子句」出現駁回的情形，
+    # 對串接後的 joined 比對時，下一句的「其餘之訴駁回」也會被看到
+    if any(_CONFIRM_GRANT_RE.search(c) for c in clauses):
         types.append("確認")
     if _PARTITION_RE.search(joined):
         types.append("形成（分割）")
@@ -738,12 +762,16 @@ def extract_awarded_amounts(verdict: str) -> Dict:
 # 於是抓到的是舊聲明或管轄權論述裡的數字，造成「判准大於請求」的矛盾。
 # 因此先找明確的錨點，找不到才退而求其次，且要求該段落後方真的出現金額。
 _CLAIM_ANCHORS = [
+    # 變更後的聲明優先，而且取**最後一次**變更（見 _CLAIM_CHANGE_RE 的說明）。
     # (?<!反)：「反訴之聲明」裡面也含有「訴之聲明」，不擋掉的話錨點會定位到
     # 反訴的聲明段，把反訴原告的請求當成本訴原告的請求。
     re.compile(r"(?<!反)訴之聲明\s*[:：]?"),
     re.compile(r"變更後聲明\s*[:：]?"),
     re.compile(r"並\s*聲明\s*[:：]"),
     re.compile(r"聲明\s*[:：]"),
+    # 「聲明求為判決：」「聲明求為如下之判決」——沒有緊接冒號，上一條抓不到，
+    # 會退回全文開頭 1500 字，把事實敘述裡的每個金額都加進請求金額。
+    re.compile(r"聲明(?:求為|請求)(?:如下之)?判決\s*[:：]?"),
 ]
 # 錨點後方必須在合理距離內出現「給付…元」，否則視為誤命中
 _CLAIM_VALIDATE_RE = re.compile(r"(?:給付|返還|賠償|支付|清償)[^。]{0,60}?元")
@@ -754,11 +782,45 @@ _CLAIM_VALIDATE_RE = re.compile(r"(?:給付|返還|賠償|支付|清償)[^。]{0
 #     …原告應分得680萬1,158元」-> claimed_total 把三個數字全加起來
 # 實測抽樣 1,192 筆 claimed_source=直接抽取 的案件，620 筆（52%）的視窗內
 # 出現對造答辯或反訴聲明的字樣。
+#
+# 後三行是聲明本身的結束點。少了它們，段落會一路讀進程序說明與法院判斷，
+# 而那裡會再複述一次請求金額：
+#   「並聲明：⑴被告應給付原告200,866元…⑶並願供擔保請准宣告假執行。
+#     三、經查，原告主張之上開事實…請求被告給付200,866元…」
+# 同一筆請求被加總兩到四次，grant_ratio 剛好落在 0.5、0.333、0.25。
+# 實測全部勝訴且請求金額為直接抽取的 10,354 筆中，3,270 筆（32%）比值小於 1。
+#   - 假執行聲請（願供擔保／請准宣告假執行）是聲明的最後一項
+#   - 核屬減縮、應予准許…是法院對聲明變更的程序判斷
+#   - 本院之判斷、經查、兩造不爭執…是法院開始論理
 _CLAIM_STOP_RE = re.compile(
     r"(?:被告|相對人|反訴原告|上訴人|被上訴人)[^。；，]{0,8}?(?:則以|則辯|辯稱|抗辯|答辯|置辯)"
     r"|反訴(?:之)?聲明"
     r"|等語(?:置辯|資為抗辯)"
-    r"|被告聲明\s*[:：]")
+    r"|被告聲明\s*[:：]"
+    r"|願(?:以[^。；]{0,30}?)?供擔保|請准(?:予)?(?:供擔保)?宣告假執行"
+    r"|核屬(?:擴張|減縮|變更|追加)|(?:核|於法)(?:並|尚)?無不合|應予准許|與[^。；]{0,10}規定相符"
+    r"|本院之判斷|得心證之理由|經查|兩造(?:不爭執|爭執|之爭點)"
+    # 一造辯論判決常見的接續句：聲明之後直接寫被告未到場、原告舉證
+    r"|被告[^。；]{0,12}?(?:經合法通知|未於(?:最後)?言詞辯論|未到場|未提出書狀)"
+    r"|原告(?:所)?主張之(?:上開|前揭|上揭|前開)?事實|業據(?:其|原告)?提出"
+    # 備位聲明是先位不成立時才審的替代請求，與先位擇一，不能相加。
+    # 實測 110 年度訴字第 357 號：先位、備位各 728 萬 5 千元，加總成 1,457 萬。
+    r"|備位(?:之)?聲明")
+
+# 聲明變更（減縮、擴張、更正）。判決書會先寫起訴時的聲明，再寫變更後的聲明：
+#   「原告起訴時聲明…60萬元。嗣…減縮該項聲明為『…1萬3,200元』」
+# 取起訴時的聲明會讓 grant_ratio 低估（上例算成 0.025，實際是全部勝訴）。
+# 一份判決可能變更多次，取最後一次。
+#
+# 寫法很多，實測需要三種句型：
+#   變更聲明為：／減縮將第2、3項聲明分別減縮為：（動詞在前）
+#   聲明減縮為請求被告給付56萬元（聲明在前）
+#   變更請求被告應給付78萬1,000元（沒有「聲明」二字）
+# (?!者) 排除法條引文「擴張或減縮應受判決事項之聲明者，不在此限」。
+_CLAIM_CHANGE_RE = re.compile(
+    r"(?:變更|減縮|擴張|更正)[^。；]{0,16}?(?:聲明|請求)(?!者)[^。；]{0,8}?(?:為|如下)\s*[:：]?"
+    r"|聲明[^。；]{0,6}?(?:變更|減縮|擴張|更正)為\s*[:：]?"
+    r"|(?:變更|減縮|擴張)為?請求(?=被告[^。；]{0,20}?給付)")
 _AS_VERDICT_RE = re.compile(r"如主文(?:第[一二三四五六七八九十\d]+項)?所示")
 # 聲明段落中的編號符號，先剝除才能正確判斷「如主文所示」是否為整段內容
 _ENUM_PREFIX_RE = re.compile(r"^[\s\d一二三四五六七八九十㈠-㈩\(（][\s\d一二三四五六七八九十㈠-㈩\)）.、,]*")
@@ -780,18 +842,22 @@ def extract_claimed_amount(
 
     claimed_source 取值：
       直接抽取  — 從聲明段落實際讀到金額
+      直接抽取（無聲明錨點）— 找不到聲明段落，從全文開頭讀到的金額，可信度較低
       主文回推  — 聲明寫「如主文所示」且全部勝訴，以判准金額代入
       未取得    — 兩者皆不可得
     """
     res = {"claimed_total": None, "claimed_currency": "", "claimed_source": "未取得",
-           "claimed_n_items": 0}
+           "claimed_n_items": 0, "claimed_fallback": 0}
 
     body = facts_and_reasons or facts or ""
     if body:
         text = re.sub(r"\s+", "", body)
         seg = ""
-        for anchor in _CLAIM_ANCHORS:
-            for am in anchor.finditer(text):
+        changes = list(_CLAIM_CHANGE_RE.finditer(text))
+        anchor_matches = ([[changes[-1]]] if changes else []) + \
+                         [list(a.finditer(text)) for a in _CLAIM_ANCHORS]
+        for matches in anchor_matches:
+            for am in matches:
                 cand = text[am.end(): am.end() + 1500]
                 # 先在對造答辯／反訴聲明處截斷，再驗證與抽金額。
                 # 順序不能反過來：先驗證的話，被對造金額「補足」的假聲明段
@@ -809,6 +875,7 @@ def extract_claimed_amount(
                 break
         if not seg:
             # 找不到可信的聲明錨點時才退回開頭 1500 字，同樣要在對造答辯處截斷
+            res["claimed_fallback"] = 1
             seg = text[:1500]
             stop = _CLAIM_STOP_RE.search(seg)
             if stop:
@@ -825,7 +892,11 @@ def extract_claimed_amount(
             res["claimed_currency"] = "/".join(currencies)
             if len(currencies) == 1:
                 res["claimed_total"] = sum(i["amount"] for i in items)
-                res["claimed_source"] = "直接抽取"
+                # 沒有聲明錨點時讀的是全文開頭，會把事實敘述裡的金額一起加總。
+                # 實測全部勝訴的案件中，這類金額算出的比值有 45% 小於 1，
+                # 有錨點者只有 7%，所以分開標記，不拿來計算 grant_ratio。
+                res["claimed_source"] = ("直接抽取（無聲明錨點）" if res["claimed_fallback"]
+                                         else "直接抽取")
                 return res
 
         # 聲明寫「如主文所示」→ 只有全部勝訴時，請求金額才等於判准金額
@@ -1165,7 +1236,7 @@ def panel_key(judges: str) -> str:
 # 案由大類對照：依關鍵字比對，順序即優先序（先命中者勝）
 #
 # 「借貸／清償」原本是單一類別，佔臺北地院 2025 民事判決的 38.2%（4,024 筆）。
-# 一個佔近四成的類別在法官分析裡形同沒有控制：銀行信用卡債（被告多半未到庭、
+# 一個佔近四成的類別在分析裡形同沒有控制：銀行信用卡債（被告多半未到庭、
 # 一造辯論、原告幾乎必勝）和自然人之間的借貸糾紛（爭點多、舉證困難）被歸成
 # 同一類，用它當基準線來調整案件組合是無效的。因此拆成三類，
 # 並把「債務人異議之訴」移出——那是強制執行救濟，根本不是借貸案件。
@@ -1221,8 +1292,85 @@ def normalize_case_type(case_type: str, plaintiff: str = "") -> Tuple[str, str]:
     return norm, "其他"
 
 
+# ── 案由中間分類 ──
+# 正規化案由約 3 千種太細（每類只有個位數案件，統計做不出東西），17 個大類又太粗：
+# 「侵權」有一萬多件，車禍、醫療糾紛、詐騙被害人求償的勝訴率天差地別。
+# 中間分類約 40 類，用兩種資訊細分：
+#   - 多數大類：正規化案由的關鍵字（給付工程款、遷讓房屋、給付資遣費…）
+#   - 侵權：案由幾乎都只寫「損害賠償」，改看原告主張段落的關鍵字。原告主張是
+#     判決前就存在的資訊，拿來分類不會把判決結果帶進來。
+# 規則依序比對，先命中者勝；(大類集合, 案由規則, 原告主張規則, 中間分類)。
+_TORT = {"侵權"}
+_CASE_TYPE_MID_RULES: List[Tuple[Optional[set], str, str, str]] = [
+    (None, r"債務不履行", "", "契約：債務不履行"),
+    # 外遇求償的主張也會寫「發生性關係」，要排在性騷擾之前。
+    # 不能用「身分法益」當關鍵字：車禍死亡案件的家屬依民法§195第3項也主張身分法益。
+    (_TORT, "", r"配偶權|有配偶之人|婚外情|外遇|通姦|侵害[^。]{0,8}配偶", "侵權：侵害配偶權"),
+    (_TORT, "", r"性騷擾|性侵|猥褻|強制性交|偷拍|性影像|性私密", "侵權：性騷擾與性侵害"),
+    (_TORT, "", r"詐騙|詐欺集團|車手|人頭帳戶|提供[^。]{0,12}帳戶|假投資|投資詐|收水|取款",
+     "侵權：詐騙"),
+    (_TORT, r"醫療", "", "侵權：醫療"),
+    (_TORT, "", r"職業災害|職災|工地[^。]{0,8}(?:墜落|受傷)", "侵權：職業災害"),
+    (_TORT, "", r"車禍|交通事故|駕駛|騎乘|肇事|行車|追撞|碰撞|號誌", "侵權：交通事故"),
+    # 車禍受傷也會寫「至醫院就醫」，所以醫療的關鍵字要限定在醫療行為本身，並排在交通事故之後
+    (_TORT, "", r"醫療(?:疏失|過失|糾紛|行為|過程)|手術(?:過程|後|中)|診療|告知說明義務", "侵權：醫療"),
+    # 車禍判決也寫「致原告受有…傷害」，所以傷害只認肢體暴力的寫法，並排在交通事故之後
+    (_TORT, "", r"毆打|徒手|揮拳|踹|傷害之犯意|持[^。]{0,6}(?:刀|棍|棒|球棒)", "侵權：傷害"),
+    (_TORT, "", r"名譽|公然侮辱|誹謗|隱私|肖像|人格權|侮辱", "侵權：名譽與人格權"),
+    (_TORT, "", r"背信|侵占|掏空|董事[^。]{0,10}(?:違反|未盡)|忠實義務|善良管理人", "侵權：經營者背信與侵占"),
+    (_TORT, "", r"買賣契約|買賣標的|瑕疵", "契約：買賣"),
+    (_TORT, "", r"漏水|滲水|壁癌|鄰房|龜裂|施工[^。]{0,6}損", "侵權：房屋漏水與施工損鄰"),
+    (_TORT, "", "", "侵權：其他"),
+    ({"契約"}, r"工程|承攬", "", "契約：工程與承攬"),
+    ({"契約", "其他"}, r"價金|貨款|買賣", "", "契約：買賣"),
+    ({"契約"}, r"違約金", "", "契約：違約金"),
+    ({"契約"}, r"租金", "", "契約：租金"),
+    ({"契約"}, r"報酬|服務費|居間|委任", "", "契約：委任、居間等勞務報酬"),
+    ({"契約"}, r"扣押款", "", "契約：扣押款（執行收取）"),
+    ({"契約"}, r"加班費|薪資|工資|獎金", "", "勞動：工資與加班費"),
+    ({"契約"}, "", "", "契約：其他"),
+    ({"勞動"}, r"確認僱傭|僱傭關係", "", "勞動：確認僱傭關係"),
+    ({"勞動"}, r"職業災害|職災", "", "勞動：職業災害"),
+    ({"勞動"}, r"資遣", "", "勞動：資遣費"),
+    ({"勞動"}, r"退休", "", "勞動：退休金"),
+    ({"勞動"}, r"工資|薪資|加班|獎金", "", "勞動：工資與加班費"),
+    ({"勞動"}, "", "", "勞動：其他"),
+    ({"物權／不動產", "其他"}, r"遷讓|返還(?:租賃)?房屋|返還租賃物|點交", "", "不動產：遷讓房屋"),
+    ({"物權／不動產", "其他"}, r"拆屋|拆除|返還土地|排除侵害", "", "不動產：拆屋還地與排除侵害"),
+    ({"物權／不動產"}, r"塗銷|移轉登記|所有權移轉", "", "不動產：登記塗銷與移轉"),
+    ({"物權／不動產", "確認"}, r"區分所有權人會議|管理委員會", "", "不動產：區分所有與社區決議"),
+    ({"物權／不動產"}, r"分割", "", "不動產：分割共有物"),
+    ({"物權／不動產"}, "", "", "不動產：其他"),
+    ({"其他"}, r"漏水", "", "侵權：房屋漏水與施工損鄰"),
+    ({"其他"}, r"國家賠償", "", "國家賠償"),
+    ({"其他"}, r"借名登記", "", "借名登記"),
+    ({"確認"}, r"通行權", "", "確認：通行權"),
+    ({"確認"}, r"債權|債務|本票", "", "確認：債權債務存否"),
+    ({"確認", "其他"}, r"決議", "", "確認：股東會或團體決議效力"),
+    ({"確認"}, "", "", "確認：其他"),
+    ({"強制執行救濟"}, r"第三人異議", "", "強制執行救濟：第三人異議"),
+    ({"強制執行救濟"}, "", "", "強制執行救濟：債務人異議等"),
+]
+
+
+def case_type_mid(category: str, norm: str, claim_text: str = "") -> str:
+    """案由中間分類。沒有細分規則的大類（金融借貸、不當得利、繼承…）沿用大類名稱。"""
+    if not category:
+        return ""
+    head = (claim_text or "")[:1500]
+    for cats, norm_pat, text_pat, label in _CASE_TYPE_MID_RULES:
+        if cats is not None and category not in cats:
+            continue
+        if norm_pat and not re.search(norm_pat, norm or ""):
+            continue
+        if text_pat and not re.search(text_pat, head):
+            continue
+        return label
+    return category
+
+
 # ═══════════════════════════════════════════════════════════════════════════
-# 9. 程序特徵與當事人特徵（法官分析的控制變數）
+# 9. 程序特徵與當事人特徵（分析時的控制變數）
 # ═══════════════════════════════════════════════════════════════════════════
 
 _CORP_RE = re.compile(r"(股份有限公司|有限公司|公司|銀行|商業銀行|合作社|基金會|協會|"
@@ -1238,7 +1386,7 @@ _AGENT_SPLIT_RE = re.compile(r"[；;、,，]+")
 # 但 derive_structured_fields 原本只讀前一對，於是上訴審與抗告案件的
 # defendant_is_corp、*_has_lawyer 一律算出 0——那是「沒有資料可算」，
 # 不是「查出來沒有」。實測 1,073 筆（8.6%）受影響，而這三欄正是
-# judge_analysis 用來控制案件組成的變數。
+# 分析時用來控制案件組成的變數。
 _POSTURE_FIRST = "第一審對審"
 _POSTURE_APPEAL = "上訴抗告"
 _POSTURE_NON_ADVERSARIAL = "非訟"
@@ -1311,11 +1459,74 @@ def _cost_share_plaintiff(verdict: str) -> Optional[float]:
     text = re.sub(r"\s+", "", verdict).replace("％", "%")
     # 「訴訟費用**新臺幣壹萬肆仟柒佰貳拾壹元**由被告負擔」這種寫法在
     # 「訴訟費用」與「由」之間夾了金額，要求兩者相鄰會整批漏掉。
-    m = re.search(r"訴訟費用[^，。；]{0,30}?由(?P<who>[^，。；]{0,20}?)負擔(?P<frac>[^，。；]{0,24})", text)
+    m = re.search(r"訴訟費用[^，。；]{0,30}?由", text)
+    if not m:
+        return None
+    # 費用分擔可能分成好幾句，要全部讀完才知道原告負擔多少：
+    #   「由被告余柏穎負擔23%，餘由被告李柏勳負擔」→ 原告 0（舊版只讀第一句，
+    #     把「被告負擔 23%」換算成原告負擔 77%）
+    #   「由被告甲、乙、丙、丁各負擔四分之一」→ 原告 0（舊版算成 75%）
+    #   「由兩造各負擔二分之一」→ 原告 0.5
+    #   「由被告負擔十分之三，餘由原告負擔」→ 原告 0.7
+    # 反訴的費用分擔與本訴無關，同一句裡出現時從「反訴」處截斷
+    clause = re.split(r"[，；]反訴", text[m.start():].split("。", 1)[0], 1)[0]
+    parts = list(re.finditer(
+        r"(?P<rest>餘(?:額|款|部分)?)?由(?P<who>[^，。；]{0,40}?)(?P<each>各)?負擔(?P<frac>[^，。；]{0,24})",
+        clause))
+    if len(parts) > 1:
+        explicit, plaintiff, rest_who, unknown = 0.0, 0.0, None, False
+        for p in parts:
+            who = p.group("who")
+            if p.group("rest"):
+                rest_who = who
+                continue
+            r = _parse_fraction(p.group("frac"))
+            if r is None:
+                unknown = True
+                continue
+            n = len([x for x in re.split(r"[、及與和]", who) if x]) if p.group("each") else 1
+            if "兩造" in who and p.group("each"):
+                explicit += 2 * r
+                plaintiff += r
+                continue
+            explicit += r * n
+            if "原告" in who and "被告" not in who:
+                plaintiff += r * n
+        if not unknown and explicit <= 1.0001:
+            if rest_who is not None:
+                if "原告" in rest_who and "被告" not in rest_who:
+                    plaintiff += 1.0 - explicit
+                elif "被告" not in rest_who and "兩造" not in rest_who:
+                    return None
+            return round(min(max(plaintiff, 0.0), 1.0), 4)
+        return None
+
+    m = parts[0] if parts else None
     if not m:
         return None
     who, frac = m.group("who"), m.group("frac")
+    if "兩造" in who and m.group("each"):
+        r = _parse_fraction(frac)
+        return round(r, 4) if r is not None else None
+    if m.group("each") and "被告" in who and "原告" not in who:
+        return 0.0
+    ratio = _parse_fraction(frac)
 
+    if ratio is None:
+        # 沒有比例 → 全部由某一方負擔
+        ratio = 1.0 if "原告" in who else (0.0 if "被告" in who else None)
+        return ratio
+
+    # 主文寫的是「由某方負擔 X」，換算成原告負擔比例
+    if "被告" in who:
+        return round(1.0 - ratio, 4)
+    if "原告" in who:
+        return round(ratio, 4)
+    return None
+
+
+def _parse_fraction(frac: str) -> Optional[float]:
+    """解析「負擔」後面的比例文字；沒有比例（例如全部負擔）回傳 None。"""
     # 主文寫比例的方式有四種，缺一種就會整批落空：
     #   百分之二十 / 20%  ·  千分之七  ·  二分之一  ·  5/100
     ratio = None
@@ -1347,18 +1558,230 @@ def _cost_share_plaintiff(verdict: str) -> Optional[float]:
                 num, den = int(fm.group(1)), int(fm.group(2))
                 if den > 0 and num <= den:
                     ratio = num / den
+    return ratio
 
-    if ratio is None:
-        # 沒有比例 → 全部由某一方負擔
-        ratio = 1.0 if "原告" in who else (0.0 if "被告" in who else None)
-        return ratio
 
-    # 主文寫的是「由某方負擔 X」，換算成原告負擔比例
-    if "被告" in who:
-        return round(1.0 - ratio, 4)
-    if "原告" in who:
-        return round(ratio, 4)
-    return None
+# ═══════════════════════════════════════════════════════════════════════════
+# 9b. 理由段落切分：原告主張／被告答辯／法院判斷
+# ═══════════════════════════════════════════════════════════════════════════
+#
+# 為什麼需要：判決理由（facts_and_reasons 等）同時包含兩造的主張與法院的判斷。
+#   - 用文字預測勝敗時，只能讀「判決前就存在」的兩造主張；混入法院判斷段落
+#     （「原告之請求為有理由」）等於讓模型直接讀到答案。
+#   - 心證層（爭點、證據採信）只該從法院判斷段落抽取，兩造書狀裡的
+#     「堪認」「不足採」是當事人的說法，不是法院的心證。
+#
+# 切點規則：法院判斷的起點取以下兩者較早者
+#   1. 明確標記：本院之判斷、得心證之理由、兩造不爭執事項、經查、按…定有明文…
+#   2. 結構：被告答辯以「等語，資為抗辯」「免為假執行」「未提出書狀…陳述」
+#      收尾，之後的第一個段落編號（三、／參、）就是法院判斷。少了這條，
+#      以「三、本件原告主張…」開頭的判斷段落會被整段算進原告主張。
+# 實測給付確認類民事判決 57,034 筆，98.4% 切得出三段。
+# 切不出法院判斷時三欄一律留空——寧可沒有資料，也不要給出可能混入判斷的主張段落。
+
+_SEC_CLAIM_RE = re.compile(
+    r"原告(?:起訴)?(?:主張|意旨|略以|陳稱|方面|部分|之主張|起訴主張)|原告[^。；，]{0,6}?(?:主張|起訴)略以")
+_SEC_DEFENSE_RE = re.compile(
+    r"(?:被告|相對人)[^。；，]{0,10}?(?:則以|則辯稱|辯稱|辯以|抗辯|答辯|方面|部分|置辯)"
+    r"|(?:被告|相對人)[^。；]{0,12}?(?:經合法通知|未於(?:最後)?言詞辯論|未到場|未提出書狀)")
+_SEC_DEFENSE_END_RE = re.compile(
+    r"等語[^。]{0,12}?(?:抗辯|置辯|答辯|辯解|資為|以資)|(?:免為|請准宣告)假執行"
+    r"|未提出(?:任何)?(?:書狀|答辯)[^。]{0,20}?(?:陳述|聲明|答辯)")
+_SEC_COURT_RE = re.compile(
+    r"(?:本院|法院)(?:之|的)?(?:判斷|認定|審酌|得心證)|得心證之理由"
+    r"|兩造(?:不爭執|爭執|之爭點|爭點)|本件(?:之)?爭點|爭點(?:厥為|在於|如下)"
+    r"|經查|(?:^|[。：:、])查[，:：]?"
+    r"|原告(?:所)?主張之?(?:上開|前揭|上揭|前開|上述)?(?:事實|情節|各情)[^。]{0,20}?(?:業據|有|為被告所不爭執)"
+    r"|^按|[。、：:]按[^。]{0,40}?(?:定有明文|規定|者)|茲(?:分述|論述)如下|綜上|從而")
+_SEC_HEAD_RE = re.compile(r"(?:[一二三四五六七八九十]{1,3}|[壹貳參叁肆伍陸柒捌玖拾])、")
+_SEC_TRAILING_HEAD_RE = re.compile(r"(?:[一二三四五六七八九十]{1,3}|[壹貳參叁肆伍陸柒捌玖拾])、$")
+_SEC_SUBSTANTIVE_RE = re.compile(r"(?:實體|本案)(?:方面|部分)")
+
+
+def split_reasoning_sections(facts_and_reasons: str, facts: str, reasons: str) -> Dict[str, str]:
+    """
+    把判決理由切成原告主張、被告答辯、法院判斷三段（已去除空白）。
+
+    split_status：
+      成功           — 三段都切出來（被告未到場時答辯段是那句「未到場」的陳述）
+      無原告主張標記 — 找不到「原告主張」等起點
+      無法院判斷標記 — 找得到主張、找不到法院判斷的起點（三欄留空，理由見上方）
+    舊式判決把「事實」與「理由」分成兩段時，事實段是兩造主張、理由段是法院判斷。
+    """
+    out = {"plaintiff_claim_text": "", "defendant_defense_text": "",
+           "court_reasoning_text": "", "section_split_status": ""}
+    if facts_and_reasons:
+        body = re.sub(r"\s+", "", facts_and_reasons)
+        court_tail = ""
+    elif facts and reasons:
+        body = re.sub(r"\s+", "", facts)
+        court_tail = re.sub(r"\s+", "", reasons)
+    else:
+        body = re.sub(r"\s+", "", facts or reasons or "")
+        court_tail = ""
+    if not body:
+        return out
+
+    sub = _SEC_SUBSTANTIVE_RE.search(body)
+    cm = _SEC_CLAIM_RE.search(body, sub.end() if sub else 0) or _SEC_CLAIM_RE.search(body)
+    if not cm:
+        out["section_split_status"] = "無原告主張標記"
+        return out
+
+    if court_tail:
+        cs = len(body)
+    else:
+        co = _SEC_COURT_RE.search(body, cm.end())
+        cs = co.start() if co else None
+        dm = _SEC_DEFENSE_RE.search(body, cm.end())
+        if dm and (cs is None or dm.start() < cs):
+            de = _SEC_DEFENSE_END_RE.search(body, dm.end())
+            if de:
+                h = _SEC_HEAD_RE.search(body, de.end())
+                if h and (cs is None or h.start() < cs):
+                    cs = h.start()
+        if cs is None:
+            out["section_split_status"] = "無法院判斷標記"
+            return out
+
+    pre = _SEC_TRAILING_HEAD_RE.sub("", body[cm.start():cs])
+    dm = _SEC_DEFENSE_RE.search(pre, 1)
+    out["plaintiff_claim_text"] = pre[:dm.start()] if dm else pre
+    out["defendant_defense_text"] = pre[dm.start():] if dm else ""
+    out["court_reasoning_text"] = body[cs:] + court_tail
+    out["section_split_status"] = "成功"
+    return out
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# 9c. 請求權基礎（原告主張的法條與法律關係）
+# ═══════════════════════════════════════════════════════════════════════════
+#
+# 民事的「請求權基礎」對應刑事的「法條」。從**原告主張段落**抽取原告援引的
+# 條文與法律關係，而不是從法院判斷段落抽：
+#   - 原告主張在判決前就存在，可以當預測變數；法院引用哪些條文則部分反映了
+#     判斷結果（駁回時常引用舉證責任、消滅時效）。
+#   - law_primary 取「引用最多的實體法」，但引用最多的常是遲延利息
+#     （民法§229、§233、§203）與連帶責任，不等於請求權基礎。
+#
+# 抽取來源：「爰依民法第184條第1項前段、第195條規定，請求…」這類句子裡的
+# 條文，以及「依消費借貸及連帶保證之法律關係」裡的法律關係。實測給付確認類
+# 民事判決的原告主張段落中，約四成寫出條文、約五成寫出法律關係。
+
+_BASIS_SENT_RE = re.compile(
+    r"(?:依|基於|本於)(?:據)?[^。；]{0,160}?(?:請求|提起|起訴|訴請|求償|主張)")
+# 「依消費借貸之法律關係」與「依系爭信用卡契約起訴」兩種寫法。後者若不收，
+# 信用卡、銀行貸款這類只寫契約名稱的案件會整批沒有請求權類型。
+_BASIS_REL_RE = re.compile(
+    r"(?:依|基於|本於)(?:([^。；，依]{2,40}?)(?:之)?法律關係"
+    r"|((?:系爭|兩造間?|上開|前開)?[^。；，依]{1,30}?(?:契約|合約|協議書?|約定書)))")
+
+# 附帶條文：利息、遲延、連帶、損害賠償的方法與範圍、債權讓與、法律行為效力。
+# 它們幾乎出現在每一種請求裡，不能代表「依什麼請求」。
+_AUXILIARY_CIVIL_ARTICLES = (
+    set(range(203, 208)) | set(range(213, 219)) | set(range(229, 235))
+    | set(range(272, 283)) | set(range(294, 300)) | set(range(71, 93)) | {148}
+)
+_AUXILIARY_LAWS = PROCEDURAL_LAWS | {"金融機構合併法"}
+
+# 民法條號範圍 → 請求權類型。順序即優先序（範圍不重疊，順序只影響可讀性）。
+_CIVIL_ARTICLE_GROUPS: List[Tuple[int, int, str]] = [
+    (18, 19, "侵權行為"), (28, 28, "侵權行為"),
+    (172, 178, "無因管理"), (179, 183, "不當得利"), (184, 198, "侵權行為"),
+    (225, 228, "債務不履行"), (242, 245, "代位或撤銷詐害債權"), (250, 260, "債務不履行"),
+    (345, 397, "買賣"), (421, 463, "租賃"), (474, 481, "消費借貸"), (482, 489, "勞動"),
+    (490, 514, "承攬"), (528, 603, "委任、居間等勞務契約"), (739, 756, "保證"),
+    (757, 966, "物權"), (967, 1137, "親屬"), (1138, 1225, "繼承"),
+]
+_LAW_GROUPS = {
+    "勞動基準法": "勞動", "勞工退休金條例": "勞動", "就業保險法": "勞動", "勞工保險條例": "勞動",
+    "性別平等工作法": "勞動", "性別工作平等法": "勞動", "職業災害勞工保護法": "勞動",
+    "勞工職業災害保險及保護法": "勞動",
+    "國家賠償法": "國家賠償", "保險法": "保險", "票據法": "票據", "強制執行法": "強制執行救濟",
+    "消費者保護法": "消費者保護", "公寓大廈管理條例": "物權", "土地法": "物權",
+    "證券交易法": "證券", "公司法": "公司",
+}
+# 法律關係關鍵字 → 請求權類型（沒有寫條文時使用）。順序即優先序。
+_RELATION_GROUPS: List[Tuple[str, str]] = [
+    (r"信用卡|現金卡|簽帳卡", "信用卡契約"),
+    (r"消費借貸|借貸|借款|貸款|信貸|授信|借據", "消費借貸"),
+    (r"保證", "保證"),
+    (r"侵權", "侵權行為"), (r"不當得利", "不當得利"), (r"無因管理", "無因管理"),
+    (r"繼承|遺產", "繼承"), (r"勞動|僱傭|勞退|工資", "勞動"),
+    (r"買賣", "買賣"), (r"承攬|工程", "承攬"), (r"租賃|租約", "租賃"),
+    (r"委任|居間|借名登記", "委任、居間等勞務契約"), (r"保險", "保險"),
+    (r"票據|本票|支票", "票據"), (r"債務不履行", "債務不履行"),
+    (r"所有權|物上請求|占有", "物權"),
+    (r"契約|協議|約定|合約", "其他契約"),
+]
+
+
+def _article_group(cite: Dict) -> str:
+    law, art = cite["law"], cite["article"]
+    if law == "民法":
+        for lo, hi, grp in _CIVIL_ARTICLE_GROUPS:
+            if lo <= art <= hi:
+                return grp
+        return "其他"
+    if law == "公司法" and art == 23:
+        return "侵權行為"   # 公司負責人執行業務侵害他人，與公司連帶賠償
+    return _LAW_GROUPS.get(law, "其他")
+
+
+def extract_claim_basis(plaintiff_claim_text: str) -> Dict:
+    """
+    從原告主張段落抽出請求權基礎。
+
+    回傳：
+      claim_basis_json    — {"articles": [條文 key…], "relations": [法律關係…], "groups": [類型…]}
+      claim_basis_primary — 第一個援引的條文，到「條」為止（民法§184），沒有條文時空白
+      claim_basis_group   — 主要請求權類型：第一個條文的類型；沒有條文時取法律關係的類型
+    """
+    out = {"claim_basis_json": "", "claim_basis_primary": "", "claim_basis_group": ""}
+    if not plaintiff_claim_text:
+        return out
+    cites: List[Dict] = []
+    for m in _BASIS_SENT_RE.finditer(plaintiff_claim_text):
+        cites.extend(extract_law_citations(m.group(0)))
+    kept, seen = [], set()
+    for c in cites:
+        if c["law"] in _AUXILIARY_LAWS:
+            continue
+        if c["law"] == "民法" and c["article"] in _AUXILIARY_CIVIL_ARTICLES:
+            continue
+        if c["key"] not in seen:
+            seen.add(c["key"])
+            kept.append(c)
+
+    relations = []
+    for m in _BASIS_REL_RE.finditer(plaintiff_claim_text):
+        raw = m.group(1) or m.group(2)
+        for part in re.split(r"[、及與暨或和]", raw):
+            part = re.sub(r"^(?:兩造間|兩造|系爭|上開|前開|上述|前揭|原告|被告)+", "", part).strip()
+            if part and not re.search(r"第\d+條|規定", part) and part not in relations:
+                relations.append(part)
+    rel_groups = []
+    for rel in relations:
+        grp = next((g for pat, g in _RELATION_GROUPS if re.search(pat, rel)), "")
+        if grp and grp not in rel_groups and not re.search(r"債權讓", rel):
+            rel_groups.append(grp)
+
+    groups = list(dict.fromkeys([_article_group(c) for c in kept] + rel_groups))
+    if not kept and not relations:
+        return out
+    out["claim_basis_json"] = json.dumps(
+        {"articles": [c["key"] for c in kept], "relations": relations, "groups": groups},
+        ensure_ascii=False)
+    if kept:
+        out["claim_basis_primary"] = f'{kept[0]["law"]}§{kept[0]["article"]}' + (
+            f'之{kept[0]["sub"]}' if kept[0]["sub"] else "")
+    # 類型取第一個具體的類型：條文優先、再看法律關係。「其他契約」「其他」最後才用——
+    # 判決常先寫「依系爭契約」、後面才寫「依消費借貸之法律關係」，照出現順序取的話
+    # 會選到籠統的「其他契約」（實測 4,439 筆中多數其實寫了更具體的法律關係）。
+    ranked = ([g for g in groups if g not in ("其他", "其他契約")]
+              + [g for g in ("其他契約", "其他") if g in groups])
+    out["claim_basis_group"] = ranked[0] if ranked else "其他"
+    return out
 
 
 # ═══════════════════════════════════════════════════════════════════════════
@@ -1384,6 +1807,7 @@ STRUCTURED_COLUMNS: List[Tuple[str, str]] = [
     ("claimed_currency",       "TEXT"),
     ("claimed_source",         "TEXT"),
     ("grant_ratio",            "REAL"),
+    ("grant_ratio_source",     "TEXT"),
     ("cost_share_plaintiff",   "REAL"),
     ("applicable_laws_json",   "TEXT"),
     ("law_n_citations",        "INTEGER"),
@@ -1394,6 +1818,7 @@ STRUCTURED_COLUMNS: List[Tuple[str, str]] = [
     ("panel_key",              "TEXT"),
     ("case_type_norm",         "TEXT"),
     ("case_type_category",     "TEXT"),
+    ("case_type_mid",          "TEXT"),
     ("party_posture",          "TEXT"),
     ("defendant_is_corp",      "INTEGER"),
     ("plaintiff_has_lawyer",   "INTEGER"),
@@ -1401,6 +1826,13 @@ STRUCTURED_COLUMNS: List[Tuple[str, str]] = [
     ("is_default_judgment",    "INTEGER"),
     ("has_provisional_exec",   "INTEGER"),
     ("reasoning_length",       "INTEGER"),
+    ("plaintiff_claim_text",   "TEXT"),
+    ("defendant_defense_text", "TEXT"),
+    ("court_reasoning_text",   "TEXT"),
+    ("section_split_status",   "TEXT"),
+    ("claim_basis_json",       "TEXT"),
+    ("claim_basis_primary",    "TEXT"),
+    ("claim_basis_group",      "TEXT"),
     ("quality_flags",          "TEXT"),
     ("structuring_version",    "TEXT"),
 ]
@@ -1420,7 +1852,7 @@ SOURCE_COLUMNS = [
 ]
 
 # 規則版本。規則異動時遞增，讓回填過的資料可以辨識是用哪一版規則產生的。
-STRUCTURING_VERSION = "2.1.0"
+STRUCTURING_VERSION = "2.3.0"
 
 
 def derive_structured_fields(row: Dict) -> Dict:
@@ -1482,6 +1914,25 @@ def derive_structured_fields(row: Dict) -> Dict:
             # 凡是照 claimed_source 篩選的分析都會把這 169 筆當成好資料。
             cl["claimed_source"] = "直接抽取（不完整）"
 
+    # ── 依判決結果補值：全部勝訴＝1、敗訴＝0 ──
+    # 舊版只在能「計算」時有值，敗訴的判決一律是空值（主文只有駁回，沒有判准
+    # 金額可除），於是對 grant_ratio 取平均只涵蓋至少判准一部分的案件，
+    # 平均會被高估；可用樣本也只剩三分之一。
+    #
+    # 這兩種補值是依定義而來，不是用判准金額回推請求金額的循環論證：
+    #   敗訴：判准為 0，只要確定原告請求的是金錢（聲明讀得到金額），比例就是 0。
+    #   全部勝訴：法院准許了原告請求的全部，比例就是 1。即使能從聲明算出比值，
+    #     也以 1 為準——全部勝訴卻算出小於 1，代表聲明金額抽多了（重複計算、
+    #     抓到減縮前的舊聲明），不是法院少判。
+    # 來源記在 grant_ratio_source，需要「純計算值」的分析可以只取「計算」。
+    grant_ratio_source = "計算" if grant_ratio is not None else ""
+    is_money = "金錢給付" in relief.split("／")
+    if oc["outcome"] == WIN and is_money:
+        grant_ratio, grant_ratio_source = 1.0, "全部勝訴"
+    elif (oc["outcome"] == LOSE and cl["claimed_total"]
+          and cl["claimed_source"].startswith("直接抽取")):
+        grant_ratio, grant_ratio_source = 0.0, "敗訴"
+
     # ── 金額缺漏的原因標記（區分「真的沒有」與「抽不到」）──
     if oc["outcome"] in (WIN, PARTIAL) and not aw["awarded_total"]:
         if aw["awarded_joint_release"]:
@@ -1497,7 +1948,10 @@ def derive_structured_fields(row: Dict) -> Dict:
             flags.append("定期給付")
         elif aw["awarded_in_table"]:
             flags.append("金額於附表")
-        elif "金錢給付" not in relief:
+        # 要比對類型清單而不是子字串：「非金錢給付」本身就含「金錢給付」，
+        # 用 in 判斷時純登記、拆屋還地的勝訴案件全部掉進「金額抽取失敗」，
+        # 士林 2022 樣本中這類假失敗佔該旗標的九成。
+        elif "金錢給付" not in relief.split("／"):
             flags.append("非金錢給付")
         elif aw["awarded_currency"] and aw["awarded_currency"] != "TWD":
             flags.append("外幣")
@@ -1526,7 +1980,8 @@ def derive_structured_fields(row: Dict) -> Dict:
     # ── 法官 ──
     jl = split_judges(g("judges"), g("full_text"))
     presiding = next((j["name"] for j in jl if j["role"] in ("審判長", "獨任")), "")
-    if not jl:
+    # 司法事務官的程序事項本來就由司法事務官署名，沒有法官不是抽取失敗
+    if not jl and not kind.startswith("司"):
         flags.append("無法官")
 
     # ── 案由 ──
@@ -1536,6 +1991,15 @@ def derive_structured_fields(row: Dict) -> Dict:
     defendant = g("defendant")
     full_text = g("full_text")
     posture = party_posture(row)
+
+    # ── 理由段落切分 ──
+    # 只對民事給付確認類切：原告／被告的語義只在第一審對審成立，刑事判決的
+    # 「被告」是刑事被告。上訴審的上訴人可能是原審任一造，也不適用。
+    if kind_cat == "給付確認" and posture != _POSTURE_CRIMINAL and "刑事" not in g("case_number"):
+        sections = split_reasoning_sections(g("facts_and_reasons"), g("facts"), g("reasons"))
+    else:
+        sections = {"plaintiff_claim_text": "", "defendant_defense_text": "",
+                    "court_reasoning_text": "", "section_split_status": ""}
 
     return {
         "case_kind":            kind,
@@ -1555,6 +2019,7 @@ def derive_structured_fields(row: Dict) -> Dict:
         "claimed_currency":     cl["claimed_currency"],
         "claimed_source":       cl["claimed_source"],
         "grant_ratio":          grant_ratio,
+        "grant_ratio_source":   grant_ratio_source,
         "cost_share_plaintiff": _cost_share_plaintiff(verdict),
         "applicable_laws_json": json.dumps(cites, ensure_ascii=False) if cites else "",
         "law_n_citations":      len(cites),
@@ -1581,6 +2046,13 @@ def derive_structured_fields(row: Dict) -> Dict:
         # 擇一撰寫，所以三者相加才是完整的論理長度。
         # 舊欄名叫 reasons_length，會讓人以為只算「理由」段。
         "reasoning_length":     len(g("reasons")) + len(g("facts_and_reasons")) + len(g("facts")),
+        **sections,
+        **extract_claim_basis(sections["plaintiff_claim_text"]),
+        # 切不出原告主張段落時，退回理由開頭（主張通常寫在最前面）
+        "case_type_mid":        case_type_mid(
+            ct_cat, ct_norm,
+            sections["plaintiff_claim_text"]
+            or re.sub(r"\s+", "", g("facts_and_reasons") or g("facts"))[:1500]),
         "quality_flags":        "|".join(dict.fromkeys(flags)),
         "structuring_version":  STRUCTURING_VERSION,
     }

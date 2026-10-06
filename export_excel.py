@@ -28,6 +28,7 @@ from typing import Optional, List, Dict
 from html_parser import normalize_date   # 日期正規化（西元 ISO）共用同一套實作
 import pandas as pd
 from openpyxl import load_workbook
+from openpyxl.cell.cell import ILLEGAL_CHARACTERS_RE
 from openpyxl.styles import (
     Font, Alignment, PatternFill, Border, Side, GradientFill
 )
@@ -79,6 +80,7 @@ STRUCTURED_EXPORT_COLUMNS: List[tuple] = [
     ("case_kind_category",   "案件層級"),
     ("case_type_norm",       "案由（正規化）"),
     ("case_type_category",   "案由大類"),
+    ("case_type_mid",        "案由中間分類"),
     ("outcome",              "訴訟結果"),
     ("main_outcome",         "本訴結果"),
     ("counter_outcome",      "反訴結果"),
@@ -94,11 +96,15 @@ STRUCTURED_EXPORT_COLUMNS: List[tuple] = [
     ("claimed_currency",     "請求幣別"),
     ("claimed_source",       "請求金額來源"),
     ("grant_ratio",          "獲償比例"),
+    ("grant_ratio_source",   "獲償比例來源"),
     ("cost_share_plaintiff", "訴訟費用原告負擔比例"),
     ("law_primary",          "主要法規"),
     ("law_n_citations",      "法條引用數"),
     ("applicable_laws_text", "適用法條"),
     ("applicable_laws_json", "適用法條（結構化JSON）"),
+    ("claim_basis_group",    "請求權類型"),
+    ("claim_basis_primary",  "請求權基礎（主要條文）"),
+    ("claim_basis_json",     "請求權基礎JSON"),
     ("presiding_judge",      "審判長／獨任法官"),
     ("judge_count",          "法官人數"),
     ("judges_json",          "法官與角色JSON"),
@@ -110,6 +116,9 @@ STRUCTURED_EXPORT_COLUMNS: List[tuple] = [
     ("is_default_judgment",  "一造辯論判決"),
     ("has_provisional_exec", "准假執行"),
     ("reasoning_length",     "論理字數"),
+    # 原告主張／被告答辯／法院判斷三段全文不匯出：Excel 單一儲存格上限 32,767 字，
+    # 法院判斷段落常超過。需要全文時請直接查資料庫。
+    ("section_split_status", "理由段落切分狀態"),
     ("quality_flags",        "資料品質旗標"),
     ("structuring_version",  "結構化規則版本"),
 ]
@@ -295,7 +304,8 @@ def export_to_excel(
                 # 這樣 Excel 的平均值/樞紐分析才會正確忽略缺值。
                 entry[label] = raw if isinstance(raw, (int, float)) else None
                 continue
-            val = str(raw if raw is not None else "")
+            # 原始裁判文字偶爾含 Excel XML 禁止的控制字元，寫入前統一移除。
+            val = ILLEGAL_CHARACTERS_RE.sub("", str(raw if raw is not None else ""))
             # Excel 單格上限 32767 字
             if len(val) > 32700:
                 val = val[:32700] + "…(截斷)"

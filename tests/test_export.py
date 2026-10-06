@@ -108,6 +108,20 @@ class TestExportToExcel(_TempDbCase):
         headers = [c.value for c in load_workbook(out).active[1]]
         self.assertIn("全文", headers)
 
+    def test_illegal_xml_control_characters_are_removed(self):
+        """REGRESSION：裁判文字內的控制字元不可使 Excel 匯出失敗。"""
+        from openpyxl import load_workbook
+        out = os.path.join(self.tmp.name, "control-char.xlsx")
+        rows = fetch_judgments(limit=1)
+        rows[0]["verdict"] = "合法\x00文字\x0b保留"
+        self.assertTrue(export_to_excel(rows, out, include_full_text=False))
+        workbook = load_workbook(out, read_only=True)
+        sheet = workbook.active
+        headers = [cell.value for cell in sheet[1]]
+        verdict_column = headers.index("主文") + 1
+        self.assertEqual(sheet.cell(2, verdict_column).value, "合法文字保留")
+        workbook.close()
+
     def test_base_columns_cover_db_schema(self):
         # BASE_COLUMNS 的每個欄位都必須存在於 judgments 表，否則匯出會整批失敗
         conn = sqlite3.connect(export_excel.DB_PATH)
