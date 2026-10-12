@@ -1048,10 +1048,12 @@ def search_and_crawl(
       skip_if_truncated           True 時，一旦偵測到結果被截斷就立即返回不翻頁
 
     回傳 {"collected": 實際下載數, "total": 該區間總筆數, "truncated": 是否被截斷,
-          "page_errors": 清單頁錯誤且復原失敗的次數,
+          "page_errors": 這一段沒有完整爬完的次數（清單頁錯誤且復原失敗、查詢回報有資料
+                         清單卻空白、取不到結果清單網址、WebDriver 例外）,
           "truncated_buckets": 本身即達 500 上限的分群桶（資料不完整、重跑也救不回）,
           "driver": 目前有效的 WebDriver}
-    page_errors > 0 代表該區段的清單沒有翻完，資料不完整，呼叫端應重跑該區段。
+    page_errors > 0 代表該區段資料不完整，呼叫端應重跑該區段。
+    只有查詢明確回報 0 筆時，collected=0 才代表這段真的沒有資料。
     注意 driver：Phase B 每 80 筆會重建 session（舊的會被 quit），
     因此傳入自己的 driver 時，下一次呼叫務必改用回傳的這一個。
     """
@@ -1082,7 +1084,11 @@ def search_and_crawl(
         base_results_url, total = _ad_search(
             driver, query_keyword, start_date, end_date, court, tuple(case_types))
         if not base_results_url:
-            logger.error("Advanced search returned no results URL — aborting")
+            # 查無資料時摘要頁本來就沒有清單連結（total=0），這是正常的空區段；
+            # 其餘情況（頁面沒載完、查詢被拒）都不能當成「這段沒有資料」
+            if total != 0:
+                page_errors += 1
+            logger.error("Advanced search returned no results URL (total=%s) — aborting", total)
             return {"collected": 0, "total": total, "truncated": False,
                     "page_errors": page_errors,
             "truncated_buckets": truncated_buckets, "driver": driver}
@@ -1197,16 +1203,18 @@ def search_and_crawl(
             logger.info("  ↳ 重新查詢後%s（page=%d）", "復原成功" if ok else "仍失敗", page)
             return ok
 
-        def _paginate(label: str, base_url: str = "") -> int:
+        def _paginate(label: str, base_url: str = "", expect_rows: bool = False) -> int:
             """
             從目前頁面一路翻頁收集，直到無下一頁或達 max_results。
             回傳翻到的原始列數（過濾前）—— 判斷分群桶是否撞到 500 上限必須看這個，
             看過濾後的筆數會在只收判決時嚴重低估，截斷就會被忽略。
+            expect_rows：查詢已回報有資料，第一頁就空白代表沒載到，不是翻完。
             """
             nonlocal page_errors
             page = 1
             raw_seen = 0
             jumped = False    # 目前這頁是翻頁失敗後以頁碼網址跳過來的：一定要有資料
+            empty_retried = False
             while len(all_items) < max_results:
                 raw_items = _parse_case_rows(driver)
                 if not raw_items:
@@ -1226,6 +1234,18 @@ def search_and_crawl(
                         page_errors += 1
                         logger.error("翻頁復原後 page=%d 仍無資料%s — 此區段資料不完整",
                                      page, label or "")
+                    elif expect_rows and raw_seen == 0:
+                        # 查詢回報有資料，清單頁卻一個案件連結都沒有、也不是已知的錯誤頁
+                        # （頁面沒載完等）。當成翻完會整段少收，月份仍標成 done。
+                        # 只重試一次：_recover_list_page 只認得已知錯誤頁，重載後沒有
+                        # 錯誤訊息就會回報成功，不設上限會在同一頁無限重試
+                        if not empty_retried:
+                            empty_retried = True
+                            if _recover_list_page(base_url, page, "清單頁沒有案件連結", label):
+                                continue
+                        page_errors += 1
+                        logger.error("查詢回報 %s 筆，清單頁卻沒有案件連結%s — 此區段資料不完整",
+                                     total, label or "")
                     break
                 jumped = False
                 raw_seen += len(raw_items)
@@ -1293,7 +1313,7 @@ def search_and_crawl(
         else:
             driver.get(base_results_url)
             time.sleep(2.5)
-            _paginate("", base_results_url)
+            _paginate("", base_results_url, expect_rows=bool(total))
 
         # 防護：摘要頁的總筆數若讀不到（頁面改版等），改以「恰好收滿上限」反推截斷。
         # 未指定案號年度過濾時，收到剛好 _RESULT_LIMIT 筆幾乎必然代表被截斷。
@@ -1388,6 +1408,9 @@ def search_and_crawl(
             pacer.wait("detail")
 
     except WebDriverException as exc:
+        # 查詢頁沒載入、瀏覽器異常等：這一段沒有爬完，必須讓呼叫端知道要重跑，
+        # 否則會以 collected=0 回報成功（實例：高雄 2024/02/01~14 整段遺漏）
+        page_errors += 1
         logger.error("WebDriver error (outer): %s", exc, exc_info=True)
     finally:
         # 由呼叫端傳入的 driver 交還呼叫端管理（供跨區間重複使用），不在此關閉

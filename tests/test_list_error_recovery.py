@@ -97,8 +97,9 @@ class TestPageUrl(unittest.TestCase):
 class _Fakes:
     """把 search_and_crawl 依賴的網路互動換掉，只留翻頁流程。"""
 
-    def __init__(self, tmpdir, pages, driver):
+    def __init__(self, tmpdir, pages, driver, search_result=(LIST_URL, 10)):
         self.tmpdir, self.pages, self.driver = tmpdir, pages, driver
+        self.search_result = search_result     # _ad_search 的回傳值，或要拋出的例外
         self.searches = 0
 
     def __enter__(self):
@@ -111,7 +112,9 @@ class _Fakes:
 
         def _search(*a, **k):
             self.searches += 1
-            return LIST_URL, 10
+            if isinstance(self.search_result, Exception):
+                raise self.search_result
+            return self.search_result
 
         def _rows(driver):
             # 錯誤頁一律沒有案件連結
@@ -176,13 +179,66 @@ class TestRecoveryDuringPagination(unittest.TestCase):
         self.assertGreaterEqual(fakes.searches, 2)
 
     def test_empty_result_is_not_treated_as_error(self):
-        """真的查無資料時不該觸發復原，也不該記錯誤。"""
+        """真的查無資料時不該觸發復原，也不該記錯誤。
+        網站查無資料時摘要頁沒有清單連結，_ad_search 回傳 (None, 0)。"""
         driver = _FakeDriver()
-        with tempfile.TemporaryDirectory() as tmp, _Fakes(tmp, [[]], driver) as fakes:
+        with tempfile.TemporaryDirectory() as tmp, \
+                _Fakes(tmp, [[]], driver, search_result=(None, 0)) as fakes:
             res = crawler.search_and_crawl(keyword="x", max_results=5, driver=driver)
         self.assertEqual(res["collected"], 0)
         self.assertEqual(res["page_errors"], 0)
         self.assertEqual(fakes.searches, 1)
+
+
+class TestSilentEmptySegments(unittest.TestCase):
+    """
+    查詢沒有完整跑完、卻回報 collected=0 而且沒有錯誤 —— 批次層會把該段當成完成，
+    月份標成 done，資料整段遺漏且不會重試。實際發生過：
+      - 宜蘭 2023-11：查詢回報 133 筆，清單頁沒有任何案件連結（也不是已知錯誤頁）
+      - 高雄 2024/02/01~14：查詢頁沒載入（找不到 jud_kw），WebDriver 例外被吞掉
+    """
+
+    def test_empty_list_despite_reported_total_is_error(self):
+        """查詢回報有資料、清單頁一直空白 → 重試一次後記為錯誤，不能當成翻完。"""
+        driver = _FakeDriver()
+        with tempfile.TemporaryDirectory() as tmp, _Fakes(tmp, [[], []], driver):
+            res = crawler.search_and_crawl(keyword="x", max_results=5, driver=driver)
+        self.assertEqual(res["collected"], 0)
+        self.assertEqual(res["page_errors"], 1)
+        # 有嘗試以頁碼網址重載第 1 頁，而且沒有無限重試
+        self.assertTrue(any("page=1" in u for u in driver.visited), driver.visited)
+
+    def test_empty_list_recovers_after_reload(self):
+        """清單頁第一次空白、重載後正常 → 照常收集，不記錯誤。"""
+        driver = _FakeDriver()
+        with tempfile.TemporaryDirectory() as tmp, \
+                _Fakes(tmp, [[], [_item(1), _item(2)]], driver):
+            res = crawler.search_and_crawl(keyword="x", max_results=5, driver=driver)
+        self.assertEqual(res["collected"], 2)
+        self.assertEqual(res["page_errors"], 0)
+
+    def test_missing_results_url_is_error_unless_total_is_zero(self):
+        """取不到結果清單網址：查無資料（total=0）是正常，其餘都要記為錯誤。"""
+        for total, expected in ((None, 1), (25, 1), (0, 0)):
+            with self.subTest(total=total):
+                driver = _FakeDriver()
+                with tempfile.TemporaryDirectory() as tmp, \
+                        _Fakes(tmp, [], driver, search_result=(None, total)):
+                    res = crawler.search_and_crawl(keyword="x", max_results=5, driver=driver)
+                self.assertEqual(res["collected"], 0)
+                self.assertEqual(res["page_errors"], expected)
+
+    def test_webdriver_exception_during_search_is_error(self):
+        """查詢頁沒載入（WebDriver 例外）→ 記為錯誤，不是回報成功的空區段。"""
+        driver = _FakeDriver()
+        exc = crawler.NoSuchElementException("no such element: [id=\"jud_kw\"]")
+        with tempfile.TemporaryDirectory() as tmp, \
+                _Fakes(tmp, [], driver, search_result=exc):
+            with self.assertLogs("crawler", level="ERROR"):
+                res = crawler.search_and_crawl(keyword="x", max_results=5, driver=driver)
+        self.assertEqual(res["collected"], 0)
+        self.assertIsNone(res["total"])
+        self.assertEqual(res["page_errors"], 1)
 
 
 class TestNextPageTimeout(unittest.TestCase):
