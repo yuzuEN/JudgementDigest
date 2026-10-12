@@ -1048,8 +1048,9 @@ def search_and_crawl(
       skip_if_truncated           True 時，一旦偵測到結果被截斷就立即返回不翻頁
 
     回傳 {"collected": 實際下載數, "total": 該區間總筆數, "truncated": 是否被截斷,
-          "page_errors": 這一段沒有完整爬完的次數（清單頁錯誤且復原失敗、查詢回報有資料
-                         清單卻空白、取不到結果清單網址、WebDriver 例外）,
+          "page_errors": 這一段沒有完整爬完的次數（清單頁錯誤且復原失敗、已知有資料
+                         清單卻空白、取不到結果清單網址、WebDriver 例外、
+                         裁判書重試後仍下載失敗）,
           "truncated_buckets": 本身即達 500 上限的分群桶（資料不完整、重跑也救不回）,
           "driver": 目前有效的 WebDriver}
     page_errors > 0 代表該區段資料不完整，呼叫端應重跑該區段。
@@ -1070,8 +1071,11 @@ def search_and_crawl(
     truncated_buckets: List[str] = []   # 分群桶本身 >= 500 筆而被截斷（重跑也救不回）
     # 只要某種裁判（判決／裁定）且沒有關鍵字時，以該詞做全文檢索當伺服器端粗篩：
     # 每份判決書本文（標題「…民事判決」、「判決如下」）必含「判決」，大量本票類裁定則不含，
-    # 實測單日 976 筆 → 55 筆、漏抓 0。結果集縮小後幾乎不會再破 500 上限，翻頁量也大減。
+    # 實測單日 976 筆 → 55 筆。結果集縮小後幾乎不會再破 500 上限，翻頁量也大減。
     # 清單頁仍會依裁判字號精篩，所以粗篩多抓進來的裁定不會被下載。
+    # 已知會漏：網站把裁定標成「民事判決」的司法事務官文書（司消債核、司聲等），
+    # 本文寫的是「裁定」、沒有「判決」二字，全文檢索搜不到（臺北 2025/03/05 單日 6 筆）。
+    # 這類文書實質是非對審的裁定；要完全不漏只能拿掉粗篩，翻頁量約多 18 倍。
     query_keyword = keyword or judgment_type
     total: Optional[int] = None
     truncated = False
@@ -1208,7 +1212,8 @@ def search_and_crawl(
             從目前頁面一路翻頁收集，直到無下一頁或達 max_results。
             回傳翻到的原始列數（過濾前）—— 判斷分群桶是否撞到 500 上限必須看這個，
             看過濾後的筆數會在只收判決時嚴重低估，截斷就會被忽略。
-            expect_rows：查詢已回報有資料，第一頁就空白代表沒載到，不是翻完。
+            expect_rows：已知這個清單有資料（查詢有結果、或是分群連結），
+            第一頁就空白代表沒載到，不是翻完。
             """
             nonlocal page_errors
             page = 1
@@ -1235,7 +1240,7 @@ def search_and_crawl(
                         logger.error("翻頁復原後 page=%d 仍無資料%s — 此區段資料不完整",
                                      page, label or "")
                     elif expect_rows and raw_seen == 0:
-                        # 查詢回報有資料，清單頁卻一個案件連結都沒有、也不是已知的錯誤頁
+                        # 已知有資料，清單頁卻一個案件連結都沒有、也不是已知的錯誤頁
                         # （頁面沒載完等）。當成翻完會整段少收，月份仍標成 done。
                         # 只重試一次：_recover_list_page 只認得已知錯誤頁，重載後沒有
                         # 錯誤訊息就會回報成功，不設上限會在同一頁無限重試
@@ -1244,8 +1249,8 @@ def search_and_crawl(
                             if _recover_list_page(base_url, page, "清單頁沒有案件連結", label):
                                 continue
                         page_errors += 1
-                        logger.error("查詢回報 %s 筆，清單頁卻沒有案件連結%s — 此區段資料不完整",
-                                     total, label or "")
+                        logger.error("查詢有結果（total=%s），清單頁卻沒有案件連結%s — "
+                                     "此區段資料不完整", total, label or "")
                     break
                 jumped = False
                 raw_seen += len(raw_items)
@@ -1285,7 +1290,8 @@ def search_and_crawl(
                 logger.info("  [Court] %s", court_label)
                 driver.get(court_url)
                 time.sleep(2.0)
-                raw = _paginate(f"  [{court_label}]", court_url)
+                # 分群連結只會出現在有結果的分群上：第一頁空白就是沒載到
+                raw = _paginate(f"  [{court_label}]", court_url, expect_rows=True)
                 if raw >= _RESULT_LIMIT:
                     truncated_buckets.append(f"{start_date}~{end_date} {court_label}")
                     logger.warning(
@@ -1303,7 +1309,7 @@ def search_and_crawl(
                 logger.info("  [CaseYear] %s", tag)
                 driver.get(year_url)
                 time.sleep(2.0)
-                raw = _paginate(f"  [{tag}]", year_url)
+                raw = _paginate(f"  [{tag}]", year_url, expect_rows=True)
                 if raw >= _RESULT_LIMIT:
                     truncated_buckets.append(f"{start_date}~{end_date} {tag}")
                     logger.warning(
@@ -1313,7 +1319,9 @@ def search_and_crawl(
         else:
             driver.get(base_results_url)
             time.sleep(2.5)
-            _paginate("", base_results_url, expect_rows=bool(total))
+            # 讀不到總筆數（None）時也要求有資料：查無資料時摘要頁不會有清單連結，
+            # 走得到這裡就代表查詢有結果
+            _paginate("", base_results_url, expect_rows=total != 0)
 
         # 防護：摘要頁的總筆數若讀不到（頁面改版等），改以「恰好收滿上限」反推截斷。
         # 未指定案號年度過濾時，收到剛好 _RESULT_LIMIT 筆幾乎必然代表被截斷。
@@ -1348,7 +1356,19 @@ def search_and_crawl(
             logger.info("New WebDriver session ready.")
             return driver
 
+        def _record(item: Dict, case_number: str, existing, html_file: str) -> None:
+            pacer.on_success()
+            if existing:
+                _mark_recrawled(case_number, html_file)
+            else:
+                upsert_record(
+                    case_number, item["court"], item["case_title"],
+                    item["judgment_date"], item["url"], html_file,
+                    keyword_label or keyword,
+                )
+
         logger.info("Phase B: downloading case pages …")
+        failed: List[Tuple[Dict, str, object]] = []   # (item, 案號, 既有紀錄)：第一輪下載失敗的
         for item in all_items:
             case_number = item["case_number"] or f"unknown_{collected + 1}"
             logger.info("[%d/%d] %s", collected + 1, len(all_items), case_number)
@@ -1394,18 +1414,39 @@ def search_and_crawl(
                     pacer.on_failure("detail page retry failed")
 
             if html_file:
-                pacer.on_success()
-                if existing:
-                    _mark_recrawled(case_number, html_file)
-                else:
-                    upsert_record(
-                        case_number, item["court"], item["case_title"],
-                        item["judgment_date"], item["url"], html_file,
-                        keyword_label or keyword,
-                    )
+                _record(item, case_number, existing, html_file)
                 collected += 1
+            else:
+                failed.append((item, case_number, existing))
 
             pacer.wait("detail")
+
+        # 下載失敗（逾時後頁面停在上一筆、標題與案號不符、連線被重設…）不能就此略過：
+        # 該段仍會被當成完成、月份標成 done，這筆裁判書就永久遺漏
+        # （實例：基隆、臺南、宜蘭等 8 院共 40 筆）。多半是暫時性的，
+        # 換新 session 後再試一次；仍失敗才計入 page_errors，讓呼叫端重跑這一段。
+        if failed:
+            logger.warning("Phase B: %d 筆下載失敗，換新 session 後重試 …", len(failed))
+            driver = _renew_driver()
+            still_failed = []
+            for item, case_number, existing in failed:
+                logger.info("[retry] %s", case_number)
+                html_file = None
+                try:
+                    html_file = crawl_detail_page(driver, item["url"], case_number)
+                except WebDriverException as exc:
+                    logger.warning("  Retry failed for %s: %s", case_number, exc)
+                    driver = _renew_driver()
+                if html_file:
+                    _record(item, case_number, existing, html_file)
+                    collected += 1
+                else:
+                    still_failed.append(case_number)
+                pacer.wait("detail")
+            if still_failed:
+                page_errors += 1
+                logger.error("以下 %d 筆裁判書重試後仍下載失敗 — 此區段資料不完整：%s",
+                             len(still_failed), "、".join(still_failed))
 
     except WebDriverException as exc:
         # 查詢頁沒載入、瀏覽器異常等：這一段沒有爬完，必須讓呼叫端知道要重跑，

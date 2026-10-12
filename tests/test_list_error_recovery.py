@@ -240,6 +240,76 @@ class TestSilentEmptySegments(unittest.TestCase):
         self.assertIsNone(res["total"])
         self.assertEqual(res["page_errors"], 1)
 
+    def test_unknown_total_with_empty_list_is_error(self):
+        """讀不到總筆數但有清單網址 → 查詢有結果，清單空白一樣要記為錯誤。"""
+        driver = _FakeDriver()
+        with tempfile.TemporaryDirectory() as tmp, \
+                _Fakes(tmp, [[], []], driver, search_result=(LIST_URL, None)):
+            res = crawler.search_and_crawl(keyword="x", max_results=5, driver=driver)
+        self.assertEqual(res["page_errors"], 1)
+
+    def test_empty_bucket_is_error(self):
+        """單日超過上限改走分群時，分群清單空白也是沒載到（分群連結只出現在有結果的分群）。"""
+        driver = _FakeDriver()
+        orig = crawler._collect_year_links
+        crawler._collect_year_links = lambda d: [(BUCKET_URL, 114, False)]
+        try:
+            with tempfile.TemporaryDirectory() as tmp, \
+                    _Fakes(tmp, [[], []], driver, search_result=(LIST_URL, 600)):
+                res = crawler.search_and_crawl(
+                    keyword="x", max_results=5, driver=driver,
+                    court="臺灣臺北地方法院", skip_if_truncated=False)
+        finally:
+            crawler._collect_year_links = orig
+        self.assertTrue(res["truncated"])
+        self.assertEqual(res["page_errors"], 1)
+
+
+class TestDetailDownloadFailures(unittest.TestCase):
+    """
+    清單有收到、裁判書頁卻沒存下來（逾時後頁面停在上一筆、標題與案號不符、連線被重設）
+    舊版直接略過，該段照樣回報完成 —— 基隆、臺南、宜蘭等 8 院因此遺漏 40 筆。
+    """
+
+    @staticmethod
+    def _detail(fail_times):
+        """前 fail_times[案號] 次回傳 None（下載失敗），之後成功。"""
+        calls = {}
+
+        def _detail(driver, url, case_number):
+            calls[case_number] = calls.get(case_number, 0) + 1
+            if calls[case_number] <= fail_times.get(case_number, 0):
+                return None
+            path = os.path.join(crawler.HTML_DIR, f"{abs(hash(case_number))}.html")
+            with open(path, "w", encoding="utf-8") as f:
+                f.write("x")
+            return path
+        return _detail, calls
+
+    def test_failed_download_is_retried_with_new_session(self):
+        driver = _FakeDriver()
+        target = _item(2)["case_number"]
+        with tempfile.TemporaryDirectory() as tmp, \
+                _Fakes(tmp, [[_item(1), _item(2), _item(3)]], driver):
+            crawler.crawl_detail_page, calls = self._detail({target: 1})
+            res = crawler.search_and_crawl(keyword="x", max_results=5, driver=driver)
+        self.assertEqual(res["collected"], 3)
+        self.assertEqual(res["page_errors"], 0)
+        self.assertEqual(calls[target], 2)        # 第一輪失敗，重試成功
+
+    def test_download_failing_twice_is_reported(self):
+        driver = _FakeDriver()
+        target = _item(2)["case_number"]
+        with tempfile.TemporaryDirectory() as tmp, \
+                _Fakes(tmp, [[_item(1), _item(2)]], driver):
+            crawler.crawl_detail_page, calls = self._detail({target: 99})
+            with self.assertLogs("crawler", level="ERROR") as log:
+                res = crawler.search_and_crawl(keyword="x", max_results=5, driver=driver)
+        self.assertEqual(res["collected"], 1)
+        self.assertEqual(res["page_errors"], 1)
+        self.assertEqual(calls[target], 2)        # 只重試一次，不會無限重試
+        self.assertIn(target, "\n".join(log.output))   # 錯誤訊息列出是哪一筆
+
 
 class TestNextPageTimeout(unittest.TestCase):
     """
