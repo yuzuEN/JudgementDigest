@@ -124,6 +124,7 @@ def batched_crawl(
     delay:         float = _DEFAULT_DELAY,
     pacer:         Optional[Pacer] = None,
     stats:         Optional[dict] = None,
+    skip_small_claims: bool = False,
 ) -> int:
     """
     依裁判日期遞迴細分爬取，嚴格由新到舊。
@@ -207,6 +208,7 @@ def batched_crawl(
                 pacer=pacer,
                 # 單日已無法再細分 → 不再探測，直接把能拿的拿走
                 skip_if_truncated=not single_day,
+                skip_small_claims=skip_small_claims,
             )
             # Phase B 每 80 筆會重建 WebDriver session，舊的已被 quit
             # → 必須換用回傳的 driver，否則下一段會用到失效的 session

@@ -127,6 +127,7 @@ python crawl_monthly.py               # 開始跑；中斷後重新執行同一�
 | `-o <檔名>` / `--full-text` | 輸出檔名、是否含全文欄位 |
 | `--allow-sleep` | 不阻止系統睡眠（預設執行期間保持喚醒；Windows／macOS／Linux 皆支援） |
 | `--no-headless` | 顯示瀏覽器視窗 |
+| `--skip-small-claims` | 下載前略過小額案件（字別含「小」：北小、勞小…）；狀態檔名加上 `_無小額`，不和完整爬取共用進度 |
 
 **接續機制**：每個月跑完就寫入狀態檔。重新執行時，狀態為 `done` 的月份直接跳過；
 有區段沒爬完（清單頁錯誤未復原、查詢回報有資料清單卻空白、查詢頁沒載入等）的月份
@@ -159,6 +160,30 @@ python crawl_monthly.py               # 開始跑；中斷後重新執行同一�
 python crawl_monthly.py --months 8-12                 # 只跑 8~12 月
 python crawl_monthly.py --export-only --export-all    # 不爬，匯出全年一份 Excel
 ```
+
+#### 簡易庭（crawl_simple_courts.py）
+
+大多數簡易庭（臺北簡易庭、板橋簡易庭…）的判決**不在一般「裁判書查詢」的索引裡**，
+用地院名稱查不到，只能從網站的「簡易案件查詢」（`Defaulte_AD.aspx`）查。
+`--court` 填簡易庭名稱（如 `臺北簡易庭`）時，爬蟲會自動改用那個查詢頁，其餘流程相同；
+寫入資料庫的 `court` 是簡易庭名稱，所屬地院見 `crawler.SIMPLE_COURT_PARENT`。
+新竹、苗栗、基隆簡易庭沿用地院代碼，判決在一般查詢裡就有，爬地院時已一起抓到。
+
+```bash
+python crawl_simple_courts.py --dry-run     # 36 個簡易庭 × 2022–2025 各年度的待爬月份
+python crawl_simple_courts.py               # 開始／接續（預設略過小額）
+python crawl_simple_courts.py --courts 臺北簡易庭 --years 2024
+```
+
+| 參數 | 說明 |
+|------|------|
+| `--dry-run` | 只顯示各簡易庭各年度待爬月份，不連網 |
+| `--courts <名稱,...>` | 只爬這些簡易庭，預設全部 |
+| `--years <年,...>` | 只爬這些年份，預設 2022–2025 |
+| `--with-small-claims` | 連小額案件一起爬（預設略過） |
+
+數量參考：36 個簡易庭 2024 年 3 月的民事裁判合計約 1 萬 600 筆（約七成是判決），
+四年約 37 萬筆判決，其中約四分之三是小額。略過小額約 9 萬筆、2～3 天；全爬約 11 天。
 
 ---
 
@@ -491,7 +516,17 @@ python backfill_structured.py --no-backup        # 略過資料庫備份（不�
 ```
 
 `--court`（法院名稱部分比對）與 `--year`（裁判日期的西元年）都不給時處理全庫。
-備份是整個資料庫檔案的複本，目前約 2 GB，執行前請確認磁碟空間。
+備份是整個資料庫檔案的複本，目前約 6 GB，執行前請確認磁碟空間。
+
+法官擷取規則改版時，`judges`／`clerk` 是解析當下從全文抓的，回填不會重抓，
+要先用已存的全文重抓，再回填 `judge_count` 等欄位。不用 `html_parser.py --reparse`：
+它會清空 judgments 表，從同學資料庫合併進來、沒有 HTML 檔的列會消失。
+
+```bash
+python refresh_judges.py --dry-run               # 只統計會改幾筆
+python refresh_judges.py                         # 備份後寫入 judges、clerk
+python backfill_structured.py --no-backup        # 接著回填（上一步已備份）
+```
 
 > ⚠ 使用 `grant_ratio`（獲償比例）前先看 `grant_ratio_source`。
 > 全部勝訴＝1、敗訴＝0 是依判決結果定義的值，一部勝訴才是判准 ÷ 請求的「計算」值。
