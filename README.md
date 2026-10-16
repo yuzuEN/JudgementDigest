@@ -177,6 +177,7 @@ python opendata_download.py --months 201601-202512 --delete-list  # 批次下載
 
 # 2. 轉成跟爬蟲資料庫相同欄位的 SQLite（每年一個檔）
 python opendata_convert.py --months 201801-202512
+python opendata_convert.py --months 201601-201712 --delete-rar    # 轉完刪掉該月 RAR，省硬碟空間
 ```
 
 - 下載的 RAR 放在 `data_opendata/`（每月約 270 MB，已被 `.gitignore` 的 `data_*/` 排除），
