@@ -14,6 +14,11 @@ judgments.db*
 judgments.bak-*.db
 *.xlsx
 *.log
+# 外部資料集壓縮檔（例如 CAIL2018，約 1 GB）與匯出的 JSONL 資料集
+*.zip
+*.jsonl
+# 本機資料夾：組員傳來的資料庫（data_芸菲/）、開放資料 RAR 與轉出的資料庫（data_opendata/）等
+data_*/
 
 # 除錯用暫存頁面
 *_page.html

@@ -161,6 +161,35 @@ python crawl_monthly.py --export-only --export-all    # 不爬，匯出全年一
 
 ---
 
+### 從司法院資料開放平臺取得全國裁判書（opendata_download.py、opendata_convert.py）
+
+爬蟲一份一份下載判決，全國地方法院 8 年約 120 萬份、要爬一個月以上。司法院資料開放平臺
+（<https://opendata.judicial.gov.tw/>）提供「每月一個 RAR」的裁判書整批檔，內容是當月所有法院、
+所有案件類型的裁判書（每份一個 JSON：`JID`、`JDATE`、`JTITLE` 案由、`JFULL` 全文、`JPDF`），
+與裁判書查詢系統的資料相同（臺北地院 2024 年 5 月比對：字號、日期 100% 一致，全文 1,542／1,546 一致）。
+
+裁判書屬「會員開放資料」，需先在平臺註冊會員（免費）。
+
+```bash
+# 1. 下載（執行時自己輸入帳號密碼，不顯示、不存檔；Token 6 小時，程式會自動重新登入）
+python opendata_download.py --months 202405 --list-only          # 先下載一個月看結構
+python opendata_download.py --months 201601-202512 --delete-list  # 批次下載＋已下架清單
+
+# 2. 轉成跟爬蟲資料庫相同欄位的 SQLite（每年一個檔）
+python opendata_convert.py --months 201801-202512
+python opendata_convert.py --months 201601-201712 --delete-rar    # 轉完刪掉該月 RAR，省硬碟空間
+```
+
+- 下載的 RAR 放在 `data_opendata/`（每月約 270 MB，已被 `.gitignore` 的 `data_*/` 排除），
+  已下載的月份會自動跳過，中斷後重跑同一指令即可。
+- 轉換只處理「地方法院刑事」與「簡易庭刑事」資料夾、只留判決（全文第一行為「刑事判決」或
+  「刑事簡易判決」；裁定、附帶民事判決不收），`Delete-Infor.csv` 上已下架的判決也不收。
+- 段落切割沿用 `html_parser.parse_html`，欄位與爬蟲資料庫相同，另多 `jid`、`jtitle`、`jpdf`、
+  `folder`、`proceeding`（第一審／上訴審）、`source_file` 欄；輸出在
+  `data_opendata/db/刑事判決_全國地院_{年}.db`（每月約 390 MB）。
+- 與爬蟲資料的差異：開放資料沒有網頁版的「相關法條」欄，`applicable_laws` 只能從全文抓；
+  長判決不會被截斷。
+
 ### 分步執行
 
 若需要個別控制每個步驟：
