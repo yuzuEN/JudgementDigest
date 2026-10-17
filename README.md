@@ -620,6 +620,6 @@ python build_offenses.py --export-only -o offenses.xlsx   # 不重建，只匯�
 python structure_tasks.py <輸入.xlsx> -o <輸出.xlsx>
 ```
 
-`<輸入.xlsx>` 沒帶時預設讀 `25_07-12.xlsx`（開發時的本機檔名），實際使用時請務必帶入正確路徑。
+`<輸入.xlsx>` 為必填；這個入口與 `build_structured_review.py` 共用逐罪萃取規則，輸出仍是案件層級的彙整欄位。
 `merge.py` 同樣是寫死本機檔名的一次性小工具（合併多個批次匯出的 Excel），使用前請先打開檔案改成
 自己的檔名清單。
