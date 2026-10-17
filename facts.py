@@ -114,8 +114,14 @@ LAW_NAMES = (
 )
 LAW_CITE_RE = re.compile(
     rf"(?:(?:修正前|修正後)?(?:{'|'.join(map(re.escape, sorted(LAW_NAMES, key=len, reverse=True)))}))?{ARTICLE}")
-# 犯意句內可含逗號（「基於意圖營利，供給賭博場所、聚眾賭博之犯意」），但不跨句、不跨另一個「基於」
-INTENT_RE = re.compile(r"基於(?P<inner>(?:(?!基於)[^。；]){1,60}?)之(?:不確定故意|未必故意|間接故意|犯意聯絡|犯意|單一犯意|故意)")
+# 犯意句：「基於／承前／接續前揭／萌生 ○○（之）犯意」。
+# 內容可含逗號（「基於意圖營利，供給賭博場所、聚眾賭博之犯意」），但不跨句、不跨另一個「基於」；
+# 「之」可省略（「基於意圖為自己不法所有之竊盜犯意」）。
+INTENT_RE = re.compile(
+    r"(?:基於|承前揭|承前|承上開|承上揭|承上|接續前揭|接續上開|續前揭|續上開|萌生)"
+    r"(?P<inner>(?:(?!基於)[^。；]){1,60}?)之?(?:不確定故意|未必故意|間接故意|犯意聯絡|犯意|單一犯意|故意)")
+# 不是罪名的犯意修飾語（「基於同一犯意」「承前揭犯意」），不遮
+NOT_CHARGE_INTENT = re.compile(r"^(?:前|上)?(?:揭|開|述|同一|單一|概括|各別|個別|接續|共同|一個|相同|此|該|其|一貫|同)*$")
 
 
 def _mask_intent(m: re.Match) -> str:
@@ -125,6 +131,8 @@ def _mask_intent(m: re.Match) -> str:
     if "之" in inner:                       # 「縱有人…亦不違背其本意之幫助詐欺取財及洗錢」→只遮最後一段
         cut = inner.rfind("之") + 1
         lead = inner[:cut]
+    if NOT_CHARGE_INTENT.match(inner[len(lead):]):
+        return m.group(0)
     return m.group(0).replace(inner, lead + MASK, 1)
 
 
@@ -140,8 +148,15 @@ def charge_keys(charges: Iterable[str]) -> List[str]:
 
 def mask_fact(fact: str, charges: Iterable[str] = ()) -> str:
     text = INTENT_RE.sub(_mask_intent, fact)
-    for key in charge_keys(charges):
-        text = re.sub(re.escape(key) + r"(?=(?:等)?(?:罪|案件|犯行))", MASK, text)
+    keys = charge_keys(charges)
+    for key in keys:
+        text = re.sub(re.escape(key) + r"(?=(?:等)?(?:罪|案件)|之?(?:犯行|犯意|故意))", MASK, text)
+    # 列舉的罪名（「詐欺取財及××之犯行」）：後面接「、／及／與××」的也遮，直到不再變動
+    while keys:
+        new = re.sub(rf"(?:{'|'.join(map(re.escape, keys))})(?=(?:、|及|與|暨|或){MASK})", MASK, text)
+        if new == text:
+            break
+        text = new
     # 法條：只保留遮蔽後的引導詞（「依」「違反」）
     text = re.sub(LAW_CITE_RE, lambda m: MASK, text)
     text = re.sub(rf"{MASK}(?:{MASK})+", MASK, text)
@@ -152,4 +167,4 @@ def leaks(text: str, charges: Iterable[str] = ()) -> bool:
     """遮蔽後是否仍看得到本案罪名名稱或條號。"""
     if re.search(ARTICLE, text):
         return True
-    return any(re.search(re.escape(k) + r"(?:等)?(?:罪|案件|犯行)", text) for k in charge_keys(charges))
+    return any(re.search(re.escape(k) + r"(?:(?:等)?(?:罪|案件)|之?(?:犯行|犯意|故意))", text) for k in charge_keys(charges))

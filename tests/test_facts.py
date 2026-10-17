@@ -106,6 +106,29 @@ class TestMaskFact(unittest.TestCase):
         out = mask_fact("劉○○基於意圖營利，供給賭博場所、聚眾賭博與賭博之犯意，提供居所作為賭博場所。", [])
         self.assertIn("劉○○基於××之犯意，提供居所", out)
 
+    def test_intent_clause_without_zhi_and_other_openers(self):
+        """REGRESSION：v1.1 有 5.1% 事實留下「竊盜犯意」「承前竊盜之犯意」這類寫法。"""
+        cases = {
+            "竟基於意圖為自己不法所有之竊盜犯意，徒手竊取": "竟基於意圖為自己不法所有之××犯意，徒手竊取",
+            "復承前竊盜之犯意，接續竊取": "復承前××之犯意，接續竊取",
+            "王○○接續前揭公然侮辱犯意，以「王八蛋」辱罵": "王○○接續前揭××犯意，以「王八蛋」辱罵",
+            "竟萌生乘機性交之犯意，先褪去": "竟萌生××之犯意，先褪去",
+        }
+        for src, want in cases.items():
+            self.assertEqual(mask_fact(src, []), want)
+
+    def test_intent_modifiers_are_not_masked(self):
+        for src in ("基於同一犯意，接續竊取", "承前揭犯意，再次進入", "基於單一犯意接續為之", "基於概括犯意"):
+            self.assertEqual(mask_fact(src, []), src)
+
+    def test_charge_name_before_intent_is_masked(self):
+        out = mask_fact("另行起意，而有竊盜之故意，竊取財物", ["竊盜罪"])
+        self.assertIn("××之故意", out)
+
+    def test_charge_name_before_zhi_fanxing_is_masked(self):
+        out = mask_fact("以此方式幫助該詐欺集團遂行詐欺取財及洗錢之犯行。", ["詐欺取財罪", "洗錢罪"])
+        self.assertEqual(out, "以此方式幫助該詐欺集團遂行××及××之犯行。")
+
     def test_intent_clause_keeps_leading_description(self):
         out = mask_fact("基於縱有人以其帳戶實施犯罪亦不違背其本意之幫助詐欺取財之不確定故意，交付帳戶。", [])
         self.assertIn("亦不違背其本意之××之不確定故意", out)
