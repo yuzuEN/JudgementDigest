@@ -25,8 +25,10 @@ MASK = "××"
 NUM = "零〇○一二兩三四五六七八九十百千萬壹貳參叁叄肆伍陸柒捌玖拾佰仟0-9"
 ZERO_WIDTH = re.compile(r"[​-‏⁠﻿]")
 
-# 判決說事實引用檢察官書狀
+# 判決說事實引用檢察官書狀（「均引用…處刑書」）
 REF_RE = re.compile(r"引用[^。]{0,40}(?:起訴書|處刑書|移送併辦意旨書|聲請書)")
+# 「一、本件犯罪事實…均如起訴書所載」：理由段也常有「如起訴書所載之犯行」，所以只看事實及理由開頭
+REF_RU_RE = re.compile(r"^.{0,40}如[^。]{0,20}(?:起訴書|處刑書)之?(?:所載|記載)")
 # 附件裡檢察官書狀的抬頭
 PROSECUTOR_HEAD_RE = re.compile(
     r"檢察署\s*檢察官\s*(?:聲請簡易判決處刑書|簡易判決處刑書|追加起訴書|起訴書|移送併辦意旨書|聲請書)")
@@ -39,14 +41,20 @@ FACT_END_RE = re.compile(
     r"\n[ \t　]*(?:證[ \t　]*據[ \t　]*並[ \t　]*所[ \t　]*犯[ \t　]*法[ \t　]*條"
     r"|證[ \t　]*據[ \t　]*清[ \t　]*單|[一二三四五六七八九十]+、[ \t　]*證[ \t　]*據"
     r"|(?:[一二三四五六七八九十]+、)?[ \t　]*案[ \t　]*經)")
-# 事實及理由第一段：「一、（犯罪事實（要旨）：）…」到「二、」之前
-FIRST_PARA_RE = re.compile(r"^一、(?:犯罪事實(?:要旨)?[：:])?(.{30,}?)(?=二、)")
+# 事實及理由第一段：「一、／壹、（本件）（犯罪事實（要旨）：）…」到「二、／貳、」之前
+_HEAD = r"(?P<head>(?:本件|本案)?犯罪事實(?:要旨)?[：:]?)?(?P<body>.{30,}?)"
+FIRST_PARA_RES = (re.compile(rf"^一、{_HEAD}(?=二、)"),
+                  re.compile(rf"^壹、{_HEAD}(?=貳、)"))       # 「壹、」裡可能還有「一、二、」小點
+# 沒有「事實及理由」標題、解析不出欄位時，從全文主文之後找「一、／壹、（本件）犯罪事實」
+FULLTEXT_FACT_RE = re.compile(r"(?:一|壹)、(?:本件|本案)?犯罪事實")
 NOT_FACT_START = ("按", "本件", "本案", "查", "核", "經查", "公訴意旨", "證據")
 # 「被告」開頭可能是事實（「被告甲○○於民國…」「被告○○明知…」）也可能是理由（「被告所為係犯…」）
 REASONING_RE = re.compile(r"^被告[^，。]{0,6}?(?:所犯|所為|坦承|自白|之犯行|犯行|於偵查|於警詢|於本院|於審理)")
 # 結尾的案件來源句
 CASE_ORIGIN_RE = re.compile(
-    r"(?:[一二三四五六七八九十]+、)?案經[^。]{0,200}?(?:移送|報告|告訴|告發|訴由|偵查|聲請|起訴|偵辦|簽分|自動檢舉)[^。]*。?$")
+    r"(?:[一二三四五六七八九十]+、|[（(][一二三四五六七八九十]+[）)]|[㈠-㈩])?"
+    r"案經[^。]{0,200}?(?:移送|報告|告訴|告發|訴由|偵查|聲請|起訴|偵辦|簽分|自動檢舉)[^。]*。?$")
+TRAILING_NO_RE = re.compile(r"(?:[二三四五六七八九十]+、|[（(][二三四五六七八九十]+[）)]|[㈡-㈩])$")
 
 
 def compact(text) -> str:
@@ -59,7 +67,7 @@ def trim_case_origin(fact: str) -> str:
     m = CASE_ORIGIN_RE.search(fact)
     if m and m.start() > 20:
         fact = fact[:m.start()]
-    fact = re.sub(r"[二三四五六七八九十]+、$", "", fact)   # 被切掉後殘留的段號
+    fact = TRAILING_NO_RE.sub("", fact)                     # 被切掉後殘留的段號
     fact = re.sub(r"。{2,}$", "。", fact)
     return fact.strip()
 
@@ -91,9 +99,20 @@ def get_fact(facts="", criminal_facts="", facts_and_reasons="", reasons="", full
     own = compact(facts) + compact(criminal_facts)
     if len(own) >= 20:
         return trim_case_origin(re.sub(r"^(?:事實|犯罪事實)[：:]?", "", own)), "事實段"
-    m = FIRST_PARA_RE.search(compact(facts_and_reasons))
-    if m and not m.group(1).startswith(NOT_FACT_START) and not REASONING_RE.match(m.group(1)):
-        return trim_case_origin(m.group(1)), "事實及理由第一段"
+    fr = compact(facts_and_reasons)
+    if REF_RU_RE.search(fr):
+        return "", "附件抓不到"
+    if not fr and not body:
+        ft = compact(full_text)
+        main = ft.find("主文")
+        hit = FULLTEXT_FACT_RE.search(ft, max(main, 0)) if main >= 0 else None
+        fr = ft[hit.start():] if hit else ""
+    m = next(filter(None, (r.search(fr) for r in FIRST_PARA_RES)), None)
+    if m:
+        fact = m.group("body")
+        # 有「犯罪事實」標題就直接採用；沒有標題時排除理由句開頭
+        if m.group("head") or (not fact.startswith(NOT_FACT_START) and not REASONING_RE.match(fact)):
+            return trim_case_origin(fact), "事實及理由第一段"
     return "", "無"
 
 

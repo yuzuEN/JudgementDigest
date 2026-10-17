@@ -86,6 +86,34 @@ class TestGetFact(unittest.TestCase):
         self.assertEqual(src, "附件")
         self.assertTrue(fact.startswith("一、甲○○明知酒後"), fact)
 
+    def test_first_paragraph_variants_from_other_courts(self):
+        """REGRESSION：全國抽樣「無」的寫法（雲林「壹、犯罪事實」、新竹「一、本件犯罪事實：」、嘉義無冒號）。"""
+        body = "甲○○於民國106年10月26日飲用啤酒後，騎乘機車上路，經警測得吐氣酒精濃度每公升0.38毫克。"
+        cases = [
+            f"壹、犯罪事實{body}一、小點不應切斷二、另一小點貳、證據名稱一、被告之供述。",
+            f"一、本件犯罪事實：{body}二、證據：被告自白。",
+            f"一、犯罪事實(一){body}(二)案經嘉義市政府警察局報告偵查後聲請簡易判決處刑。二、證據：被告自白。",
+        ]
+        for fr in cases:
+            fact, src = get_fact(facts_and_reasons=fr)
+            self.assertEqual(src, "事實及理由第一段", fr)
+            self.assertNotIn("案經", fact)
+            self.assertNotIn("證據", fact)
+        self.assertIn("另一小點", get_fact(facts_and_reasons=cases[0])[0])
+
+    def test_fact_from_full_text_when_sections_missing(self):
+        full = ("臺灣嘉義地方法院刑事簡易判決\n主 文\n吳○○駕駛動力交通工具，處有期徒刑參月。\n"
+                "一、犯罪事實\n(一)吳○○於民國106年10月26日飲用啤酒後，騎乘機車上路，經警測得吐氣酒精濃度每公升0.38毫克。\n"
+                "(二)案經嘉義市政府警察局報告偵查後聲請簡易判決處刑。\n二、認定犯罪事實所憑之證據及理由：")
+        fact, src = get_fact(full_text=full)
+        self.assertEqual(src, "事實及理由第一段")
+        self.assertTrue(fact.startswith("(一)吳○○於民國106年"), fact)
+        self.assertTrue(fact.endswith("毫克。"), fact)
+
+    def test_ru_qisushu_suozai_counts_as_reference(self):
+        fr = "一、本件犯罪事實、證據及所犯法條均如起訴書所載。二、本院考量本案刑度…"
+        self.assertEqual(get_fact(facts_and_reasons=fr), ("", "附件抓不到"))
+
     def test_first_paragraph_that_is_reasoning_is_rejected(self):
         fr = "一、按刑法第185條之3第1項第1款規定之構成要件，以吐氣所含酒精濃度達每公升0.25毫克為準。二、證據：被告自白。"
         self.assertEqual(get_fact(facts_and_reasons=fr), ("", "無"))
