@@ -110,6 +110,37 @@ class TestGetFact(unittest.TestCase):
         self.assertTrue(fact.startswith("(一)吳○○於民國106年"), fact)
         self.assertTrue(fact.endswith("毫克。"), fact)
 
+    def test_full_text_fallback_still_checks_attachment_reference(self):
+        """REGRESSION：全國審核抽樣 #45（沙鹿簡易庭），沒有欄位時從全文抓到的是「均引用…處刑書」那句。"""
+        full = ("臺灣臺中地方法院刑事簡易判決\n主 文\n甲○○犯妨害公務執行罪，處拘役參拾日。\n"
+                "一、本件犯罪事實及證據，除應增列被告嗣與員警達成和解外，均引用檢察官聲請簡易判決處刑書(如附件)之記載。\n"
+                "二、依刑事訴訟法第449條第1項前段，逕以簡易判決處刑如主文。")
+        self.assertEqual(get_fact(full_text=full), ("", "附件抓不到"))
+
+    def test_reference_sentence_in_facts_field_counts_as_attachment(self):
+        """REGRESSION：全國 v2 有 1,934 筆「事實」欄開頭就是「本件犯罪事實…均引用…處刑書」。"""
+        own = "一、本件犯罪事實及證據，均引用檢察官聲請簡易判決處刑書之記載（如附件）。二、核被告所為，係犯刑法第320條第1項之竊盜罪。"
+        self.assertEqual(get_fact(facts=own), ("", "附件抓不到"))
+
+    def test_fact_column_correction_is_not_a_heading(self):
+        full = ("事實及理由\n一、本件犯罪事實及證據，除起訴書\n犯罪事實欄一「竟基於幫助詐欺之犯意」應更正為「竟基於幫助詐欺取財之不確定故意」外，"
+                "其餘均引用起訴書所載（如附件）。\n二、論罪科刑：…\n附件：\n臺灣臺北地方檢察署檢察官起訴書\n犯罪事實\n"
+                "一、甲○○可預見提供帳戶予他人使用，可能幫助他人詐欺取財，仍將帳戶提供予詐欺集團成員使用。\n二、案經乙○○訴由警察局報告偵辦。\n證據並所犯法條\n")
+        fact, src = get_fact(facts_and_reasons="一、本件犯罪事實及證據，除起訴書犯罪事實欄一…外，其餘均引用起訴書所載（如附件）。", full_text=full)
+        self.assertEqual(src, "附件")
+        self.assertTrue(fact.startswith("一、甲○○可預見"), fact)
+
+    def test_reference_with_yinyong_after_qisushu(self):
+        """REGRESSION：全國審核抽樣（臺東）「餘均同於檢察官起訴書之記載，茲均引用之（如附件）」。"""
+        fr = "一、本件犯罪事實及證據，除證據部分應補充被告於本院審理時之自白外，餘均同於檢察官起訴書之記載，茲均引用之（如附件）。二、核被告所為…"
+        self.assertEqual(get_fact(facts_and_reasons=fr), ("", "附件抓不到"))
+
+    def test_first_paragraph_with_shishi_heading(self):
+        fr = "一、事實：廖○○明知飲酒後不得駕駛動力交通工具，竟於民國107年1月1日駕駛機車上路，經警測得吐氣酒精濃度每公升0.48毫克。二、證據：被告自白。"
+        fact, src = get_fact(facts_and_reasons=fr)
+        self.assertEqual(src, "事實及理由第一段")
+        self.assertTrue(fact.startswith("廖○○明知"), fact)
+
     def test_ru_qisushu_suozai_counts_as_reference(self):
         fr = "一、本件犯罪事實、證據及所犯法條均如起訴書所載。二、本院考量本案刑度…"
         self.assertEqual(get_fact(facts_and_reasons=fr), ("", "附件抓不到"))

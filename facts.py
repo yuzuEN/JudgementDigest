@@ -26,7 +26,9 @@ NUM = "零〇○一二兩三四五六七八九十百千萬壹貳參叁叄肆伍�
 ZERO_WIDTH = re.compile(r"[​-‏⁠﻿]")
 
 # 判決說事實引用檢察官書狀（「均引用…處刑書」）
-REF_RE = re.compile(r"引用[^。]{0,40}(?:起訴書|處刑書|移送併辦意旨書|聲請書)")
+# 「均引用…處刑書」，或順序相反的「均同於檢察官起訴書之記載，茲均引用之」
+REF_RE = re.compile(r"引用[^。]{0,40}(?:起訴書|處刑書|移送併辦意旨書|聲請書)"
+                    r"|(?:起訴書|處刑書|移送併辦意旨書)[^。]{0,15}引用之")
 # 「一、本件犯罪事實…均如起訴書所載」：理由段也常有「如起訴書所載之犯行」，所以只看事實及理由開頭
 REF_RU_RE = re.compile(r"^.{0,40}如[^。]{0,20}(?:起訴書|處刑書)之?(?:所載|記載)")
 # 附件裡檢察官書狀的抬頭
@@ -35,14 +37,14 @@ PROSECUTOR_HEAD_RE = re.compile(
 # 書狀裡獨立成行的「犯罪事實」標題（排除「茲將犯罪事實及證據…分敘如下」這種句子）
 FACT_HEAD_RE = re.compile(
     r"(?:^|\n)[ \t　]*(?:[一二三四五六七八九十]+、[ \t　]*)?犯[ \t　]*罪[ \t　]*事[ \t　]*實"
-    r"(?![ \t　]*及[ \t　]*證[ \t　]*據)(?:[ \t　]*要[ \t　]*旨)?[ \t　]*[:：]?")
+    r"(?![ \t　]*及[ \t　]*證[ \t　]*據)(?![ \t　]*欄)(?:[ \t　]*要[ \t　]*旨)?[ \t　]*[:：]?")   # 「犯罪事實欄…應更正為」不是標題
 # 書狀裡事實段的結尾：證據段標題、或交代案件來源的「案經」行
 FACT_END_RE = re.compile(
     r"\n[ \t　]*(?:證[ \t　]*據[ \t　]*並[ \t　]*所[ \t　]*犯[ \t　]*法[ \t　]*條"
     r"|證[ \t　]*據[ \t　]*清[ \t　]*單|[一二三四五六七八九十]+、[ \t　]*證[ \t　]*據"
     r"|(?:[一二三四五六七八九十]+、)?[ \t　]*案[ \t　]*經)")
 # 事實及理由第一段：「一、／壹、（本件）（犯罪事實（要旨）：）…」到「二、／貳、」之前
-_HEAD = r"(?P<head>(?:本件|本案)?犯罪事實(?:要旨)?[：:]?)?(?P<body>.{30,}?)"
+_HEAD = r"(?P<head>(?:本件|本案)?犯罪事實(?:要旨)?[：:]?|事實[：:])?(?P<body>.{30,}?)"
 FIRST_PARA_RES = (re.compile(rf"^一、{_HEAD}(?=二、)"),
                   re.compile(rf"^壹、{_HEAD}(?=貳、)"))       # 「壹、」裡可能還有「一、二、」小點
 # 沒有「事實及理由」標題、解析不出欄位時，從全文主文之後找「一、／壹、（本件）犯罪事實」
@@ -90,23 +92,25 @@ def attachment_fact(full_text: str, ref_pos: int = 0) -> str:
 
 def get_fact(facts="", criminal_facts="", facts_and_reasons="", reasons="", full_text="") -> Tuple[str, str]:
     """回傳 (事實文字, 來源)。來源：附件／事實段／事實及理由第一段／附件抓不到／無。"""
-    body = compact(facts_and_reasons) + compact(reasons)
-    if REF_RE.search(body):
+    own = compact(facts) + compact(criminal_facts)
+    fr = compact(facts_and_reasons)
+    body = fr + compact(reasons)
+    if not body and len(own) < 20:
+        # 沒有「事實及理由」標題、解析不出欄位：從全文主文之後找段落，後面一樣先判斷是否引用附件
+        ft = compact(full_text)
+        main = ft.find("主文")
+        hit = FULLTEXT_FACT_RE.search(ft, max(main, 0)) if main >= 0 else None
+        fr = body = ft[hit.start():] if hit else ""
+    # 「事實」欄開頭就是「本件犯罪事實…均引用…處刑書」：解析程式把事實及理由放進了事實欄，一樣算引用附件
+    if REF_RE.search(body) or REF_RE.search(own[:200]):
         ft = str(full_text or "")
         ref = REF_RE.search(ft)
         fact = attachment_fact(ft, ref.end() if ref else 0)
         return (trim_case_origin(fact), "附件") if fact else ("", "附件抓不到")
-    own = compact(facts) + compact(criminal_facts)
     if len(own) >= 20:
         return trim_case_origin(re.sub(r"^(?:事實|犯罪事實)[：:]?", "", own)), "事實段"
-    fr = compact(facts_and_reasons)
     if REF_RU_RE.search(fr):
         return "", "附件抓不到"
-    if not fr and not body:
-        ft = compact(full_text)
-        main = ft.find("主文")
-        hit = FULLTEXT_FACT_RE.search(ft, max(main, 0)) if main >= 0 else None
-        fr = ft[hit.start():] if hit else ""
     m = next(filter(None, (r.search(fr) for r in FIRST_PARA_RES)), None)
     if m:
         fact = m.group("body")
