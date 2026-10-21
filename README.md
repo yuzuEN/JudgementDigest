@@ -369,7 +369,8 @@ python crawler.py --recrawl-stubs
 │   ├── evaluate.py      # 共用讀取、切分、評分（所有模型共用）
 │   ├── svm_baseline.py  # TF-IDF ＋ LinearSVC 10-fold 基準線
 │   ├── svm_learning_curve.py # 同上，學習曲線
-│   └── fasttext_gpu.py  # fastText 架構（PyTorch，GPU）
+│   ├── fasttext_gpu.py  # fastText 架構（PyTorch，GPU）
+│   └── textcnn_gpu.py   # TextCNN（PyTorch，GPU）
 │
 ├── docs/                # 說明文件
 │   ├── 欄位說明.md      # 各資料表與欄位的說明（民事／刑事）

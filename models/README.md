@@ -8,6 +8,7 @@ CAIL 格式資料集（罪名、法條、刑期三個任務）的基準模型與
 | `svm_baseline.py` | TF-IDF（字 1–2 gram）＋ LinearSVC，10-fold | 台北 v1.x（約 5 萬筆） | scikit-learn |
 | `svm_learning_curve.py` | 同上，固定測試集、訓練資料逐步增加 | 全國，最多約 20 萬筆 | scikit-learn |
 | `fasttext_gpu.py` | fastText 架構（PyTorch），每個任務各一個模型，驗證集提早停止 | 全國全部（約 90 萬筆訓練） | scikit-learn、PyTorch、GPU |
+| `textcnn_gpu.py` | TextCNN（字向量＋寬 2–5 字的卷積），每個任務各一個模型，驗證集提早停止 | 全國全部 | scikit-learn、PyTorch、GPU |
 
 安裝：`pip install -r models/requirements.txt`（PyTorch 依 GPU 環境另外裝；Kaggle 已內建）。
 
@@ -42,7 +43,7 @@ CAIL 格式 `.jsonl`（或含一個 `.jsonl` 的 `.zip`），每行 `{"fact": �
 !python -W ignore fasttext_gpu.py --data /kaggle/input/<資料集>/cail_v2.jsonl --out /kaggle/working/fasttext.md
 ```
 
-正式 10-fold：`--sizes all --test-fold k --test-n 0`，k 依序跑 0–9。結果檔開頭會寫上程式雜湊與所有參數，方便對照是哪一版、怎麼跑的。
+`textcnn_gpu.py` 參數用法相同。正式 10-fold：`--sizes all --test-fold k --test-n 0`，k 依序跑 0–9。結果檔開頭會寫上程式雜湊與所有參數，方便對照是哪一版、怎麼跑的。
 
 ## 目前結果（舊版全國 v2，2026-10）
 
