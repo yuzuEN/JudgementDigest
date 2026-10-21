@@ -1,0 +1,494 @@
+{
+  "counts": {
+    "before_raw_empty": 3712,
+    "before_raw_partial": 338,
+    "before_standard_empty": 4230,
+    "after_raw_empty": 3712,
+    "after_raw_partial": 338,
+    "after_standard_empty": 4230,
+    "eligible": 70197,
+    "after_article_gate": 60657,
+    "raw_changed": 3,
+    "units_only_or_format_changed": 1,
+    "article_changed": 2,
+    "charges_changed": 2
+  },
+  "cohort_id_sha256": "75fae88bf4da0a4e9ad36dc64f25757196bc372c6990cb358511414b26c1eaeb",
+  "source_rows_sha256": "dca11b8dab12c1cff0e8d6c9e86459385dcad402583060afbc9386bd4bcd962c",
+  "code_sha256": {
+    "structure_tasks.py": "a68af69261e2b0616aeeaec13ad7a7568172bd28a9226e86e43ec7d5ff7d3a3d",
+    "build_structured_review.py": "bc22bc328dc4aa016512e25c13b91c8ef047d1e0581ae40eda3628d99e968a06",
+    "normalize.py": "99aa4ac94046ff5b8358b71d2b29b360f3826dc3ee5d50fde958f89e5f894bb7",
+    "law_frequency.py": "ce322d982710575764b0f2e8c3fe1ed0070a3f63debcc06782be8beb06084943",
+    "driving_charge.py": "2e4a030d281c04cf1126d0c460209d95a623a22a71a2be33b94d5c099a432c93",
+    "refresh_modeldata.py": "4c89c8a1ffd86755d314a33759b362943e56c4bd0acecd4dc7d8a8c20e64f944"
+  },
+  "evidence_sha256": {
+    "finaldata/reviewer_github_local_precision_20261019/sample_review.jsonl": "1e7d0d751a9c661bdc45dcadb39ddd8f73a86bc2da0e3638148b682b97304087",
+    "finaldata/reviewer_github_local_precision_20261019/old_path_trace.jsonl": "777b0b832ab9dac17ae1a40f7b3dae31bd7c529ae519167c0a8f2ebec5c4b8c7",
+    "finaldata/legacy_fallback_experiment_20261020/summary.json": "f417c9cbaf2f83f1e6d195743863fb48307849a77684b4ffd25f90ce01de9248",
+    "finaldata/legacy_fallback_experiment_20261020/sample_review.jsonl": "5dac3e7776865e7c7fc94ac8c493d89176e06f23475ca2deabbe0002f32a2a52",
+    "finaldata/legacy_fallback_experiment_20261020/sample_evidence.jsonl": "73792afcbd0d88b447ffbdd9a11f546780827e306fac2a0beafb73bc5e5b4fa6"
+  },
+  "seconds": 202.19,
+  "sample_results": {
+    "reviewer_20261019": {
+      "n": 100,
+      "after_equal_before": true,
+      "historical_article_counts": {
+        "A": 85,
+        "B": 10,
+        "C": 2,
+        "A_units_only": 1,
+        "D": 1,
+        "E": 1
+      },
+      "note": "different fixed samples; no pooling; article is law + article/subarticle per offense slot",
+      "historical_wrong_occurrences": {
+        "raw": 14,
+        "article": 13,
+        "units_only": 1
+      },
+      "current_before_after_all_empty": [
+        100,
+        100
+      ]
+    },
+    "fallback_20261020": {
+      "n": 100,
+      "after_equal_before": true,
+      "historical_article_counts": {
+        "A": 89,
+        "B": 9,
+        "E": 1,
+        "A_units_only": 1
+      },
+      "note": "different fixed samples; no pooling; article is law + article/subarticle per offense slot",
+      "before_after_article_wrong_cases": [
+        9,
+        9
+      ],
+      "before_after_units_only_cases": [
+        1,
+        1
+      ],
+      "before_after_core_missing_cases": [
+        1,
+        1
+      ]
+    }
+  },
+  "validation": {
+    "pr_tests": 559,
+    "formal_fallback_enabled": false,
+    "modeldata_updated": false,
+    "normalization_changed": false
+  },
+  "targets": [
+    {
+      "id": 53384,
+      "case": "臺灣臺北地方法院 109 年度訴字第 227 號刑事判決",
+      "old_github": [
+        [
+          "槍砲彈藥刀械管制條例第7條第4項"
+        ]
+      ],
+      "formal_before": [
+        []
+      ],
+      "formal_after": [
+        []
+      ],
+      "experimental_before": [
+        [
+          "槍砲彈藥刀械管制條例第7條第4項"
+        ]
+      ],
+      "experimental_after": [
+        []
+      ]
+    },
+    {
+      "id": 73767,
+      "case": "臺灣臺北地方法院 107 年度原交簡字第 51 號刑事判決",
+      "old_github": [
+        [
+          "刑法第185條之3第1項第1款",
+          "刑法第47條第1項"
+        ]
+      ],
+      "formal_before": [
+        []
+      ],
+      "formal_after": [
+        []
+      ],
+      "experimental_before": [
+        [
+          "刑法第185條之3"
+        ]
+      ],
+      "experimental_after": [
+        [
+          "刑法第185條之3"
+        ]
+      ]
+    },
+    {
+      "id": 75151,
+      "case": "臺灣臺北地方法院 107 年度交簡字第 1505 號刑事判決",
+      "old_github": [
+        [
+          "刑法第185條之3第1項第1款",
+          "刑法第47條第1項"
+        ]
+      ],
+      "formal_before": [
+        []
+      ],
+      "formal_after": [
+        []
+      ],
+      "experimental_before": [
+        [
+          "刑法第185條之3"
+        ]
+      ],
+      "experimental_after": [
+        [
+          "刑法第185條之3"
+        ]
+      ]
+    },
+    {
+      "id": 126939,
+      "case": "臺灣臺北地方法院 110 年度訴字第 230 號刑事判決",
+      "old_github": [
+        [
+          "核與刑法第19條第1項"
+        ]
+      ],
+      "formal_before": [
+        []
+      ],
+      "formal_after": [
+        []
+      ],
+      "experimental_before": [
+        []
+      ],
+      "experimental_after": [
+        []
+      ]
+    },
+    {
+      "id": 138412,
+      "case": "臺灣臺北地方法院 111 年度訴字第 659 號刑事判決",
+      "old_github": [
+        [
+          "刑法第336條第2項",
+          "刑法第358條",
+          "刑法第359條"
+        ]
+      ],
+      "formal_before": [
+        []
+      ],
+      "formal_after": [
+        []
+      ],
+      "experimental_before": [
+        [
+          "刑法第336條第2項",
+          "刑法第358條",
+          "刑法第359條"
+        ]
+      ],
+      "experimental_after": [
+        [
+          "刑法第336條第2項",
+          "刑法第358條",
+          "刑法第359條"
+        ]
+      ]
+    }
+  ],
+  "changed_cases": [
+    {
+      "id": 81233,
+      "case": "臺灣臺北地方法院 107 年度訴字第 742 號刑事判決",
+      "before": {
+        "raw": [
+          [
+            "刑法第216條第210項",
+            "刑法第210條"
+          ]
+        ],
+        "standard": [
+          [
+            "刑法第216條",
+            "刑法第210條"
+          ]
+        ],
+        "charges": [
+          "行使偽造私文書，足以生損害於他人"
+        ],
+        "standard_charges": [
+          [
+            "偽造文書罪"
+          ]
+        ],
+        "sources": [
+          "理由"
+        ],
+        "charge_source": "主文",
+        "primary": [
+          "有期徒刑陸月"
+        ],
+        "fine": [
+          ""
+        ],
+        "standard_missing": ""
+      },
+      "after": {
+        "raw": [
+          [
+            "刑法第216條",
+            "刑法第210條"
+          ]
+        ],
+        "standard": [
+          [
+            "刑法第216條",
+            "刑法第210條"
+          ]
+        ],
+        "charges": [
+          "行使偽造私文書，足以生損害於他人"
+        ],
+        "sources": [
+          "理由"
+        ],
+        "charge_source": "主文"
+      },
+      "task_validity": {
+        "before": {
+          "accusation": true,
+          "article": true,
+          "imprisonment": true
+        },
+        "after": {
+          "accusation": true,
+          "article": true,
+          "imprisonment": true
+        }
+      },
+      "article_union_unchanged": true
+    },
+    {
+      "id": 95714,
+      "case": "臺灣臺北地方法院 113 年度訴字第 1191 號刑事判決",
+      "before": {
+        "raw": [
+          [
+            "刑法第339條之4第1項第2款"
+          ],
+          [
+            "洗錢防制法第19條第1項"
+          ],
+          [
+            "刑法第339條之4第1項第2款"
+          ]
+        ],
+        "standard": [
+          [
+            "刑法第339條"
+          ],
+          [
+            "洗錢防制法第19條"
+          ],
+          [
+            "刑法第339條"
+          ]
+        ],
+        "charges": [
+          "3人以上共同詐欺取財罪",
+          "一般洗錢罪",
+          "三人以上共同詐欺取財罪"
+        ],
+        "standard_charges": [
+          [
+            "詐欺罪"
+          ],
+          [
+            "洗錢罪"
+          ],
+          [
+            "詐欺罪"
+          ]
+        ],
+        "sources": [
+          "理由",
+          "理由",
+          "理由"
+        ],
+        "charge_source": "理由／事實備援",
+        "primary": [
+          "",
+          "",
+          ""
+        ],
+        "fine": [
+          "",
+          "",
+          ""
+        ],
+        "standard_missing": ""
+      },
+      "after": {
+        "raw": [
+          [
+            "刑法第339條之4第1項第2款"
+          ],
+          [
+            "洗錢防制法第19條第1項"
+          ]
+        ],
+        "standard": [
+          [
+            "刑法第339條"
+          ],
+          [
+            "洗錢防制法第19條"
+          ]
+        ],
+        "charges": [
+          "3人以上共同詐欺取財罪",
+          "一般洗錢罪"
+        ],
+        "sources": [
+          "理由",
+          "理由"
+        ],
+        "charge_source": "理由／事實備援"
+      },
+      "task_validity": {
+        "before": {
+          "accusation": false,
+          "article": false,
+          "imprisonment": true
+        },
+        "after": {
+          "accusation": false,
+          "article": false,
+          "imprisonment": true
+        }
+      },
+      "article_union_unchanged": true
+    },
+    {
+      "id": 95952,
+      "case": "臺灣臺北地方法院 113 年度訴字第 804 號刑事判決",
+      "before": {
+        "raw": [
+          [
+            "刑法第339條之4第1項第2款"
+          ],
+          [
+            "洗錢防制法第19條第1項"
+          ],
+          [
+            "刑法第339條之4第1項第2款"
+          ]
+        ],
+        "standard": [
+          [
+            "刑法第339條"
+          ],
+          [
+            "洗錢防制法第19條"
+          ],
+          [
+            "刑法第339條"
+          ]
+        ],
+        "charges": [
+          "3人以上共同詐欺取財罪",
+          "一般洗錢罪",
+          "三人以上共同詐欺取財罪"
+        ],
+        "standard_charges": [
+          [
+            "詐欺罪"
+          ],
+          [
+            "洗錢罪"
+          ],
+          [
+            "詐欺罪"
+          ]
+        ],
+        "sources": [
+          "理由",
+          "理由",
+          "理由"
+        ],
+        "charge_source": "理由／事實備援",
+        "primary": [
+          "",
+          "",
+          ""
+        ],
+        "fine": [
+          "",
+          "",
+          ""
+        ],
+        "standard_missing": ""
+      },
+      "after": {
+        "raw": [
+          [
+            "刑法第339條之4第1項第2款"
+          ],
+          [
+            "洗錢防制法第19條第1項"
+          ]
+        ],
+        "standard": [
+          [
+            "刑法第339條"
+          ],
+          [
+            "洗錢防制法第19條"
+          ]
+        ],
+        "charges": [
+          "3人以上共同詐欺取財罪",
+          "一般洗錢罪"
+        ],
+        "sources": [
+          "理由",
+          "理由"
+        ],
+        "charge_source": "理由／事實備援"
+      },
+      "task_validity": {
+        "before": {
+          "accusation": false,
+          "article": false,
+          "imprisonment": true
+        },
+        "after": {
+          "accusation": false,
+          "article": false,
+          "imprisonment": true
+        }
+      },
+      "article_union_unchanged": true
+    }
+  ],
+  "before_article_gate": 60657,
+  "case_article_set_changed": 0,
+  "before_revision": "05d6ba0f7a98e154ca83279a94f791c5874d3043"
+}

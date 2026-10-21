@@ -1,0 +1,444 @@
+{
+  "counts": {
+    "eligible": 70197,
+    "current_raw_empty": 3899,
+    "current_standard_empty": 4416,
+    "current_partial_raw": 347,
+    "c733d65_raw_empty": 1474,
+    "c733d65_standard_empty": 2070,
+    "c733d65_partial_raw": 3,
+    "f3adff7_raw_empty": 2385,
+    "f3adff7_standard_empty": 3004,
+    "f3adff7_partial_raw": 261,
+    "handoff_raw_empty": 5414,
+    "handoff_standard_empty": 5946,
+    "handoff_partial_raw": 459,
+    "c733d65_charges_changed": 12132,
+    "f3adff7_charges_changed": 12132,
+    "handoff_charges_changed": 11191,
+    "new_empty": 2849,
+    "c733d65_raw_changed": 16816,
+    "f3adff7_raw_changed": 15936,
+    "handoff_new_empty": 170,
+    "handoff_raw_changed": 3396,
+    "recovered": 1335,
+    "handoff_recovered": 1685,
+    "prior_regression_fixed": 666,
+    "prior_regression_unfixed": 245
+  },
+  "transitions": {
+    "(True, True, True)": 64963,
+    "(True, True, False)": 2849,
+    "(False, False, True)": 669,
+    "(True, False, True)": 666,
+    "(False, False, False)": 805,
+    "(True, False, False)": 245
+  },
+  "cohort": "2018–2025 有罪、單被告刑事判決；排除案號含上字／上訴字",
+  "database": "/Users/yunn/NTU/114-2/專題/JudgementDigest/judgments.db",
+  "database_mode": "read_only",
+  "cohort_id_sha256": "75fae88bf4da0a4e9ad36dc64f25757196bc372c6990cb358511414b26c1eaeb",
+  "source_rows_sha256": "dca11b8dab12c1cff0e8d6c9e86459385dcad402583060afbc9386bd4bcd962c",
+  "code_sha256": {
+    "structure_tasks.py": "f051732c62f734a04151c40e4dd9424579b734083bfa7c4ff046179a5200f19a",
+    "law_frequency.py": "ce322d982710575764b0f2e8c3fe1ed0070a3f63debcc06782be8beb06084943",
+    "normalize.py": "99aa4ac94046ff5b8358b71d2b29b360f3826dc3ee5d50fde958f89e5f894bb7",
+    "build_structured_review.py": "103830fec25c4d79ada908eca5844bca8e097dc2e0f28387a871f926686403e6",
+    "driving_charge.py": "2e4a030d281c04cf1126d0c460209d95a623a22a71a2be33b94d5c099a432c93",
+    "refresh_modeldata.py": "3f3b2486cf33dc6f5e3c626d3aa33788b7bb0395494245793275010e352a1c21",
+    "compare_law_extraction.py": "f62eddd8695318ef39719a38927a4a549e503a0acd91064a9bf92d808226bb48"
+  },
+  "snapshot": "/tmp/jd_law_handoff_baseline_20261019",
+  "seconds": 263.87,
+  "triage_method": "Mutually exclusive parser-state triage, not a manual correctness verdict. Order: missing charge, excluded exact pair, accepted but conflicting/mismatched names, unparsed conviction, incorporation, unaccepted entry, no pair.",
+  "triage_counts": {
+    "new_empty": {
+      "incorporated_indictment_without_pair": 897,
+      "charge_name_or_class_mismatch": 295,
+      "conclusion_without_parseable_charge_pair": 1235,
+      "no_explicit_charge_pair": 101,
+      "ambiguous_coarse_names": 206,
+      "unaccepted_sentence_entry": 67,
+      "excluded_claim_or_negative_passage": 11,
+      "attempt_state_conflict": 33,
+      "no_main_charge": 4
+    },
+    "handoff_new_empty": {
+      "charge_name_or_class_mismatch": 141,
+      "conclusion_without_parseable_charge_pair": 4,
+      "attempt_state_conflict": 3,
+      "ambiguous_coarse_names": 20,
+      "no_main_charge": 2
+    },
+    "prior_regression_unfixed": {
+      "conclusion_without_parseable_charge_pair": 47,
+      "charge_name_or_class_mismatch": 173,
+      "ambiguous_coarse_names": 8,
+      "unaccepted_sentence_entry": 2,
+      "excluded_claim_or_negative_passage": 1,
+      "attempt_state_conflict": 13,
+      "incorporated_indictment_without_pair": 1
+    }
+  },
+  "mandatory_cases": [
+    {
+      "id": 68780,
+      "case": "臺灣臺北地方法院 107 年度簡字第 88 號刑事判決",
+      "charges": [
+        "施用第二級毒品罪"
+      ],
+      "laws": [
+        [
+          "毒品危害防制條例第10條第2項"
+        ]
+      ],
+      "expected": [
+        [
+          "毒品危害防制條例第10條第2項"
+        ]
+      ],
+      "passed": true
+    },
+    {
+      "id": 69004,
+      "case": "臺灣臺北地方法院 106 年度審易字第 2718 號刑事判決",
+      "charges": [
+        "施用第二級毒品",
+        "施用第二級毒品"
+      ],
+      "laws": [
+        [
+          "毒品危害防制條例第10條第2項"
+        ],
+        [
+          "毒品危害防制條例第10條第2項"
+        ]
+      ],
+      "expected": [
+        [
+          "毒品危害防制條例第10條第2項"
+        ],
+        [
+          "毒品危害防制條例第10條第2項"
+        ]
+      ],
+      "passed": true
+    },
+    {
+      "id": 77748,
+      "case": "臺灣臺北地方法院 107 年度簡字第 2258 號刑事判決",
+      "charges": [
+        "意圖為自己不法之所有，以詐術使人將本人之物交付"
+      ],
+      "laws": [
+        [
+          "刑法第339條第1項"
+        ]
+      ],
+      "expected": [
+        [
+          "刑法第339條第1項"
+        ]
+      ],
+      "passed": true
+    },
+    {
+      "id": 73711,
+      "case": "臺灣臺北地方法院 107 年度簡字第 1548 號刑事判決",
+      "charges": [
+        "強制罪"
+      ],
+      "laws": [
+        [
+          "刑法第304條"
+        ]
+      ],
+      "expected": [
+        [
+          "刑法第304條"
+        ]
+      ],
+      "passed": true
+    },
+    {
+      "id": 68624,
+      "case": "臺灣臺北地方法院 107 年度審交簡字第 26 號刑事判決",
+      "charges": [
+        "汽車駕駛人，無駕駛執照駕車，因過失傷害致人受傷罪"
+      ],
+      "laws": [
+        [
+          "道路交通管理處罰條例第86條第1項",
+          "刑法第284條第1項"
+        ]
+      ],
+      "expected": [
+        [
+          "道路交通管理處罰條例第86條第1項",
+          "刑法第284條第1項"
+        ]
+      ],
+      "passed": true
+    },
+    {
+      "id": 68930,
+      "case": "臺灣臺北地方法院 107 年度審交簡字第 4 號刑事判決",
+      "charges": [
+        "過失傷害罪"
+      ],
+      "laws": [
+        [
+          "道路交通管理處罰條例第86條第1項",
+          "刑法第284條第1項"
+        ]
+      ],
+      "expected": [
+        [
+          "道路交通管理處罰條例第86條第1項",
+          "刑法第284條第1項"
+        ]
+      ],
+      "passed": true
+    },
+    {
+      "id": 48999,
+      "case": "臺灣臺北地方法院 109 年度審簡字第 1088 號刑事判決",
+      "charges": [
+        "詐欺取財罪"
+      ],
+      "laws": [
+        [
+          "刑法第339條第1項"
+        ]
+      ],
+      "expected": [
+        [
+          "刑法第339條第1項"
+        ]
+      ],
+      "passed": true
+    },
+    {
+      "id": 122048,
+      "case": "臺灣臺北地方法院 110 年度審簡字第 1391 號刑事判決",
+      "charges": [
+        "詐欺得利罪"
+      ],
+      "laws": [
+        [
+          "刑法第339條第1項"
+        ]
+      ],
+      "expected": [
+        [
+          "刑法第339條第1項"
+        ]
+      ],
+      "passed": true
+    },
+    {
+      "id": 64901,
+      "case": "臺灣臺北地方法院 108 年度訴字第 526 號刑事判決",
+      "charges": [
+        "三人以上共同冒用政府機關名義詐欺取財罪"
+      ],
+      "laws": [
+        [
+          "刑法第339條之4第1項第2款",
+          "刑法第339條之4第1項第1款"
+        ]
+      ],
+      "expected": [
+        [
+          "刑法第339條之4第1項第2款",
+          "刑法第339條之4第1項第1款"
+        ]
+      ],
+      "passed": true
+    },
+    {
+      "id": 120580,
+      "case": "臺灣臺北地方法院 110 年度訴字第 491 號刑事判決",
+      "charges": [
+        "幫助販賣第三級毒品未遂罪"
+      ],
+      "laws": [
+        [
+          "刑法第30條",
+          "毒品危害防制條例第4條第3項",
+          "毒品危害防制條例第4條第6項"
+        ]
+      ],
+      "expected": [
+        [
+          "刑法第30條",
+          "毒品危害防制條例第4條第3項",
+          "毒品危害防制條例第4條第6項"
+        ]
+      ],
+      "passed": true
+    },
+    {
+      "id": 116485,
+      "case": "臺灣臺北地方法院 109 年度訴字第 1162 號刑事判決",
+      "charges": [
+        "對直系血親尊親屬重傷害未遂罪"
+      ],
+      "laws": [
+        [
+          "刑法第280條",
+          "刑法第278條第3項",
+          "刑法第278條第1項"
+        ]
+      ],
+      "expected": [
+        [
+          "刑法第280條",
+          "刑法第278條第3項",
+          "刑法第278條第1項"
+        ]
+      ],
+      "passed": true
+    }
+  ],
+  "manual_assessments": [
+    {
+      "id": 42040,
+      "case": "臺灣臺北地方法院 109 年度簡字第 1107 號刑事判決",
+      "charges": [
+        "失火燒燬住宅等以外之物罪"
+      ],
+      "laws": [
+        []
+      ],
+      "assessment": "交接前本機取到檢方173條；法院實際論述175條。新版未再取173，但含頓號罪名仍未配到175，是真正待修漏抓。"
+    },
+    {
+      "id": 74258,
+      "case": "臺灣臺北地方法院 107 年度簡字第 1166 號刑事判決",
+      "charges": [
+        "詐欺取財罪",
+        "竊盜罪"
+      ],
+      "laws": [
+        [],
+        []
+      ],
+      "assessment": "舊版將同一339條同時掛在詐欺與竊盜；不能恢復整案備援。新版仍缺少可接受的逐罪配對，不能稱整案空值已正確。"
+    },
+    {
+      "id": 82023,
+      "case": "臺灣臺北地方法院 105 年度訴字第 601 號刑事判決",
+      "charges": [
+        "施用第一級毒品",
+        "施用第二級毒品"
+      ],
+      "laws": [
+        [],
+        []
+      ],
+      "assessment": "主文明載的兩筆是施用；附表另有販賣。不能因理由罪數相同把兩筆施用改成販賣。原文第10條1項及第一級、第二級並列仍未解析。"
+    },
+    {
+      "id": 41179,
+      "case": "臺灣臺北地方法院 109 年度簡字第 1552 號刑事判決",
+      "charges": [
+        "明知為禁藥而轉讓"
+      ],
+      "laws": [
+        []
+      ],
+      "assessment": "法院明載藥事法83條轉讓禁藥罪；主文為明知為禁藥而轉讓。語序／粗分類尚未連結，為真實漏抓。"
+    },
+    {
+      "id": 72343,
+      "case": "臺灣臺北地方法院 107 年度審簡字第 1036 號刑事判決",
+      "charges": [
+        "對於醫事人員以恐嚇之方法，妨害其執行醫療業務"
+      ],
+      "laws": [
+        []
+      ],
+      "assessment": "主文為妨害醫療業務；法院同時論述醫療法106條及刑法305條。新版保留歧義，不直接用恐嚇粗類替代主文。"
+    },
+    {
+      "id": 136705,
+      "case": "臺灣臺北地方法院 111 年度審訴字第 2210 號刑事判決",
+      "charges": [
+        "三人以上共同詐欺取財罪"
+      ],
+      "laws": [
+        [
+          "刑法第339條之4第1項第2款"
+        ]
+      ],
+      "assessment": "應取法院認定的339條之4，不取被否定的檢方339條。共同犯字樣與下一法名的切分已修復。"
+    },
+    {
+      "id": 84444,
+      "case": "臺灣臺北地方法院 113 年度審簡字第 606 號刑事判決",
+      "charges": [
+        "詐欺得利罪"
+      ],
+      "laws": [
+        [
+          "刑法第30條第1項",
+          "刑法第339條第2項"
+        ]
+      ],
+      "assessment": "主文幫助犯詐欺得利；第30條及339條第2項，不能混入同句另罪取財的第1項。"
+    },
+    {
+      "id": 69784,
+      "case": "臺灣臺北地方法院 107 年度審交簡字第 39 號刑事判決",
+      "charges": [
+        "過失傷害罪"
+      ],
+      "laws": [
+        [
+          "道路交通管理處罰條例第86條第1項",
+          "刑法第284條第1項"
+        ]
+      ],
+      "assessment": "兩種法院罪名寫法引用完全相同的86條及284條，法條集合相同可保留；不同法條集合仍拒絕猜測。"
+    }
+  ],
+  "charge_preservation_impact": {
+    "raw_charge_changed": 11191,
+    "same_standard_label_set": 10546,
+    "changed_standard_label_set": 645,
+    "new_incomplete_standard": 69,
+    "resolved_incomplete_standard": 42
+  },
+  "verification": {
+    "tests_passed": 511,
+    "command": "/tmp/judgment-extraction-review-env/bin/python -m unittest discover -s tests -t . -q",
+    "database_cases_checked": 11,
+    "scope": "PR five and handoff six, exact raw law arrays",
+    "training_data_overwritten": false,
+    "models_retrained": false
+  },
+  "sample_review": {
+    "seed": 42,
+    "cases": 20,
+    "textually_supported": 17,
+    "unresolved_law_name": 1,
+    "appendix_not_verified": 2
+  },
+  "artifact_directory": "/tmp/jd_law_handoff_result_20261019",
+  "baseline_directory": "/tmp/jd_law_handoff_baseline_20261019",
+  "artifacts_sha256": {
+    "comparison.jsonl": "7e6a8543ef883de367b29bc9f5135eb34a5f74916a80b8e6f9eac7eade92100c",
+    "empty_triage.jsonl": "b3a8ba1622965ae5b66a521603dc9a5d9b07e2b8034e7008a83a7d8f9704782f",
+    "summary.json": "400d9614ad28922d7e819d4745b9822e809f8b5d121e6e49d56147c1189a1fff",
+    "sample_review.json": "6c620073b89d8ae0305832c561857aef3eab48c729697b30f221bbc75690eb14",
+    "mandatory_cases.json": "12a23db9f3a8780f5a300fea13dc82c80d5af1c3fa088c81e0a2283dcfdaf1be",
+    "classify_comparison.py": "97bb0a76c11fa3a745e2b8a554d25f6cc3d2de3eb9dbf369a1847a798fed63ce"
+  },
+  "limitations": [
+    "空值轉移不是正確率；所有新增空值均有機械分類，但未人工審查全部70197筆。",
+    "附表主文原有理由備援仍可能包含想像競合的其他罪，抽樣兩筆未確認。",
+    "保留主文描述後有語序及名稱差異仍無法配對；法名指涉與頓號複合罪名仍有漏抓。",
+    "固定白名單不再作整案法條匯出門檻；模型資料與模型尚未重跑。"
+  ]
+}

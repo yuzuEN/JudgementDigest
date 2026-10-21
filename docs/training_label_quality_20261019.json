@@ -1,0 +1,283 @@
+{
+  "counts": {
+    "eligible": 70197,
+    "raw_empty": 3712,
+    "raw_partial": 338,
+    "standard_empty": 4230,
+    "before_accusation_valid": 68957,
+    "after_accusation_valid": 64184,
+    "before_article_valid": 66485,
+    "after_article_valid": 60657,
+    "before_imprisonment_valid": 44590,
+    "after_imprisonment_valid": 44590,
+    "training_rows_changed": 5828
+  },
+  "raw_extraction_changes": 0,
+  "exclusions": {
+    "accusation": {
+      "incomplete_standard_charges": 1240,
+      "unverified_charge_source": 5140
+    },
+    "article": {
+      "all_offense_laws_missing": 3712,
+      "unverified_charge_source": 5140,
+      "partial_offense_laws_missing": 338,
+      "invalid_law_strings": 718
+    },
+    "imprisonment": {
+      "no_safe_single_sentence": 9468,
+      "detention_not_prison": 16014,
+      "mixed_prison_and_detention": 125
+    }
+  },
+  "new_exclusions": {
+    "accusation": {
+      "unverified_charge_source": 4773
+    },
+    "article": {
+      "unverified_charge_source": 4875,
+      "partial_offense_laws_missing": 338,
+      "invalid_law_strings": 718
+    }
+  },
+  "new_article_exclusion_combinations": {
+    "unverified_charge_source": 4792,
+    "partial_offense_laws_missing": 318,
+    "invalid_law_strings": 615,
+    "unverified_charge_source + invalid_law_strings": 83,
+    "partial_offense_laws_missing + invalid_law_strings": 20
+  },
+  "invalid_law_reason_case_counts": {
+    "unrecognized_law_name_or_format": 89,
+    "unresolved_law_reference": 226,
+    "law_string_residue": 413
+  },
+  "transitions": {
+    "accusation": {
+      "True->True": 64184,
+      "False->False": 1240,
+      "True->False": 4773
+    },
+    "article": {
+      "True->True": 60657,
+      "False->False": 3712,
+      "True->False": 5828
+    },
+    "imprisonment": {
+      "True->True": 44590,
+      "False->False": 25607
+    }
+  },
+  "cohort_id_sha256": "75fae88bf4da0a4e9ad36dc64f25757196bc372c6990cb358511414b26c1eaeb",
+  "source_rows_sha256": "dca11b8dab12c1cff0e8d6c9e86459385dcad402583060afbc9386bd4bcd962c",
+  "before_code_sha256": {
+    "structure_tasks.py": "58c37ff4f36adc8f1588194934f96106ede918a2d4aa3b500c3706d8ed237e74",
+    "build_structured_review.py": "bc22bc328dc4aa016512e25c13b91c8ef047d1e0581ae40eda3628d99e968a06",
+    "normalize.py": "99aa4ac94046ff5b8358b71d2b29b360f3826dc3ee5d50fde958f89e5f894bb7",
+    "law_frequency.py": "ce322d982710575764b0f2e8c3fe1ed0070a3f63debcc06782be8beb06084943",
+    "driving_charge.py": "2e4a030d281c04cf1126d0c460209d95a623a22a71a2be33b94d5c099a432c93",
+    "refresh_modeldata.py": "3f3b2486cf33dc6f5e3c626d3aa33788b7bb0395494245793275010e352a1c21",
+    "compare_law_extraction.py": "f62eddd8695318ef39719a38927a4a549e503a0acd91064a9bf92d808226bb48"
+  },
+  "after_code_sha256": {
+    "structure_tasks.py": "58c37ff4f36adc8f1588194934f96106ede918a2d4aa3b500c3706d8ed237e74",
+    "build_structured_review.py": "bc22bc328dc4aa016512e25c13b91c8ef047d1e0581ae40eda3628d99e968a06",
+    "normalize.py": "99aa4ac94046ff5b8358b71d2b29b360f3826dc3ee5d50fde958f89e5f894bb7",
+    "law_frequency.py": "ce322d982710575764b0f2e8c3fe1ed0070a3f63debcc06782be8beb06084943",
+    "driving_charge.py": "2e4a030d281c04cf1126d0c460209d95a623a22a71a2be33b94d5c099a432c93",
+    "refresh_modeldata.py": "4c89c8a1ffd86755d314a33759b362943e56c4bd0acecd4dc7d8a8c20e64f944",
+    "compare_law_extraction.py": "f62eddd8695318ef39719a38927a4a549e503a0acd91064a9bf92d808226bb48"
+  },
+  "baseline_sha256": "9e1678199cef367ee726c96bfc021c8bfdaea396a866575026f3dc4a0b71dd78",
+  "seconds": 172.82,
+  "database_mode": "read_only",
+  "scope": "70,197 raw judgments; before frequency/year/fact filters; not a modeldata refresh",
+  "verification": {
+    "unit_tests_passed": 546,
+    "command": "python -m unittest discover -s tests -t . -q",
+    "consumer": {
+      "consumer": "../BERT-base-prediction/Taiwan",
+      "code_sha256": {
+        "data.py": "e793cdcd349242a1844fc0000311f6c9f907b605ac288a71ec679d9c76b2cdc4",
+        "analyze.py": "58faa4db944484ca95bac286566d453c14a14fb7ad033ddd8d781b0f86f26fd7"
+      },
+      "input_records": 12,
+      "results": {
+        "accusation": {
+          "expected_ids": [
+            "complete-2023",
+            "complete-2024",
+            "complete-2025",
+            "partial-2023",
+            "partial-2024",
+            "partial-2025",
+            "unresolved-2023",
+            "unresolved-2024",
+            "unresolved-2025"
+          ],
+          "actual_ids": [
+            "complete-2023",
+            "complete-2024",
+            "complete-2025",
+            "partial-2023",
+            "partial-2024",
+            "partial-2025",
+            "unresolved-2023",
+            "unresolved-2024",
+            "unresolved-2025"
+          ],
+          "skipped": {
+            "empty_active_task_labels": 3
+          },
+          "splits": {
+            "train": {
+              "n": 3,
+              "years": {
+                "2023": 3
+              },
+              "removed_label_occurrences": {}
+            },
+            "valid": {
+              "n": 3,
+              "years": {
+                "2024": 3
+              },
+              "removed_label_occurrences": {}
+            },
+            "test": {
+              "n": 3,
+              "years": {
+                "2025": 3
+              },
+              "removed_label_occurrences": {}
+            }
+          }
+        },
+        "article": {
+          "expected_ids": [
+            "complete-2023",
+            "complete-2024",
+            "complete-2025"
+          ],
+          "actual_ids": [
+            "complete-2023",
+            "complete-2024",
+            "complete-2025"
+          ],
+          "skipped": {
+            "empty_active_task_labels": 9
+          },
+          "splits": {
+            "train": {
+              "n": 1,
+              "years": {
+                "2023": 1
+              },
+              "removed_label_occurrences": {}
+            },
+            "valid": {
+              "n": 1,
+              "years": {
+                "2024": 1
+              },
+              "removed_label_occurrences": {}
+            },
+            "test": {
+              "n": 1,
+              "years": {
+                "2025": 1
+              },
+              "removed_label_occurrences": {}
+            }
+          }
+        },
+        "imprisonment": {
+          "expected_ids": [
+            "complete-2023",
+            "complete-2024",
+            "complete-2025",
+            "fallback-2023",
+            "fallback-2024",
+            "fallback-2025",
+            "partial-2023",
+            "partial-2024",
+            "partial-2025",
+            "unresolved-2023",
+            "unresolved-2024",
+            "unresolved-2025"
+          ],
+          "actual_ids": [
+            "complete-2023",
+            "complete-2024",
+            "complete-2025",
+            "fallback-2023",
+            "fallback-2024",
+            "fallback-2025",
+            "partial-2023",
+            "partial-2024",
+            "partial-2025",
+            "unresolved-2023",
+            "unresolved-2024",
+            "unresolved-2025"
+          ],
+          "skipped": {},
+          "splits": {
+            "train": {
+              "n": 4,
+              "years": {
+                "2023": 4
+              },
+              "removed_label_occurrences": {}
+            },
+            "valid": {
+              "n": 4,
+              "years": {
+                "2024": 4
+              },
+              "removed_label_occurrences": {}
+            },
+            "test": {
+              "n": 4,
+              "years": {
+                "2025": 4
+              },
+              "removed_label_occurrences": {}
+            }
+          }
+        }
+      },
+      "conclusion": "Actual Taiwan prepare excludes invalid active labels; it does not read task_validity directly. Other consumers not executed."
+    },
+    "confirmed_cases": {
+      "fallback_cases_excluded": [
+        136618,
+        145255,
+        82335,
+        92083
+      ],
+      "historical_wrong_pairs_still_empty": [
+        132204,
+        53384,
+        126939,
+        69860,
+        138412
+      ],
+      "deferred_recall_cases_still_empty": [
+        58189,
+        80137,
+        98500
+      ],
+      "passed": true
+    },
+    "extraction_code_unchanged_this_round": true,
+    "model_data_overwritten": false,
+    "models_retrained": false
+  },
+  "reviewer_evidence_sha256": {
+    "review.txt": "9007907bbbe779cf6371b6e1616ae960bf4eeea993e85cb8f76d843b49c37bc1",
+    "summary.json": "9ef42ccb6de0d2df89fc9389c47f3c408020842ee09d52c0089310fdf31fa02e",
+    "sample_review.tsv": "cd07d5e2a45517dda4f466a26823dfc8cd2e8e7d2c4b2be89e0e72a10fac463b",
+    "old_path_summary.json": "911b1b7cdb144c495c8f15956d438b7d9cfd58ddc93f654f250a0d84843d2aa4"
+  },
+  "artifacts": "finaldata/training_label_quality_20261019/"
+}

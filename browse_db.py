@@ -9,6 +9,7 @@
 被放棄。
 """
 
+import argparse
 import os
 import sqlite3
 import subprocess
@@ -43,7 +44,10 @@ def ensure_indexes(db_path: str) -> None:
 
 
 def main() -> int:
-    db_path = os.path.join(ROOT, "judgments.db")
+    parser = argparse.ArgumentParser(add_help=False)
+    parser.add_argument("--db", default=os.path.join(ROOT, "judgments.db"))
+    args, datasette_args = parser.parse_known_args()
+    db_path = args.db if os.path.isabs(args.db) else os.path.join(ROOT, args.db)
     if not os.path.exists(db_path):
         print(f"找不到資料庫：{db_path}")
         return 1
@@ -52,7 +56,7 @@ def main() -> int:
            "--metadata", os.path.join(ROOT, "datasette_metadata.yml")]
     for k, v in SETTINGS.items():
         cmd += ["--setting", k, v]
-    cmd += sys.argv[1:]
+    cmd += datasette_args
     # Windows 預設用系統編碼（cp1252／cp950）讀設定檔，中文會解碼失敗
     env = dict(os.environ, PYTHONUTF8="1")
     try:
