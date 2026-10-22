@@ -1,0 +1,16 @@
+{
+  "data": "data/source/shared_100k.jsonl",
+  "output": "runs/accusation_cv",
+  "training_config": "configs/accusation_cv_electra.json",
+  "task": "accusation",
+  "folds": 5,
+  "epochs": 3,
+  "precision": "fp32",
+  "time_cv": false,
+  "first_year": 2016,
+  "test_year": 2025,
+  "min_label_freq": 150,
+  "seed": 42,
+  "device": "auto",
+  "class_list": "data/source/fixed_classes.json"
+}

@@ -2,6 +2,8 @@
 
 自動從[司法院裁判書查詢系統](https://judgment.judicial.gov.tw/FJUD/default.aspx)爬取裁判書，解析結構化資料並匯出 Excel。
 
+判決預測模型的程式、架構說明與訓練操作另見 [model/README.md](model/README.md)；資料集與模型權重不隨程式提供。
+
 ## 功能
 
 - 關鍵字搜尋，依裁判日期遞迴細分區間，突破單一查詢 500 筆上限
