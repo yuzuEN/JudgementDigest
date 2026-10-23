@@ -92,6 +92,35 @@ class TestLoadAndSplit(unittest.TestCase):
         full = E.holdout_split(rows, test_fold=3, test_n=None)[2]
         self.assertEqual(len(full), 20)                            # test_n=None：整個 fold
 
+    def test_load_shared_package_roles_and_jid_check(self):
+        """共用實驗包：依 CSV 每一輪的角色切分，purged 不收，並逐筆核對 jid。"""
+        with tempfile.TemporaryDirectory() as d:
+            recs = []
+            for i in range(4):
+                r = record(0); r["meta"]["jid"] = f"J{i}"; recs.append(r)
+            with open(os.path.join(d, "shared_100k.jsonl"), "w", encoding="utf-8") as f:
+                for r in recs:
+                    f.write(json.dumps(r, ensure_ascii=False) + "\n")
+            with open(os.path.join(d, "shared_fold_assignments.csv"), "w", encoding="utf-8-sig") as f:
+                f.write("sample_line_1based,jid,fold_01,fold_02\n"
+                        "1,J0,train,test\n2,J1,valid,train\n3,J2,test,purged\n4,J3,holdout,holdout\n")
+            with open(os.path.join(d, "fixed_classes.json"), "w", encoding="utf-8") as f:
+                json.dump({"accusation": ["竊盜罪"], "article": ["刑法第320條"]}, f, ensure_ascii=False)
+            rows, assignments, classes = E.load_shared(d)
+            self.assertEqual(E.shared_folds(assignments), ["fold_01", "fold_02"])
+            self.assertEqual(classes["accusation"], ["竊盜罪"])
+            sp = E.shared_split(rows, assignments, "fold_02")
+            self.assertEqual({k: [r["jid"] for r in v] for k, v in sp.items()},
+                             {"train": ["J1"], "valid": [], "test": ["J0"], "holdout": ["J3"]})
+            with open(os.path.join(d, "shared_fold_assignments.csv"), "w", encoding="utf-8-sig") as f:
+                f.write("sample_line_1based,jid,fold_01\n1,錯的,train\n")
+            with self.assertRaises(ValueError):
+                E.load_shared(d)
+
+    def test_mean_std_uses_sample_std(self):
+        self.assertEqual(E.mean_std([1.0, 3.0]), (2.0, float(np.std([1.0, 3.0], ddof=1))))
+        self.assertEqual(E.mean_std([0.5]), (0.5, 0.0))
+
     def test_task_rows_filters_invalid(self):
         rows = [E.to_row(record(0, validity={"accusation": v, "article": True, "imprisonment": True})) for v in (True, False)]
         self.assertEqual(len(E.task_rows(rows, "accusation")), 1)

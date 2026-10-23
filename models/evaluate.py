@@ -66,7 +66,8 @@ def validity_of(meta: dict) -> Dict[str, bool]:
 def to_row(record: dict, article_field: str = "relevant_articles") -> dict:
     m = record["meta"]
     return {"fact": record["fact"], "accusation": m.get("accusation") or [], "article": m.get(article_field) or [],
-            "months": months_of(m), "valid": validity_of(m), "fold": m["fold"], "year": m.get("year")}
+            "months": months_of(m), "valid": validity_of(m), "fold": m.get("fold"), "year": m.get("year"),
+            "jid": m.get("jid")}
 
 
 def load(path: str, article_field: str = "relevant_articles") -> List[dict]:
@@ -87,6 +88,46 @@ def holdout_split(rows: Sequence[dict], test_fold: int = 0, test_n: Optional[int
     val = pool[len(pool) - val_n:] if val_n else []
     pool = pool[:len(pool) - val_n] if val_n else pool
     return pool, val, test
+
+
+# ── 共用實驗包（芸菲，share_national150_100k_5fold）──────────────────────────────
+# 資料夾內有 shared_100k.jsonl、shared_fold_assignments.csv、fixed_classes.json。
+# CSV 的 fold_01–fold_05 欄是每一輪的角色：train／valid（挑 epoch）／test（該輪評分）／holdout（2025）／purged（排除）。
+SHARED_ROLES = ("train", "valid", "test", "holdout")
+
+
+def load_shared(path: str, article_field: str = "relevant_articles"):
+    """回傳 (rows, assignments, classes)。rows 依 sample_line_1based 對應，並逐筆核對 jid。"""
+    import csv
+    import os
+    rows = load(os.path.join(path, "shared_100k.jsonl"), article_field)
+    with open(os.path.join(path, "shared_fold_assignments.csv"), encoding="utf-8-sig") as f:
+        assignments = list(csv.DictReader(f))
+    for a in assignments:
+        if rows[int(a["sample_line_1based"]) - 1]["jid"] != a["jid"]:
+            raise ValueError(f"jid 對不上：第 {a['sample_line_1based']} 行")
+    with open(os.path.join(path, "fixed_classes.json"), encoding="utf-8") as f:
+        fixed = json.load(f)
+    return rows, assignments, {"accusation": list(fixed["accusation"]), "article": list(fixed["article"])}
+
+
+def shared_folds(assignments: Sequence[dict]) -> List[str]:
+    return sorted(k for k in assignments[0] if k.startswith("fold_"))
+
+
+def shared_split(rows: Sequence[dict], assignments: Sequence[dict], fold: str) -> Dict[str, list]:
+    """某一輪的 train／valid／test／holdout；purged 與其他角色不收。"""
+    out = {role: [] for role in SHARED_ROLES}
+    for a in assignments:
+        if a[fold] in out:
+            out[a[fold]].append(rows[int(a["sample_line_1based"]) - 1])
+    return out
+
+
+def mean_std(values: Sequence[float]) -> Tuple[float, float]:
+    """平均與樣本標準差（n − 1）；只有一個值時標準差為 0。"""
+    v = np.asarray(values, dtype=float)
+    return float(v.mean()), float(v.std(ddof=1)) if len(v) > 1 else 0.0
 
 
 def task_rows(rows: Sequence[dict], task: str) -> list:
