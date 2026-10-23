@@ -10,6 +10,7 @@ CAIL 格式資料集（罪名、法條、刑期三個任務）的基準模型與
 | `fasttext_gpu.py` | fastText 架構（PyTorch），每個任務各一個模型，驗證集提早停止 | 全國全部（約 90 萬筆訓練） | scikit-learn、PyTorch、GPU |
 | `svm_shared.py` | TF-IDF ＋ LinearSVC，在共用實驗包（芸菲 share_national150_100k_5fold）上跑 5 折 | 共用包 10 萬筆 | scikit-learn |
 | `textcnn_gpu.py` | TextCNN（字向量＋寬 2–5 字的卷積），每個任務各一個模型，驗證集提早停止 | 全國全部 | scikit-learn、PyTorch、GPU |
+| `electra_term_gpu.py` | 法律 ELECTRA 刑期（設定同芸菲 PR #15 的罪名、法條），輸出頭與評分同 TextCNN | 共用包 10 萬筆 | PyTorch、transformers、GPU |
 
 安裝：`pip install -r models/requirements.txt`（PyTorch 依 GPU 環境另外裝；Kaggle 已內建）。
 
