@@ -96,19 +96,41 @@ def holdout_split(rows: Sequence[dict], test_fold: int = 0, test_n: Optional[int
 SHARED_ROLES = ("train", "valid", "test", "holdout")
 
 
+SUFFIX_FIELD = "relevant_articles_with_suffix"
+
+
 def load_shared(path: str, article_field: str = "relevant_articles"):
-    """回傳 (rows, assignments, classes)。rows 依 sample_line_1based 對應，並逐筆核對 jid。"""
+    """回傳 (rows, assignments, classes)。rows 依 sample_line_1based 對應，並逐筆核對 jid。
+
+    支援兩版共用包：舊版（shared_100k.jsonl、fixed_classes.json）與之X 版
+    （shared_100k_with_article_suffix.jsonl、fixed_classes_coarse.json／fixed_classes_suffix.json）。
+    article_field="relevant_articles_with_suffix" 時法條用之X 版 109 類：標籤先篩到固定類別，
+    篩完是空的案件（約 245 筆）法條任務記為不可用，罪名、刑期照常。
+    """
     import csv
     import os
-    rows = load(os.path.join(path, "shared_100k.jsonl"), article_field)
+
+    def first(*names):
+        return next((os.path.join(path, n) for n in names if os.path.exists(os.path.join(path, n))), None)
+
+    rows = load(first("shared_100k.jsonl", "shared_100k_with_article_suffix.jsonl"), article_field)
     with open(os.path.join(path, "shared_fold_assignments.csv"), encoding="utf-8-sig") as f:
         assignments = list(csv.DictReader(f))
     for a in assignments:
         if rows[int(a["sample_line_1based"]) - 1]["jid"] != a["jid"]:
             raise ValueError(f"jid 對不上：第 {a['sample_line_1based']} 行")
-    with open(os.path.join(path, "fixed_classes.json"), encoding="utf-8") as f:
+    with open(first("fixed_classes.json", "fixed_classes_coarse.json"), encoding="utf-8") as f:
         fixed = json.load(f)
-    return rows, assignments, {"accusation": list(fixed["accusation"]), "article": list(fixed["article"])}
+    classes = {"accusation": list(fixed["accusation"]), "article": list(fixed["article"])}
+    if article_field == SUFFIX_FIELD:
+        with open(first("fixed_classes_suffix.json"), encoding="utf-8") as f:
+            classes["article"] = list(json.load(f)["article"])
+        keep = set(classes["article"])
+        for r in rows:
+            r["article"] = [a for a in r["article"] if a in keep]
+            if not r["article"]:
+                r["valid"]["article"] = False
+    return rows, assignments, classes
 
 
 def shared_folds(assignments: Sequence[dict]) -> List[str]:

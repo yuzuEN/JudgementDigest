@@ -32,10 +32,14 @@ ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDe
 ap.add_argument("--shared", required=True, help="共用實驗包資料夾（含 shared_100k.jsonl 等）")
 ap.add_argument("--folds", default="all", help="要跑的輪，例如 fold_01,fold_02；all = 全部")
 ap.add_argument("--jobs", type=int, default=-1, help="one-vs-rest 平行數；記憶體不夠就調小")
+ap.add_argument("--article-field", default="relevant_articles",
+                help="法條欄位；relevant_articles_with_suffix = 之X 版（109 類，需要之X 版共用包）")
+ap.add_argument("--tasks", default="accusation,article,imprisonment", help="要跑的任務，逗號分隔")
 ap.add_argument("--out", default="svm_shared.md")
 args = ap.parse_args()
+TASKS = [t for t in args.tasks.split(",") if t]
 
-rows, assignments, classes = E.load_shared(args.shared)
+rows, assignments, classes = E.load_shared(args.shared, args.article_field)
 folds = E.shared_folds(assignments) if args.folds == "all" else args.folds.split(",")
 mlb = {t: MultiLabelBinarizer(classes=classes[t]).fit([[]]) for t in ("accusation", "article")}
 res = collections.defaultdict(list)          # (split, 指標) → 各輪的值
@@ -45,7 +49,7 @@ for fold in folds:
     tr = sp["train"]
     vec = TfidfVectorizer(analyzer="char", ngram_range=(1, 2), min_df=3, max_features=300_000,
                           sublinear_tf=True, dtype=np.float32).fit([r["fact"] for r in tr])
-    for t in ("accusation", "article"):
+    for t in [t for t in ("accusation", "article") if t in TASKS]:
         a = E.task_rows(tr, t)
         Xa = vec.transform([r["fact"] for r in a]); Ya = mlb[t].transform([r[t] for r in a])
         keep = Ya.sum(0) > 0
@@ -57,17 +61,18 @@ for fold in folds:
             P = np.zeros_like(Yb); P[:, keep] = E.at_least_one(clf.decision_function(Xb))
             for name, v in E.multilabel_scores(Yb, P, top).items():
                 res[(split, f"{E.TASK_NAMES[t]} {name}")].append(v)
-    a = E.task_rows(tr, "imprisonment")
-    Xa = vec.transform([r["fact"] for r in a]); ma = np.array([r["months"] for r in a])
-    bins = LinearSVC(C=0.5).fit(Xa, [E.bin_of(m) for m in ma])
-    fin = ma >= 0
-    reg = Ridge(alpha=1.0).fit(Xa[fin], np.log1p(ma[fin]))
-    for split in ("test", "holdout"):
-        b = E.task_rows(sp[split], "imprisonment")
-        Xb = vec.transform([r["fact"] for r in b]); mb = [r["months"] for r in b]
-        pred = np.clip(np.expm1(reg.predict(Xb)), 0, None).round()
-        for name, v in E.term_scores(mb, bins.predict(Xb), pred).items():
-            res[(split, f"刑期 {name}")].append(v)
+    if "imprisonment" in TASKS:
+        a = E.task_rows(tr, "imprisonment")
+        Xa = vec.transform([r["fact"] for r in a]); ma = np.array([r["months"] for r in a])
+        bins = LinearSVC(C=0.5).fit(Xa, [E.bin_of(m) for m in ma])
+        fin = ma >= 0
+        reg = Ridge(alpha=1.0).fit(Xa[fin], np.log1p(ma[fin]))
+        for split in ("test", "holdout"):
+            b = E.task_rows(sp[split], "imprisonment")
+            Xb = vec.transform([r["fact"] for r in b]); mb = [r["months"] for r in b]
+            pred = np.clip(np.expm1(reg.predict(Xb)), 0, None).round()
+            for name, v in E.term_scores(mb, bins.predict(Xb), pred).items():
+                res[(split, f"刑期 {name}")].append(v)
     print(f"{fold} 完成（{time.time() - t0:.0f}s）：train {len(tr):,}、test {len(sp['test']):,}、holdout {len(sp['holdout']):,}；"
           + "、".join(f"{k[1]} {v[-1]:.3f}" for k, v in res.items() if k[0] == "test"), flush=True)
 

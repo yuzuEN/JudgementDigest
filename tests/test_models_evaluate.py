@@ -117,6 +117,29 @@ class TestLoadAndSplit(unittest.TestCase):
             with self.assertRaises(ValueError):
                 E.load_shared(d)
 
+    def test_load_shared_suffix_package(self):
+        """之X 版共用包：檔名不同；法條篩到 109 類清單，篩完是空的案件法條任務不可用，罪名照常。"""
+        with tempfile.TemporaryDirectory() as d:
+            recs = []
+            for i, suf in enumerate((["刑法第185條之3"], ["刑法第302條之1"])):
+                r = record(0, art=("刑法第185條",)); r["meta"]["jid"] = f"J{i}"
+                r["meta"]["relevant_articles_with_suffix"] = suf; recs.append(r)
+            with open(os.path.join(d, "shared_100k_with_article_suffix.jsonl"), "w", encoding="utf-8") as f:
+                for r in recs:
+                    f.write(json.dumps(r, ensure_ascii=False) + "\n")
+            with open(os.path.join(d, "shared_fold_assignments.csv"), "w", encoding="utf-8-sig") as f:
+                f.write("sample_line_1based,jid,fold_01\n1,J0,train\n2,J1,test\n")
+            with open(os.path.join(d, "fixed_classes_coarse.json"), "w", encoding="utf-8") as f:
+                json.dump({"accusation": ["竊盜罪"], "article": ["刑法第185條"]}, f, ensure_ascii=False)
+            with open(os.path.join(d, "fixed_classes_suffix.json"), "w", encoding="utf-8") as f:
+                json.dump({"article": ["刑法第185條之3"]}, f, ensure_ascii=False)
+            rows, _, classes = E.load_shared(d)
+            self.assertEqual(classes["article"], ["刑法第185條"])
+            rows, _, classes = E.load_shared(d, E.SUFFIX_FIELD)
+            self.assertEqual(classes["article"], ["刑法第185條之3"])
+            self.assertEqual([r["valid"]["article"] for r in rows], [True, False])
+            self.assertEqual([r["valid"]["accusation"] for r in rows], [True, True])
+
     def test_mean_std_uses_sample_std(self):
         self.assertEqual(E.mean_std([1.0, 3.0]), (2.0, float(np.std([1.0, 3.0], ddof=1))))
         self.assertEqual(E.mean_std([0.5]), (0.5, 0.0))
