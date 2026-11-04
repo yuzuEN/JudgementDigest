@@ -8,12 +8,15 @@ __pycache__/
 
 # 資料（不入版控）
 html_cache/
+*.db
+*.zip
 judgments.db*
 # 舊版 backfill_structured.py 產生的備份命名（judgments.bak-*.db），
 # 不符合上面的 judgments.db* 規則，補一條避免 290 MB 的檔案被 git add 進來
 judgments.bak-*.db
 *.xlsx
 *.log
+.DS_Store
 
 # 除錯用暫存頁面
 *_page.html

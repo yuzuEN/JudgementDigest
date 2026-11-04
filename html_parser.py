@@ -697,7 +697,7 @@ def _extract_parties(preamble_lines: List[str]) -> Dict[str, str]:
         # （例：113 年度簡上字第 394 號的 appellant 存成「A男；A男之母；兼 共 同」）。
         if re.fullmatch(r"[即及與兼共同，,、；;。\s]+", name):
             return
-        if check_len:
+        if check_len and field != "defendant":
             core = re.sub(r"[（(][^）)]*[）)]", "", name).strip()
             if not (1 <= len(core) <= 20):
                 return
@@ -828,7 +828,8 @@ def _extract_parties(preamble_lines: List[str]) -> Dict[str, str]:
             continue
 
         # 5. 跳過地址行（數字/英文開頭）
-        if _ADDR_ONLY_RE.match(collapsed):
+        if (_ADDR_ONLY_RE.match(collapsed)
+                and not (current_field == "defendant" and re.match(r"[A-Za-z]", collapsed))):
             continue
 
         # 6. 延續行：若為代理人上下文或含「律師」則歸代理人，否則歸當事人
