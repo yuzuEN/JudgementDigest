@@ -73,8 +73,8 @@ flowchart LR
 ```
 JudgementDigest/
 ├── data_pipeline/     資料蒐集與處理：爬蟲、開放資料、HTML 解析、民事與刑事結構化欄位
-├── civil/             民事：dataset/（資料集）、models/（勝訴機率、金額）
-├── criminal/          刑事：dataset/（事實取得與遮蔽）、models/（罪名、法條、刑期）
+├── civil/             民事：dataset/（建資料集的程式）、models/（勝訴機率、金額）
+├── criminal/          刑事：dataset/（事實取得與遮蔽的程式）、models/（罪名、法條、刑期）
 ├── retrieval/         相似判決檢索：engine.py（共用）、civil.py、criminal.py
 ├── annotation/        段落功能標註：LLM 輔助標註、驗證（判決導讀、法官論理傾向分析的基礎）
 ├── backend/           API 伺服器（FastAPI）：遮名、LLM 追問、呼叫模型與檢索
@@ -83,6 +83,8 @@ JudgementDigest/
 ├── docs/              爬蟲用法、欄位說明、刑事結構化規則、repo 結構
 └── tests/
 ```
+
+資料庫、HTML 原檔、資料集 CSV、模型權重都不放在 repo 裡（太大，且含當事人資訊），repo 只放程式。
 
 各資料夾的內容、檔案分類與負責人，見 [docs/repo結構.md](docs/repo結構.md)。
 
