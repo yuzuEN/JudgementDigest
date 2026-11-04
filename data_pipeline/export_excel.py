@@ -2,13 +2,13 @@
 額外部分 — 將資料庫裁判書資料匯出為 Excel 檔案
 
 使用方式:
-    python export_excel.py                          # 匯出最新 100 筆
-    python export_excel.py -n 50                    # 匯出最新 50 筆
-    python export_excel.py -n 0                     # 匯出全部
-    python export_excel.py -n 30 -k 詐欺            # 篩選關鍵字
-    python export_excel.py -n 30 -c 臺灣臺北        # 篩選法院
-    python export_excel.py -n 30 --full-text        # 含全文欄位
-    python export_excel.py -n 20 -o my_export.xlsx  # 指定輸出檔名
+    python data_pipeline/export_excel.py                          # 匯出最新 100 筆
+    python data_pipeline/export_excel.py -n 50                    # 匯出最新 50 筆
+    python data_pipeline/export_excel.py -n 0                     # 匯出全部
+    python data_pipeline/export_excel.py -n 30 -k 詐欺            # 篩選關鍵字
+    python data_pipeline/export_excel.py -n 30 -c 臺灣臺北        # 篩選法院
+    python data_pipeline/export_excel.py -n 30 --full-text        # 含全文欄位
+    python data_pipeline/export_excel.py -n 20 -o my_export.xlsx  # 指定輸出檔名
 """
 
 import sys

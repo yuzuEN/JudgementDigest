@@ -15,10 +15,10 @@
 所以先前被其他批次（例如「借名登記」）抓過的同條件判決也會一併匯出。
 
 用法:
-    python crawl_monthly.py                       # 預設：2025 年 3~12 月臺灣臺北地方法院民事判決
-    python crawl_monthly.py --dry-run             # 只顯示計畫與目前進度，不連網
-    python crawl_monthly.py --months 3-7          # 只跑 3~7 月
-    python crawl_monthly.py --export-only --export-all   # 不爬，直接匯出全年
+    python data_pipeline/crawl_monthly.py                       # 預設：2025 年 3~12 月臺灣臺北地方法院民事判決
+    python data_pipeline/crawl_monthly.py --dry-run             # 只顯示計畫與目前進度，不連網
+    python data_pipeline/crawl_monthly.py --months 3-7          # 只跑 3~7 月
+    python data_pipeline/crawl_monthly.py --export-only --export-all   # 不爬，直接匯出全年
 """
 
 import argparse
@@ -435,10 +435,10 @@ def main(argv: Optional[List[str]] = None) -> int:
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 範例:
-  python crawl_monthly.py                              # 2025 年 3~12 月臺北地院民事判決
-  python crawl_monthly.py --dry-run                    # 預覽計畫與進度，不連網
-  python crawl_monthly.py --months 8-12                # 只跑 8~12 月
-  python crawl_monthly.py --export-only --export-all   # 不爬，匯出全年一份 Excel
+  python data_pipeline/crawl_monthly.py                              # 2025 年 3~12 月臺北地院民事判決
+  python data_pipeline/crawl_monthly.py --dry-run                    # 預覽計畫與進度，不連網
+  python data_pipeline/crawl_monthly.py --months 8-12                # 只跑 8~12 月
+  python data_pipeline/crawl_monthly.py --export-only --export-all   # 不爬，匯出全年一份 Excel
         """,
     )
     ap.add_argument("--year", type=int, default=2025, help="西元年（預設: 2025，即民國 114 年）")

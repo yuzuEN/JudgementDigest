@@ -8,14 +8,15 @@
 預設略過小額案件（北小、勞小…）：簡易庭判決約四分之三是小額，小額判決多半只有主文與
 理由要領，分析用不到；略過可把爬取時間從約 11 天縮到 3 天左右。要連小額一起爬時加 --with-small-claims。
 
-    python crawl_simple_courts.py                      # 開始／接續
-    python crawl_simple_courts.py --dry-run            # 只看各簡易庭各年度還剩哪些月份
-    python crawl_simple_courts.py --courts 臺北簡易庭,板橋簡易庭 --years 2024
+    python data_pipeline/crawl_simple_courts.py                      # 開始／接續
+    python data_pipeline/crawl_simple_courts.py --dry-run            # 只看各簡易庭各年度還剩哪些月份
+    python data_pipeline/crawl_simple_courts.py --courts 臺北簡易庭,板橋簡易庭 --years 2024
 
 中斷：隨時按 Ctrl+C，重跑同一個指令會從中斷的月份接續（進度記在 crawl_state_*簡易庭*_無小額.json）。
 注意：執行期間不要切換 git 分支（子程序每次啟動都會讀當下的 crawler.py）。
 """
 import argparse
+import os
 import sqlite3
 import subprocess
 import sys
@@ -32,6 +33,7 @@ DELAY          = 1.5
 MAX_ATTEMPTS   = 3
 RETRY_WAIT_MIN = 10
 GRACE_SEC      = 60
+HERE           = os.path.dirname(os.path.abspath(__file__))
 
 
 class Interrupted(Exception):
@@ -69,7 +71,7 @@ def run_child(args: list) -> int:
 
 
 def parse_new() -> None:
-    rc = run_child(["html_parser.py"])
+    rc = run_child([os.path.join(HERE, "html_parser.py")])
     if rc != 0:
         print(f"[{now()}] ⚠ 解析結束代碼 {rc}，未解析的紀錄下次執行時會再試", flush=True)
 
@@ -87,7 +89,7 @@ def pending_months(court: str, year: int, skip_small: bool) -> list:
 
 
 def crawl_year(court: str, year: int, skip_small: bool) -> int:
-    args = ["crawl_monthly.py",
+    args = [os.path.join(HERE, "crawl_monthly.py"),
             "--court", court, "--case-type", CASE_TYPE, "--judgment-type", JUDGMENT_TYPE,
             "--year", str(year), "--months", "1-12", "--delay", str(DELAY), "--no-export",
             "--state", state_path(court, year, skip_small)]
@@ -150,5 +152,5 @@ if __name__ == "__main__":
     try:
         sys.exit(main())
     except (KeyboardInterrupt, Interrupted):
-        print(f"\n[{now()}] 已安全中斷。重新執行 python crawl_simple_courts.py 即可接續。")
+        print(f"\n[{now()}] 已安全中斷。重新執行 python data_pipeline/crawl_simple_courts.py 即可接續。")
         sys.exit(130)

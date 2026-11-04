@@ -1,8 +1,8 @@
 """
 用 Datasette 在瀏覽器瀏覽 judgments.db。網頁本身是唯讀的，不會改動資料。
 
-    python browse_db.py            # 開在 http://127.0.0.1:8001
-    python browse_db.py -p 8002    # 其餘參數原樣轉交給 datasette
+    python scripts/browse_db.py            # 開在 http://127.0.0.1:8001
+    python scripts/browse_db.py -p 8002    # 其餘參數原樣轉交給 datasette
 
 啟動前會替分面用的幾個欄位補建索引（已存在就跳過），並放寬 Datasette 預設
 的查詢時間上限：資料庫有 8 萬多筆、近 2 GB，分面統計超過預設的 200 毫秒就會
@@ -15,7 +15,8 @@ import sqlite3
 import subprocess
 import sys
 
-ROOT = os.path.dirname(os.path.abspath(__file__))
+HERE = os.path.dirname(os.path.abspath(__file__))
+ROOT = os.path.dirname(HERE)       # repo 根目錄（judgments.db 所在）
 
 SETTINGS = {
     "sql_time_limit_ms": "10000",    # 單一查詢上限（預設 1000）
@@ -53,7 +54,7 @@ def main() -> int:
         return 1
     ensure_indexes(db_path)
     cmd = [sys.executable, "-m", "datasette", "serve", db_path,
-           "--metadata", os.path.join(ROOT, "datasette_metadata.yml")]
+           "--metadata", os.path.join(HERE, "datasette_metadata.yml")]
     for k, v in SETTINGS.items():
         cmd += ["--setting", k, v]
     cmd += datasette_args

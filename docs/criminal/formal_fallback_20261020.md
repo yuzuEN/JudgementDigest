@@ -74,8 +74,8 @@
 重建使用尚不存在的版本目錄，避免覆寫：
 
 ```bash
-python rebuild_fallback_outputs.py --output-dir finaldata/your_new_version
-python refresh_modeldata.py --input '../modeldata/CAIL格式_刑事判決_2018-2025_v1.1.zip' --output-dir ../modeldata/your_new_version --version v1.5
+python data_pipeline/rebuild_fallback_outputs.py --output-dir finaldata/your_new_version
+python data_pipeline/refresh_modeldata.py --input '../modeldata/CAIL格式_刑事判決_2018-2025_v1.1.zip' --output-dir ../modeldata/your_new_version --version v1.5
 ```
 
 機器可讀統計及程式／資料雜湊見 [JSON](formal_fallback_20261020.json)。

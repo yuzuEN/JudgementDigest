@@ -23,9 +23,9 @@
      truncated_buckets 並在結束時列出
 
 用法:
-    python crawl_batched.py 借名登記 -n 2000
-    python crawl_batched.py 借名登記 -n 1000 --start-year 2018 --end-year 2023
-    python crawl_batched.py 借名登記 -n 1000 --start-date 2020/01/01 --end-date 2024/12/31
+    python data_pipeline/crawl_batched.py 借名登記 -n 2000
+    python data_pipeline/crawl_batched.py 借名登記 -n 1000 --start-year 2018 --end-year 2023
+    python data_pipeline/crawl_batched.py 借名登記 -n 1000 --start-date 2020/01/01 --end-date 2024/12/31
 """
 
 import argparse
@@ -291,10 +291,10 @@ if __name__ == "__main__":
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 範例:
-  python crawl_batched.py 借名登記 -n 2000
-  python crawl_batched.py 借名登記 -n 1000 --start-year 2018 --end-year 2023
-  python crawl_batched.py 借名登記 -n 500  --start-date 2024/01/01 --end-date 2025/04/28
-  python crawl_batched.py -n 0 --court 臺灣臺北地方法院 --case-type 民事 \\
+  python data_pipeline/crawl_batched.py 借名登記 -n 2000
+  python data_pipeline/crawl_batched.py 借名登記 -n 1000 --start-year 2018 --end-year 2023
+  python data_pipeline/crawl_batched.py 借名登記 -n 500  --start-date 2024/01/01 --end-date 2025/04/28
+  python data_pipeline/crawl_batched.py -n 0 --court 臺灣臺北地方法院 --case-type 民事 \\
                           --judgment-type 判決 --start-date 2025/01/01 --end-date 2025/12/31
         """,
     )

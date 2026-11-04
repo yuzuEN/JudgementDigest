@@ -17,10 +17,10 @@ Part 3b — 對既有資料庫回填結構化欄位
 
 使用方式
 ────────
-    python backfill_structured.py --dry-run          # 只統計，不寫入
-    python backfill_structured.py                    # 全量回填
-    python backfill_structured.py --court 臺北 --year 2025
-    python backfill_structured.py --only-missing     # 只補尚未回填的列
+    python data_pipeline/backfill_structured.py --dry-run          # 只統計，不寫入
+    python data_pipeline/backfill_structured.py                    # 全量回填
+    python data_pipeline/backfill_structured.py --court 臺北 --year 2025
+    python data_pipeline/backfill_structured.py --only-missing     # 只補尚未回填的列
 """
 
 from __future__ import annotations

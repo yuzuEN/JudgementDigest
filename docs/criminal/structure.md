@@ -290,7 +290,7 @@
 在專案目錄、具備requirements依賴的Python環境中重現（輸出目錄必須尚不存在）：
 
 ```sh
-python compare_law_extraction.py --output-dir /tmp/jd_law_review_new --snapshot /tmp/jd_law_handoff_baseline_20261019
+python data_pipeline/compare_law_extraction.py --output-dir /tmp/jd_law_review_new --snapshot /tmp/jd_law_handoff_baseline_20261019
 PYTHONPATH="$PWD" python /tmp/jd_law_handoff_result_20261019/classify_comparison.py /tmp/jd_law_review_new
 python -m unittest discover -s tests -t . -q
 ```

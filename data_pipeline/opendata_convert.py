@@ -8,9 +8,9 @@
 由 html_parser 既有的標題白名單辨識，所以結構化欄位跟爬蟲資料一致。
 
 用法:
-    python opendata_convert.py --months 202405                 # 先轉一個月檢查
-    python opendata_convert.py --months 201601-202512          # 全部
-    python opendata_convert.py --months 201601-202512 --delete-rar   # 轉完刪 RAR 省空間
+    python data_pipeline/opendata_convert.py --months 202405                 # 先轉一個月檢查
+    python data_pipeline/opendata_convert.py --months 201601-202512          # 全部
+    python data_pipeline/opendata_convert.py --months 201601-202512 --delete-rar   # 轉完刪 RAR 省空間
 
 輸出：data_opendata/db/刑事判決_全國地院_{年}.db
 """

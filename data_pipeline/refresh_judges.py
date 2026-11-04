@@ -10,8 +10,8 @@
 全文在解析時截到 10 萬字（_cap），長度剛好 10 萬字的列簽名區可能已被截掉，這些列不動。
 更新後請接著跑 backfill_structured.py，judge_count、presiding_judge 等結構化欄位才會跟著更新。
 
-    python refresh_judges.py --dry-run     # 只統計會改幾筆、列出範例
-    python refresh_judges.py               # 備份資料庫後寫入
+    python data_pipeline/refresh_judges.py --dry-run     # 只統計會改幾筆、列出範例
+    python data_pipeline/refresh_judges.py               # 備份資料庫後寫入
 """
 import argparse
 import io
@@ -65,7 +65,7 @@ def main() -> int:
         shutil.copy2(DB_PATH, bak)
     conn.executemany("UPDATE judgments SET judges = ?, clerk = ? WHERE id = ?", changes)
     conn.commit()
-    print("完成。接著執行 python backfill_structured.py 更新 judge_count 等欄位。")
+    print("完成。接著執行 python data_pipeline/backfill_structured.py 更新 judge_count 等欄位。")
     return 0
 
 

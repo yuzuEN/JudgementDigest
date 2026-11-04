@@ -40,7 +40,7 @@ pip install -r requirements.txt
 ### 一鍵完整流程（推薦）
 
 ```bash
-python pipeline.py [keyword] -n <筆數> [選項]
+python data_pipeline/pipeline.py [keyword] -n <筆數> [選項]
 ```
 
 | 參數 | 說明 |
@@ -77,26 +77,26 @@ python pipeline.py [keyword] -n <筆數> [選項]
 
 ```bash
 # 基本用法：搜尋「借名登記」，目標 1000 筆
-python pipeline.py 借名登記 -n 1000
+python data_pipeline/pipeline.py 借名登記 -n 1000
 
 # 限制年份範圍
-python pipeline.py 借名登記 -n 1000 --start-year 2020 --end-year 2024
+python data_pipeline/pipeline.py 借名登記 -n 1000 --start-year 2020 --end-year 2024
 
 # 精確日期範圍
-python pipeline.py 借名登記 -n 500 --start-date 2024/01/01 --end-date 2024/12/31
+python data_pipeline/pipeline.py 借名登記 -n 500 --start-date 2024/01/01 --end-date 2024/12/31
 
 # 顯示瀏覽器視窗（除錯用）
-python pipeline.py 借名登記 -n 100 --no-headless
+python data_pipeline/pipeline.py 借名登記 -n 100 --no-headless
 
 # 裁判日期 + 案號年度（兩個獨立維度，可組合）
-python pipeline.py 借名登記 -n 500 --start-date 2024/01/01 --end-date 2024/12/31 --case-year-start 113 --case-year-end 113
+python data_pipeline/pipeline.py 借名登記 -n 500 --start-date 2024/01/01 --end-date 2024/12/31 --case-year-start 113 --case-year-end 113
 
 # 不給關鍵字，純條件查詢：民國 114 年（裁判日期）臺北地院所有民事判決
-python pipeline.py -n 0 --court 臺灣臺北地方法院 --case-type 民事 --judgment-type 判決 \
+python data_pipeline/pipeline.py -n 0 --court 臺灣臺北地方法院 --case-type 民事 --judgment-type 判決 \
        --start-date 2025/01/01 --end-date 2025/12/31
 
 # 跳過爬取，只重新解析 + 匯出
-python pipeline.py 借名登記 --skip-crawl
+python data_pipeline/pipeline.py 借名登記 --skip-crawl
 ```
 
 ---
@@ -108,8 +108,8 @@ python pipeline.py 借名登記 --skip-crawl
 臺灣臺北地方法院民事**判決**（裁定在清單頁就濾掉，不會下載）。
 
 ```bash
-python crawl_monthly.py --dry-run     # 先預覽：各月狀態、DB 現有筆數、預估時間（不連網）
-python crawl_monthly.py               # 開始跑；中斷後重新執行同一個指令即可接續
+python data_pipeline/crawl_monthly.py --dry-run     # 先預覽：各月狀態、DB 現有筆數、預估時間（不連網）
+python data_pipeline/crawl_monthly.py               # 開始跑；中斷後重新執行同一個指令即可接續
 ```
 
 | 參數 | 說明 |
@@ -157,8 +157,8 @@ python crawl_monthly.py               # 開始跑；中斷後重新執行同一�
 這台機器不會被擋睡，請自行調整電源設定。闔上筆電蓋子仍可能依系統設定而睡眠，三個平台皆然。
 
 ```bash
-python crawl_monthly.py --months 8-12                 # 只跑 8~12 月
-python crawl_monthly.py --export-only --export-all    # 不爬，匯出全年一份 Excel
+python data_pipeline/crawl_monthly.py --months 8-12                 # 只跑 8~12 月
+python data_pipeline/crawl_monthly.py --export-only --export-all    # 不爬，匯出全年一份 Excel
 ```
 
 #### 簡易庭（crawl_simple_courts.py）
@@ -170,9 +170,9 @@ python crawl_monthly.py --export-only --export-all    # 不爬，匯出全年一
 新竹、苗栗、基隆簡易庭沿用地院代碼，判決在一般查詢裡就有，爬地院時已一起抓到。
 
 ```bash
-python crawl_simple_courts.py --dry-run     # 36 個簡易庭 × 2022–2025 各年度的待爬月份
-python crawl_simple_courts.py               # 開始／接續（預設略過小額）
-python crawl_simple_courts.py --courts 臺北簡易庭 --years 2024
+python data_pipeline/crawl_simple_courts.py --dry-run     # 36 個簡易庭 × 2022–2025 各年度的待爬月份
+python data_pipeline/crawl_simple_courts.py               # 開始／接續（預設略過小額）
+python data_pipeline/crawl_simple_courts.py --courts 臺北簡易庭 --years 2024
 ```
 
 | 參數 | 說明 |
@@ -198,12 +198,12 @@ python crawl_simple_courts.py --courts 臺北簡易庭 --years 2024
 
 ```bash
 # 1. 下載（執行時自己輸入帳號密碼，不顯示、不存檔；Token 6 小時，程式會自動重新登入）
-python opendata_download.py --months 202405 --list-only          # 先下載一個月看結構
-python opendata_download.py --months 201601-202512 --delete-list  # 批次下載＋已下架清單
+python data_pipeline/opendata_download.py --months 202405 --list-only          # 先下載一個月看結構
+python data_pipeline/opendata_download.py --months 201601-202512 --delete-list  # 批次下載＋已下架清單
 
 # 2. 轉成跟爬蟲資料庫相同欄位的 SQLite（每年一個檔）
-python opendata_convert.py --months 201801-202512
-python opendata_convert.py --months 201601-201712 --delete-rar    # 轉完刪掉該月 RAR，省硬碟空間
+python data_pipeline/opendata_convert.py --months 201801-202512
+python data_pipeline/opendata_convert.py --months 201601-201712 --delete-rar    # 轉完刪掉該月 RAR，省硬碟空間
 ```
 
 - 下載的 RAR 放在 `data_opendata/`（每月約 270 MB，已被 `.gitignore` 的 `data_*/` 排除），
@@ -223,7 +223,7 @@ python opendata_convert.py --months 201601-201712 --delete-rar    # 轉完刪掉
 **步驟 1：爬取**
 
 ```bash
-python crawl_batched.py [keyword] -n <筆數> [選項]
+python data_pipeline/crawl_batched.py [keyword] -n <筆數> [選項]
 ```
 
 | 參數 | 說明 |
@@ -243,9 +243,9 @@ python crawl_batched.py [keyword] -n <筆數> [選項]
 | `--no-headless` | 顯示瀏覽器視窗 |
 
 ```bash
-python crawl_batched.py 借名登記 -n 1000
-python crawl_batched.py 借名登記 -n 1000 --start-year 2018 --end-year 2023
-python crawl_batched.py -n 0 --court 臺灣臺北地方法院 --case-type 民事 --judgment-type 判決 \
+python data_pipeline/crawl_batched.py 借名登記 -n 1000
+python data_pipeline/crawl_batched.py 借名登記 -n 1000 --start-year 2018 --end-year 2023
+python data_pipeline/crawl_batched.py -n 0 --court 臺灣臺北地方法院 --case-type 民事 --judgment-type 判決 \
        --start-date 2025/01/01 --end-date 2025/12/31
 ```
 
@@ -254,7 +254,7 @@ HTML 快取存於 `html_cache/`，爬取紀錄寫入 `judgments.db`。
 **步驟 2：解析**
 
 ```bash
-python html_parser.py [選項]
+python data_pipeline/html_parser.py [選項]
 ```
 
 | 參數 | 說明 |
@@ -264,14 +264,14 @@ python html_parser.py [選項]
 | `--file <路徑>` | 僅解析指定的單一 HTML 檔案（測試用） |
 
 ```bash
-python html_parser.py            # 解析新增的紀錄
-python html_parser.py --reparse  # 全部重新解析
+python data_pipeline/html_parser.py            # 解析新增的紀錄
+python data_pipeline/html_parser.py --reparse  # 全部重新解析
 ```
 
 **步驟 3：匯出 Excel**
 
 ```bash
-python export_excel.py [選項]
+python data_pipeline/export_excel.py [選項]
 ```
 
 | 參數 | 說明 |
@@ -287,10 +287,10 @@ python export_excel.py [選項]
 | `-o <檔名>` | 指定輸出檔名 |
 
 ```bash
-python export_excel.py -n 0 -k 借名登記       # 匯出全部借名登記資料
-python export_excel.py -n 100                  # 匯出最新解析的 100 筆
-python export_excel.py -n 0 -c 臺灣臺北       # 篩選臺北相關法院
-python export_excel.py -n 0 --full-text        # 含全文欄位
+python data_pipeline/export_excel.py -n 0 -k 借名登記       # 匯出全部借名登記資料
+python data_pipeline/export_excel.py -n 100                  # 匯出最新解析的 100 筆
+python data_pipeline/export_excel.py -n 0 -c 臺灣臺北       # 篩選臺北相關法院
+python data_pipeline/export_excel.py -n 0 --full-text        # 含全文欄位
 ```
 
 排序固定為**解析時間由新到舊**（所以 `-n 100` 是「最近解析的 100 筆」），不是裁判日期。
@@ -322,8 +322,8 @@ Excel 的「適用法條」欄是 `applicable_laws_json` 的易讀呈現
 載入記憶體。
 
 ```bash
-python browse_db.py            # 開啟 http://127.0.0.1:8001 ，Ctrl+C 結束
-python browse_db.py -p 8002    # 其餘參數原樣轉交給 datasette（此例為改用 8002 埠）
+python scripts/browse_db.py            # 開啟 http://127.0.0.1:8001 ，Ctrl+C 結束
+python scripts/browse_db.py -p 8002    # 其餘參數原樣轉交給 datasette（此例為改用 8002 埠）
 ```
 
 - **網頁是唯讀的**，無法透過它修改資料。
@@ -339,7 +339,7 @@ python browse_db.py -p 8002    # 其餘參數原樣轉交給 datasette（此例�
   - **民事：結構化欄位（不含判決內文）**：只列民事分析常用欄位，可輸入法院做部分比對
   - **民事：各法院勝敗分布（給付確認類）**
 - 列表頁的長文字欄位只顯示前 300 字，點進單筆資料可看完整內容。
-- **各資料表與欄位的說明見 [docs/欄位說明.md](docs/欄位說明.md)**（每個欄位是什麼、怎麼來的、
+- **各資料表與欄位的說明見 [docs/欄位說明.md](欄位說明.md)**（每個欄位是什麼、怎麼來的、
   為什麼需要，並標出哪些是民事專用）。Datasette 網頁上只放簡短說明。
 - `requirements.txt` 限制 Datasette 低於 1.0：1.0 把分面、預存查詢等設定從
   metadata 移到另一個設定檔，`datasette_metadata.yml` 需要改寫才能沿用。
@@ -351,7 +351,7 @@ python browse_db.py -p 8002    # 其餘參數原樣轉交給 datasette（此例�
 不做日期切分，直接對單一條件查詢一次。支援法院、案件類別、裁判種類與案號年度篩選：
 
 ```bash
-python crawler.py [keyword] -n <筆數> [選項]
+python data_pipeline/crawler.py [keyword] -n <筆數> [選項]
 ```
 
 | 參數 | 說明 |
@@ -372,13 +372,13 @@ python crawler.py [keyword] -n <筆數> [選項]
 
 ```bash
 # 指定裁判日期區間
-python crawler.py 借名登記 -n 20 --start-date 2024/03/01 --end-date 2024/03/07
+python data_pipeline/crawler.py 借名登記 -n 20 --start-date 2024/03/01 --end-date 2024/03/07
 
 # 裁判日期 + 案號年度（兩個獨立維度）
-python crawler.py 借名登記 -n 20 --start-date 2024/01/01 --end-date 2024/02/14 --case-year-start 113 --case-year-end 113
+python data_pipeline/crawler.py 借名登記 -n 20 --start-date 2024/01/01 --end-date 2024/02/14 --case-year-start 113 --case-year-end 113
 
 # 不給關鍵字的條件查詢（單日）
-python crawler.py -n 20 --court 臺灣臺北地方法院 --case-type 民事 --judgment-type 判決 \
+python data_pipeline/crawler.py -n 20 --court 臺灣臺北地方法院 --case-type 民事 --judgment-type 判決 \
        --start-date 2025/01/08 --end-date 2025/01/08 --label TPD民事判決
 ```
 
@@ -397,7 +397,7 @@ python crawler.py -n 20 --court 臺灣臺北地方法院 --case-type 民事 --ju
 若某些裁判書頁面因網路問題只儲存到不完整的 HTML，可補爬：
 
 ```bash
-python crawler.py --recrawl-stubs
+python data_pipeline/crawler.py --recrawl-stubs
 ```
 
 ## 專案結構
@@ -522,7 +522,7 @@ crawl_batched.py
 
 `structuring.py` 在解析當下從既有文字欄位推導出 35 個結構化欄位，涵蓋
 案件分類、訴訟結果（本訴／反訴分離）、判准與請求金額、結構化法條引用、
-法官與角色、當事人與程序特徵。逐欄說明與使用注意事項見 [docs/欄位說明.md](docs/欄位說明.md)。
+法官與角色、當事人與程序特徵。逐欄說明與使用注意事項見 [docs/欄位說明.md](欄位說明.md)。
 這套規則是為民事判決設計的；刑事判決也會套用，但結果沒有意義，分析刑事時請忽略。
 
 三個設計重點：
@@ -537,11 +537,11 @@ crawl_batched.py
 
 ```bash
 # 規則改版後回填（會自動備份資料庫）
-python backfill_structured.py                    # 全庫
-python backfill_structured.py --court 臺北 --year 2025
-python backfill_structured.py --dry-run          # 只看分布，不寫入
-python backfill_structured.py --only-missing     # 只刷新規則版本較舊的列
-python backfill_structured.py --no-backup        # 略過資料庫備份（不建議）
+python data_pipeline/backfill_structured.py                    # 全庫
+python data_pipeline/backfill_structured.py --court 臺北 --year 2025
+python data_pipeline/backfill_structured.py --dry-run          # 只看分布，不寫入
+python data_pipeline/backfill_structured.py --only-missing     # 只刷新規則版本較舊的列
+python data_pipeline/backfill_structured.py --no-backup        # 略過資料庫備份（不建議）
 ```
 
 `--court`（法院名稱部分比對）與 `--year`（裁判日期的西元年）都不給時處理全庫。
@@ -552,15 +552,15 @@ python backfill_structured.py --no-backup        # 略過資料庫備份（不�
 它會清空 judgments 表，從同學資料庫合併進來、沒有 HTML 檔的列會消失。
 
 ```bash
-python refresh_judges.py --dry-run               # 只統計會改幾筆
-python refresh_judges.py                         # 備份後寫入 judges、clerk
-python backfill_structured.py --no-backup        # 接著回填（上一步已備份）
+python data_pipeline/refresh_judges.py --dry-run               # 只統計會改幾筆
+python data_pipeline/refresh_judges.py                         # 備份後寫入 judges、clerk
+python data_pipeline/backfill_structured.py --no-backup        # 接著回填（上一步已備份）
 ```
 
 > ⚠ 使用 `grant_ratio`（獲償比例）前先看 `grant_ratio_source`。
 > 全部勝訴＝1、敗訴＝0 是依判決結果定義的值，一部勝訴才是判准 ÷ 請求的「計算」值。
 > `claimed_source` 為「主文回推」的請求金額只出現在全部勝訴的案件，不能當分析變數。
-> 詳見 [docs/欄位說明.md](docs/欄位說明.md)。
+> 詳見 [docs/欄位說明.md](欄位說明.md)。
 
 ## 注意事項
 
@@ -652,7 +652,7 @@ python backfill_structured.py --no-backup        # 接著回填（上一步已�
     沒有主文段落的補字裁定；真正的判決有 8 筆，是版型特殊而沒切出主文段落
   - 「無法條引用」旗標：士林 1.5%、臺中 0.8%、新北 0.3%、臺北 0.2%。士林偏高是
     寫作風格：士林的除權判決理由只寫「爰判決如主文」，沒有引用條文
-  - 改善方式是修改 `html_parser.py` 後執行 `python html_parser.py --reparse`，
+  - 改善方式是修改 `html_parser.py` 後執行 `python data_pipeline/html_parser.py --reparse`，
     會從 `html_cache/` 重建，**不需重爬**
 - **`export_excel.py` 的排序固定為解析時間**；依裁判日期排序請用 `crawl_monthly.py --export-only`
 - **「證據並所犯法條」標題的內容會併入 `reasons` 欄，但這段有時是判決簽名之後附的
@@ -662,7 +662,7 @@ python backfill_structured.py --no-backup        # 接著回填（上一步已�
   `--end-date` 會把輸入轉成 `YYYY-MM-DD` 再做字串比較。目前的資料庫已全量重新解析，
   83,368 筆全部是 ISO 格式；但若拿到用舊版程式解析的資料庫（`judgment_date` 還是
   「民國 114 年 01 月 06 日」），篩選會回傳 0 筆，請先執行
-  `python html_parser.py --reparse` 重新正規化
+  `python data_pipeline/html_parser.py --reparse` 重新正規化
 
 ---
 
@@ -672,8 +672,8 @@ python backfill_structured.py --no-backup        # 接著回填（上一步已�
 一列一個「被告 × 罪 × 宣告刑」寫入 `offenses` 表（每次執行整張重建）。
 
 ```bash
-python build_offenses.py --keyword "臺灣臺北地方法院-刑事-判決" -o offenses.xlsx
-python build_offenses.py --export-only -o offenses.xlsx   # 不重建，只匯出現有內容
+python data_pipeline/build_offenses.py --keyword "臺灣臺北地方法院-刑事-判決" -o offenses.xlsx
+python data_pipeline/build_offenses.py --export-only -o offenses.xlsx   # 不重建，只匯出現有內容
 ```
 
 | 參數 | 說明 |
@@ -689,10 +689,10 @@ python build_offenses.py --export-only -o offenses.xlsx   # 不重建，只匯�
 
 從 `export_excel.py` 匯出的 Excel 讀「裁判書資料」分頁，一案一列輸出「罪法刑結構化」分頁
 （罪名／法條／總執行刑／萃取狀態）。跟 `offenses` 表不同：這裡不分被告，多被告案件只取整體結果。
-萃取規則見 [docs/structure.md](docs/structure.md)。
+萃取規則見 [docs/structure.md](criminal/structure.md)。
 
 ```bash
-python structure_tasks.py <輸入.xlsx> -o <輸出.xlsx>
+python data_pipeline/structure_tasks.py <輸入.xlsx> -o <輸出.xlsx>
 ```
 
 `<輸入.xlsx>` 為必填；這個入口與 `build_structured_review.py` 共用逐罪萃取規則，輸出仍是案件層級的彙整欄位。

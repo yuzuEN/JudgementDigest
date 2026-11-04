@@ -37,7 +37,7 @@ jobs:
           pip install -r requirements.txt
 
       - name: 語法檢查
-        run: python -m compileall -q crawler.py crawl_batched.py html_parser.py export_excel.py pipeline.py
+        run: python -m compileall -q data_pipeline scripts
 
       - name: 離線測試
         run: python -m unittest discover -s tests -t . -v
