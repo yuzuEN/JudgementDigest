@@ -6,15 +6,15 @@
 步驟 3: export_excel   — 匯出 Excel
 
 使用方式:
-    python pipeline.py [關鍵字] [-n 筆數] [選項]
+    python data_pipeline/pipeline.py [關鍵字] [-n 筆數] [選項]
 
 範例:
-    python pipeline.py 借名登記 -n 1000
-    python pipeline.py 借名登記 -n 2000 --start-year 2018
-    python pipeline.py 借名登記 -n 500  --start-date 2024/01/01 --end-date 2025/04/28
-    python pipeline.py 借名登記 -n 100  --no-headless
-    python pipeline.py 借名登記 -n 1000 --skip-crawl   # 只重新解析 + 匯出
-    python pipeline.py -n 0 --court 臺灣臺北地方法院 --case-type 民事 \
+    python data_pipeline/pipeline.py 借名登記 -n 1000
+    python data_pipeline/pipeline.py 借名登記 -n 2000 --start-year 2018
+    python data_pipeline/pipeline.py 借名登記 -n 500  --start-date 2024/01/01 --end-date 2025/04/28
+    python data_pipeline/pipeline.py 借名登記 -n 100  --no-headless
+    python data_pipeline/pipeline.py 借名登記 -n 1000 --skip-crawl   # 只重新解析 + 匯出
+    python data_pipeline/pipeline.py -n 0 --court 臺灣臺北地方法院 --case-type 民事 \
                        --judgment-type 判決 --start-date 2025/01/01 --end-date 2025/12/31
 """
 
@@ -140,11 +140,11 @@ if __name__ == "__main__":
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 範例:
-  python pipeline.py 借名登記 -n 1000
-  python pipeline.py 借名登記 -n 2000 --start-year 2018 --end-year 2023
-  python pipeline.py 借名登記 -n 500  --start-date 2024/01/01 --end-date 2025/04/28
-  python pipeline.py 借名登記 -n 1000 --skip-crawl        # 只重解析 + 匯出
-  python pipeline.py -n 0 --court 臺灣臺北地方法院 --case-type 民事 \\
+  python data_pipeline/pipeline.py 借名登記 -n 1000
+  python data_pipeline/pipeline.py 借名登記 -n 2000 --start-year 2018 --end-year 2023
+  python data_pipeline/pipeline.py 借名登記 -n 500  --start-date 2024/01/01 --end-date 2025/04/28
+  python data_pipeline/pipeline.py 借名登記 -n 1000 --skip-crawl        # 只重解析 + 匯出
+  python data_pipeline/pipeline.py -n 0 --court 臺灣臺北地方法院 --case-type 民事 \\
                      --judgment-type 判決 --start-date 2025/01/01 --end-date 2025/12/31
         """,
     )

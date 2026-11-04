@@ -1,7 +1,7 @@
 """從 html_cache 的附表建立 offenses 表（一列 = 一個被告的一個罪的一個宣告刑）。
 
 不動 judgments 表，可重複執行（每次重建 offenses）。
-用法: python build_offenses.py [--keyword ADV:TPD:M] [-o offenses.xlsx]
+用法: python data_pipeline/build_offenses.py [--keyword ADV:TPD:M] [-o offenses.xlsx]
       加 -o 時建表後匯出 Excel；只想匯出、不重建可加 --export-only。
 """
 

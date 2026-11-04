@@ -70,12 +70,12 @@
 
 逐筆資料位於專案內的新目錄（`finaldata` 已被Git忽略；未覆寫既有模型資料）：
 
-- [全部70,197筆before/after](../finaldata/law_extraction_nonnegative_20261019/comparison/all_rows.jsonl)，保留罪名、逐罪原始法條、標準鍵、來源與刑期槽位。
-- [全部變動JSONL](../finaldata/law_extraction_nonnegative_20261019/comparison/changes.jsonl)／[可用試算表開啟的TSV](../finaldata/law_extraction_nonnegative_20261019/comparison/changes.tsv)。
-- [所有新增全空的來源證據](../finaldata/law_extraction_nonnegative_20261019/comparison/new_empty_evidence.jsonl)；[逐條標準化缺口與原因](../finaldata/law_extraction_nonnegative_20261019/comparison/standardization_gaps.jsonl)。
-- [16筆交辦案例](../finaldata/law_extraction_nonnegative_20261019/mandatory_cases.json)、[9筆後續案例](../finaldata/law_extraction_nonnegative_20261019/followup_cases.json)、[6筆數字／省略項次案例](../finaldata/law_extraction_nonnegative_20261019/elision_numeric_cases.json)、[23筆數字匹配回歸](../finaldata/law_extraction_nonnegative_20261019/numeric_matching_recheck.json)。
-- [固定36筆抽查判定](../finaldata/law_extraction_nonnegative_20261019/manual_sample_assessments.json)；`comparison/sample_review.json`是最終類別的另一組自動抽樣，未把它冒充人工審核結果。
-- `before/`、`after/`為程式快照；[摘要與雜湊](law_extraction_nonnegative_20261019.json)及[測試紀錄](../finaldata/law_extraction_nonnegative_20261019/tests_final.log)可核對此次版本。
+- [全部70,197筆before/after](../../finaldata/law_extraction_nonnegative_20261019/comparison/all_rows.jsonl)，保留罪名、逐罪原始法條、標準鍵、來源與刑期槽位。
+- [全部變動JSONL](../../finaldata/law_extraction_nonnegative_20261019/comparison/changes.jsonl)／[可用試算表開啟的TSV](../../finaldata/law_extraction_nonnegative_20261019/comparison/changes.tsv)。
+- [所有新增全空的來源證據](../../finaldata/law_extraction_nonnegative_20261019/comparison/new_empty_evidence.jsonl)；[逐條標準化缺口與原因](../../finaldata/law_extraction_nonnegative_20261019/comparison/standardization_gaps.jsonl)。
+- [16筆交辦案例](../../finaldata/law_extraction_nonnegative_20261019/mandatory_cases.json)、[9筆後續案例](../../finaldata/law_extraction_nonnegative_20261019/followup_cases.json)、[6筆數字／省略項次案例](../../finaldata/law_extraction_nonnegative_20261019/elision_numeric_cases.json)、[23筆數字匹配回歸](../../finaldata/law_extraction_nonnegative_20261019/numeric_matching_recheck.json)。
+- [固定36筆抽查判定](../../finaldata/law_extraction_nonnegative_20261019/manual_sample_assessments.json)；`comparison/sample_review.json`是最終類別的另一組自動抽樣，未把它冒充人工審核結果。
+- `before/`、`after/`為程式快照；[摘要與雜湊](law_extraction_nonnegative_20261019.json)及[測試紀錄](../../finaldata/law_extraction_nonnegative_20261019/tests_final.log)可核對此次版本。
 
 修改的萃取程式為 `structure_tasks.py`（配對、來源與槽位）及 `build_structured_review.py`（各欄位先辨別法院／附件來源）；新增 `tests/test_nonnegative_law_pairing.py`。本次未改 `normalize.py` 或白名單，保留其他未提交修改。
 

@@ -14,16 +14,17 @@ import sys
 import unittest
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "data_pipeline"))
 
 ROOT = Path(__file__).resolve().parents[1]
-README = (ROOT / "README.md").read_text(encoding="utf-8")
+# 爬蟲與資料處理的用法說明在 docs/crawler.md（根目錄的 README.md 是系統介紹）
+README = (ROOT / "docs" / "crawler.md").read_text(encoding="utf-8")
 
 SCRIPTS = [
-    "pipeline.py", "crawl_batched.py", "crawl_monthly.py", "crawler.py",
-    "html_parser.py", "export_excel.py", "tests/live_check.py",
-    "backfill_structured.py", "crawl_simple_courts.py", "refresh_judges.py",
-    "opendata_download.py", "opendata_convert.py",
+    "data_pipeline/pipeline.py", "data_pipeline/crawl_batched.py", "data_pipeline/crawl_monthly.py", "data_pipeline/crawler.py",
+    "data_pipeline/html_parser.py", "data_pipeline/export_excel.py", "tests/live_check.py",
+    "data_pipeline/backfill_structured.py", "data_pipeline/crawl_simple_courts.py", "data_pipeline/refresh_judges.py",
+    "data_pipeline/opendata_download.py", "data_pipeline/opendata_convert.py",
 ]
 
 # 只看 argparse 的參數；`opts.add_argument("--headless=new")` 那些是 Chrome 啟動旗標
@@ -73,7 +74,7 @@ class TestDocumentedDefaults(unittest.TestCase):
     """README 明寫的預設值必須與 argparse 的 default 相符。"""
 
     def _default_of(self, script: str, flag: str) -> str:
-        src = (ROOT / script).read_text(encoding="utf-8")
+        src = (ROOT / "data_pipeline" / script).read_text(encoding="utf-8")
         m = re.search(
             r'add_argument\([^)]*"' + re.escape(flag) + r'"[^)]*?default\s*=\s*([^,)\s]+)',
             src, re.DOTALL)
@@ -88,7 +89,7 @@ class TestDocumentedDefaults(unittest.TestCase):
 
     def test_pipeline_num_default_100(self):
         self.assertEqual(self._default_of("pipeline.py", "--num"), "100")
-        self.assertIn("預設: 100", (ROOT / "pipeline.py").read_text(encoding="utf-8"))
+        self.assertIn("預設: 100", (ROOT / "data_pipeline" / "pipeline.py").read_text(encoding="utf-8"))
 
     def test_crawler_num_default_10(self):
         # README：「爬取筆數，預設 10」

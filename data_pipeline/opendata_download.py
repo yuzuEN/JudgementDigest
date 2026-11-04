@@ -5,9 +5,9 @@
 帳號密碼在執行時由使用者自己輸入（getpass，不顯示、不存檔），只在記憶體中換成 Token 使用。
 
 用法:
-    python opendata_download.py --months 202405 --list-only     # 先下載一個月，看壓縮檔裡的結構
-    python opendata_download.py --months 201801-202512           # 之後再批次下載
-    python opendata_download.py --delete-list                    # 已下架的裁判書清單
+    python data_pipeline/opendata_download.py --months 202405 --list-only     # 先下載一個月，看壓縮檔裡的結構
+    python data_pipeline/opendata_download.py --months 201801-202512           # 之後再批次下載
+    python data_pipeline/opendata_download.py --delete-list                    # 已下架的裁判書清單
 
 壓縮檔放在 data_opendata/（.gitignore 已排除 data_*/）。
 """
@@ -25,7 +25,7 @@ import urllib.error
 import urllib.request
 
 BASE = "https://opendata.judicial.gov.tw"
-OUT = os.path.join(os.path.dirname(os.path.abspath(__file__)), "data_opendata")
+OUT = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "data_opendata")
 SEVEN_ZIP = r"C:\Program Files\7-Zip\7z.exe"
 
 # 司法院憑證缺 Subject Key Identifier，Python 3.13 的嚴格模式會擋；仍驗證憑證鏈，只關嚴格檢查

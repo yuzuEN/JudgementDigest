@@ -3,15 +3,15 @@ Part 1 — 司法院裁判書自動爬蟲
 目標網站: https://judgment.judicial.gov.tw/FJUD/default.aspx
 
 使用方式:
-    python crawler.py [關鍵字] [-n 筆數] [--no-headless]
+    python data_pipeline/crawler.py [關鍵字] [-n 筆數] [--no-headless]
                       [--start-date YYYY/MM/DD] [--end-date YYYY/MM/DD]
                       [--case-year-start 民國年] [--case-year-end 民國年]
                       [--court 法院] [--case-type 民事] [--judgment-type 判決]
 
 範例:
-    python crawler.py 詐欺 -n 20
-    python crawler.py 勞動契約 -n 10 --start-date 2023/01/01 --end-date 2023/12/31 --no-headless
-    python crawler.py -n 50 --court 臺灣臺北地方法院 --case-type 民事 --judgment-type 判決 \
+    python data_pipeline/crawler.py 詐欺 -n 20
+    python data_pipeline/crawler.py 勞動契約 -n 10 --start-date 2023/01/01 --end-date 2023/12/31 --no-headless
+    python data_pipeline/crawler.py -n 50 --court 臺灣臺北地方法院 --case-type 民事 --judgment-type 判決 \
                       --start-date 2025/01/01 --end-date 2025/01/07
 """
 

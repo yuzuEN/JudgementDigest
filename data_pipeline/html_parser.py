@@ -17,8 +17,8 @@ Part 2 — 裁判書 HTML 結構化解析器
   div#JudrelaLaw             → 相關法條面板
 
 使用方式:
-    python html_parser.py                   # 批次處理所有未解析紀錄
-    python html_parser.py --file <path>     # 解析單一 HTML 檔案
+    python data_pipeline/html_parser.py                   # 批次處理所有未解析紀錄
+    python data_pipeline/html_parser.py --file <path>     # 解析單一 HTML 檔案
 """
 
 import sys, io

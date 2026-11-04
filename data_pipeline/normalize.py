@@ -13,7 +13,7 @@ from driving_charge import is_driving_charge, driving_charge_kind
 
 SOURCE_SHEET = "罪法刑結構化"
 OUTPUT_SHEET = "標準化"
-# 全資料原始引用前 200 名且至少 30 件的快照（150 類；排除指定三條）；詳見「白名單.md」。
+# 全資料原始引用前 200 名且至少 30 件的快照（150 類；排除指定三條）；詳見「docs/criminal/白名單.md」。
 # 跨時間驗證須只用訓練資料重建前 200 名並套用至少 30 件門檻，不可直接使用此快照。
 LAW_WHITELIST = frozenset({
     "刑法第320條",

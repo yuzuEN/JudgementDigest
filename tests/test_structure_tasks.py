@@ -2,7 +2,7 @@
 """
 structure_tasks.py 及其合併、標準化後處理的離線測試。
 
-之前完全沒有接入 pytest（只有手動執行 `python structure_tasks.py` 時
+之前完全沒有接入 pytest（只有手動執行 `python data_pipeline/structure_tasks.py` 時
 才會跑 self_check()），PR #4 review 兩次指出這個缺口。這裡先把
 self_check() 接進 pytest，再補今天實際修過的兩個 bug 的回歸測試。
 """
@@ -15,7 +15,7 @@ from pathlib import Path
 
 from openpyxl import Workbook, load_workbook
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "data_pipeline"))
 
 from merge import merge_workbooks  # noqa: E402
 from build_structured_review import HEADERS, build_row  # noqa: E402
