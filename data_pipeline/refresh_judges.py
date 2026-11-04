@@ -36,6 +36,13 @@ def main() -> int:
     args = ap.parse_args()
 
     conn = sqlite3.connect(DB_PATH)
+    try:
+        return _refresh(conn, args)
+    finally:
+        conn.close()
+
+
+def _refresh(conn: sqlite3.Connection, args: argparse.Namespace) -> int:
     rows = conn.execute("SELECT id, judges, clerk, full_text FROM judgments "
                         "WHERE full_text IS NOT NULL AND length(full_text) < ?",
                         (FULL_TEXT_CAP,))
