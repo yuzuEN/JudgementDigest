@@ -16,11 +16,13 @@
 注意：執行期間不要切換 git 分支（子程序每次啟動都會讀當下的 crawler.py）。
 """
 import argparse
+import sqlite3
+import subprocess
 import sys
 import time
+from datetime import datetime
 
 import crawl_monthly
-from crawl_refresh import Interrupted, now, parse_new, record_count, run_child
 from crawler import SIMPLE_ONLY_COURTS
 
 YEARS          = (2025, 2024, 2023, 2022)
@@ -29,6 +31,47 @@ JUDGMENT_TYPE  = "判決"
 DELAY          = 1.5
 MAX_ATTEMPTS   = 3
 RETRY_WAIT_MIN = 10
+GRACE_SEC      = 60
+
+
+class Interrupted(Exception):
+    pass
+
+
+def now() -> str:
+    return datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+
+
+def record_count() -> int:
+    with sqlite3.connect("judgments.db") as c:
+        return c.execute("SELECT COUNT(*) FROM crawl_records").fetchone()[0]
+
+
+def run_child(args: list) -> int:
+    """Ctrl+C 會同時送到子程序：等它把狀態檔寫好再結束，超過 GRACE_SEC 才強制終止。"""
+    p = subprocess.Popen([sys.executable, *args])
+    try:
+        return p.wait()
+    except KeyboardInterrupt:
+        print(f"\n[{now()}] 收到中斷，等待子程序收尾（最多 {GRACE_SEC} 秒，請勿關閉視窗）……",
+              flush=True)
+        deadline = time.time() + GRACE_SEC
+        while p.poll() is None and time.time() < deadline:
+            try:
+                p.wait(timeout=1)
+            except (subprocess.TimeoutExpired, KeyboardInterrupt):
+                pass
+        if p.poll() is None:
+            print(f"[{now()}] 子程序未在時限內結束，強制終止", flush=True)
+            p.kill()
+            p.wait()
+        raise Interrupted
+
+
+def parse_new() -> None:
+    rc = run_child(["html_parser.py"])
+    if rc != 0:
+        print(f"[{now()}] ⚠ 解析結束代碼 {rc}，未解析的紀錄下次執行時會再試", flush=True)
 
 
 def state_path(court: str, year: int, skip_small: bool) -> str:
