@@ -1463,3 +1463,200 @@ class TestCaseTypeMid(unittest.TestCase):
         self.assertEqual(S.case_type_mid("物權／不動產", "遷讓房屋"), "不動產：遷讓房屋")
         self.assertEqual(S.case_type_mid("金融借貸", "清償借款"), "金融借貸")
         self.assertEqual(S.case_type_mid("", ""), "")
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# 規則 2.5.0（進度報告第 6 節）
+# ═══════════════════════════════════════════════════════════════════════════
+
+class TestSections250(unittest.TestCase):
+    """2.5.0 段落切分：答辯開頭看位置、當事人寫的「經查」不切。"""
+
+    def test_plaintiff_quoting_defendant_is_not_defense(self):
+        """REGRESSION（問題 D，核對 #9 #13）：原告主張裡的「被告辯稱…云云」是原告在反駁。"""
+        text = ("一、原告主張：被告向原告借款50萬元。被告辯稱該款項係贈與云云，顯不足採。"
+                "並聲明：被告應給付原告50萬元。二、被告則以：該款項係贈與等語，資為抗辯。"
+                "三、本院之判斷：原告提出借據為證。")
+        r = S.split_reasoning_sections(text, "", "")
+        self.assertIn("顯不足採", r["plaintiff_claim_text"])
+        self.assertTrue(r["defendant_defense_text"].startswith("被告則以"))
+
+    def test_mid_sentence_defendant_is_not_defense(self):
+        """REGRESSION（問題 D）：「系爭地下室為被告之專有部分」不是答辯開頭。"""
+        text = ("一、原告主張：系爭地下室為被告之專有部分，長期疏於管理。並聲明：被告應給付10萬元。"
+                "二、被告則以：已定期清潔等語置辯。三、本院之判斷：查…")
+        r = S.split_reasoning_sections(text, "", "")
+        self.assertIn("疏於管理", r["plaintiff_claim_text"])
+        self.assertTrue(r["defendant_defense_text"].startswith("被告則以"))
+
+    def test_party_jingcha_does_not_cut_defense(self):
+        """REGRESSION（問題 C，核對 #7）：被告自己寫的「經查」不是法院判斷。"""
+        text = ("一、原告主張：被告應給付貨款。二、被告則以：原告未依約交貨，經查原告從未通知驗收，"
+                "被告自得拒絕給付等語，資為抗辯。三、本院之判斷：經查，原告提出出貨單為證。")
+        r = S.split_reasoning_sections(text, "", "")
+        self.assertIn("自得拒絕給付", r["defendant_defense_text"])
+        self.assertTrue(r["court_reasoning_text"].startswith("三、本院之判斷"))
+
+    def test_party_congerr_does_not_empty_defense(self):
+        """REGRESSION：原告主張裡的「從而」曾讓整段答辯消失（答辯空白約 7,000 件的主因）。"""
+        text = ("一、原告主張：被告未依約付款，從而原告得請求給付。並聲明：如主文所示。"
+                "二、被告均同意原告請求而為認諾。三、按當事人於言詞辯論時為訴訟標的之認諾者…")
+        r = S.split_reasoning_sections(text, "", "")
+        self.assertTrue(r["defendant_defense_text"].startswith("被告均同意"))
+        self.assertTrue(r["court_reasoning_text"].startswith("三、按"))
+
+    def test_nested_heading_is_not_defense(self):
+        """REGRESSION：「壹、原告主張：一、被告優達客公司…」的「一、」是原告段的小點。"""
+        text = ("壹、原告主張：一、被告優達客公司自101年起向原告承租房屋。二、被告積欠租金。"
+                "並聲明：被告應給付租金。貳、被告抗辯：一、租金已付清等語置辯。"
+                "參、兩造不爭執事項：㈠租約存在。")
+        r = S.split_reasoning_sections(text, "", "")
+        self.assertIn("積欠租金", r["plaintiff_claim_text"])
+        self.assertTrue(r["defendant_defense_text"].startswith("被告抗辯"))
+        self.assertTrue(r["court_reasoning_text"].startswith("參、兩造不爭執事項"))
+
+    def test_name_instead_of_defendant(self):
+        text = ("一、原告主張：林妙芬未付工程款。並聲明：林妙芬應給付10萬元。"
+                "二、林妙芬則以：工程未完工等語置辯。三、兩造不爭執事項：㈠承攬契約存在。")
+        r = S.split_reasoning_sections(text, "", "")
+        self.assertTrue(r["defendant_defense_text"].startswith("林妙芬則以"))
+
+    def test_substantive_marker_inside_court_section_ignored(self):
+        """REGRESSION（464482）：法院段句中的「本案部分」曾讓原告主張從法院段開始。"""
+        text = ("一、原告主張：被告應給付價金。並聲明：被告應給付10萬元。二、被告則以：已付清等語置辯。"
+                "三、得心證之理由：關於本案部分，原告請求為有理由。")
+        r = S.split_reasoning_sections(text, "", "")
+        self.assertTrue(r["plaintiff_claim_text"].startswith("原告主張"))
+        self.assertNotIn("有理由", r["plaintiff_claim_text"] + r["defendant_defense_text"])
+
+    def test_hypothetical_court_by_party(self):
+        """REGRESSION（核對 #7）：被告寫「縱使假設法院認定…」不是法院判斷。"""
+        text = ("一、原告主張：被告應給付權利金。二、被告則以：無授權事實。又縱使假設法院認定被告應給付，"
+                "被告亦得主張抵銷等語，資為抗辯。三、本院之判斷：…")
+        r = S.split_reasoning_sections(text, "", "")
+        self.assertIn("主張抵銷", r["defendant_defense_text"])
+
+    def test_claim_marker_mid_sentence_is_not_claim_start(self):
+        """REGRESSION（全庫抽讀 417234、461443）：法院段、程序段句中的「原告主張」不是原告主張的開頭。"""
+        text = ("壹、程序方面：查原告主張被告非法解雇一節，為被告所否認，有確認利益。"
+                "貳、實體方面：一、原告主張：被告於110年解僱原告。二、被告則以：原告曠職等語置辯。"
+                "三、本院之判斷：經查，應堪認原告主張屬實。")
+        r = S.split_reasoning_sections(text, "", "")
+        self.assertTrue(r["plaintiff_claim_text"].startswith("原告主張：被告於110年"))
+        self.assertNotIn("確認利益", r["plaintiff_claim_text"])
+
+    def test_claim_with_count(self):
+        """REGRESSION（359141）：「原告2人起訴主張」曾整件無法切分。"""
+        text = ("甲、兩造聲明及陳述要旨：一、原告2人起訴主張：被告詐騙原告。二、被告則以：否認等語置辯。"
+                "三、本院之判斷：…")
+        r = S.split_reasoning_sections(text, "", "")
+        self.assertEqual(r["section_split_status"], "成功")
+        self.assertTrue(r["plaintiff_claim_text"].startswith("原告2人起訴主張"))
+
+    def test_numeral_list_is_not_heading(self):
+        """REGRESSION（406936、353563）：「刑事一、二審」「第一、二次」不是段落標題。"""
+        text = ("一、原告主張：被告撞傷原告。二、被告則以：原告傷勢業經刑事一、二審法院認定，"
+                "第一、二次鑑定結果不同等語置辯。三、本院之判斷：…")
+        r = S.split_reasoning_sections(text, "", "")
+        self.assertIn("第一、二次鑑定結果不同", r["defendant_defense_text"])
+
+    def test_undisputed_mention_in_claim(self):
+        """REGRESSION（379199）：原告段裡的「如後述兩造不爭執事項所載」不是法院判斷的開頭。"""
+        text = ("一、原告主張：原告等受僱於被告（任職期間如後述兩造不爭執事項所載），被告積欠加班費。"
+                "二、被告則以：已依法給付等語置辯。三、兩造不爭執事項：㈠僱傭關係存在。")
+        r = S.split_reasoning_sections(text, "", "")
+        self.assertIn("積欠加班費", r["plaintiff_claim_text"])
+        self.assertTrue(r["defendant_defense_text"].startswith("被告則以"))
+        self.assertTrue(r["court_reasoning_text"].startswith("三、兩造不爭執事項"))
+
+    def test_second_defendant_section_kept(self):
+        """REGRESSION（405789）：多位被告各寫一段答辯，第二段也是答辯。"""
+        text = ("一、原告主張：被告醫療疏失。二、乙○○則以：已盡注意義務等語置辯。並聲明：原告之訴駁回。"
+                "三、聖功醫院則以：同乙○○所述等語置辯。並聲明：原告之訴駁回。"
+                "四、本院之判斷：…")
+        r = S.split_reasoning_sections(text, "", "")
+        self.assertIn("聖功醫院則以", r["defendant_defense_text"])
+        self.assertTrue(r["court_reasoning_text"].startswith("四、本院之判斷"))
+
+    def test_court_restating_defense_not_kept_as_defense(self):
+        """法院段裡的「四、被告抗辯…等語，惟查…」不能被當成另一段答辯。"""
+        text = ("一、原告主張：被告欠款。二、被告則以：已清償等語置辯。"
+                "三、被告抗辯已清償等語，經查並無清償證據，堪認原告請求有理由。")
+        r = S.split_reasoning_sections(text, "", "")
+        self.assertNotIn("堪認", r["defendant_defense_text"])
+
+    def test_weekday_list_is_not_heading(self):
+        """REGRESSION（v5 人工核對 324862）：「週一、週三、週五」不是段落標題。"""
+        text = ("一、原告主張：被告積欠加班費。二、被告則以：原告主張其週一、週三、週五延長工時，"
+                "與出勤紀錄不符等語置辯。三、本院之判斷：…")
+        r = S.split_reasoning_sections(text, "", "")
+        self.assertIn("與出勤紀錄不符", r["defendant_defense_text"])
+
+    def test_heading_inside_quote(self):
+        """REGRESSION（v5 人工核對 413024）：答辯引用鑑定報告「研議：一、…二、…」，引號裡的不是標題。"""
+        text = ("一、原告主張：被告未設號誌。二、被告則以：車鑑會鑑定結果為：「研議：一、吳俊賢闖紅燈為肇事原因。"
+                "二、蘇柏超無肇事因素。」，顯見事故與號誌無關等語置辯。三、本院之判斷：…")
+        r = S.split_reasoning_sections(text, "", "")
+        self.assertIn("顯見事故與號誌無關", r["defendant_defense_text"])
+        self.assertTrue(r["court_reasoning_text"].startswith("三、本院之判斷"))
+
+    def test_trailing_headings_removed(self):
+        """問題 A：段尾不留下一段的編號。"""
+        r = S.split_reasoning_sections(TestReasoningSections.CONTESTED, "", "")
+        for col in ("plaintiff_claim_text", "defendant_defense_text"):
+            self.assertNotRegex(r[col], r"(?:[一二三四五六七八九十]、|[㈠-㈩])$")
+
+
+class TestRules250(unittest.TestCase):
+
+    def test_provisional_without_zhi(self):
+        """REGRESSION（M1）：「原告其餘假執行聲請駁回」只是不准假執行。"""
+        v = "一、被告應給付原告10萬元。二、訴訟費用由被告負擔。三、原告其餘假執行聲請駁回。"
+        self.assertEqual(S.classify_outcome(v)["outcome"], S.WIN)
+
+    def test_missing_dismiss_rest_flag(self):
+        row = dict(TestDeriveStructuredFields.BASE,
+                   verdict="一、被告應給付原告10萬元。二、訴訟費用由被告負擔百分之六十，餘由原告負擔。")
+        r = S.derive_structured_fields(row)
+        self.assertEqual(r["outcome"], S.WIN)
+        self.assertIn("疑似漏寫其餘駁回", r["quality_flags"])
+        full = dict(TestDeriveStructuredFields.BASE,
+                    verdict="一、被告應給付原告10萬元。二、訴訟費用由被告負擔。")
+        self.assertNotIn("疑似漏寫其餘駁回", S.derive_structured_fields(full)["quality_flags"])
+
+    def test_corp_government_and_sole_proprietor(self):
+        self.assertEqual(S.party_is_corp("臺北市政府工務局", ""), 1)
+        self.assertEqual(S.party_is_corp("國立臺灣大學", ""), 1)
+        self.assertEqual(S.party_is_corp("王小明即小明建築師事務所", ""), 0)
+        self.assertEqual(S.party_is_corp("王小明；甲有限公司", ""), 1)
+        self.assertEqual(S.party_is_corp("王小明", ""), 0)
+
+    def test_corp_truncated_name_restored(self):
+        """REGRESSION：解析器在「設」停下，「台灣設計股份有限公司」只剩「台灣」。"""
+        head = "原　　告　台灣設計股份有限公司\n法定代理人　王大明\n被　　告　李四　住臺北市"
+        self.assertEqual(S.party_is_corp("台灣", head), 1)
+        self.assertEqual(S.party_is_corp("李四", head), 0)
+
+    def test_defendant_government_is_corp_in_derive(self):
+        row = dict(TestDeriveStructuredFields.BASE, defendant="新北市政府工務局")
+        self.assertEqual(S.derive_structured_fields(row)["defendant_is_corp"], 1)
+
+    def test_no_plaintiff_is_corp_column(self):
+        """原告的當事人類型以同學的 parties.py 為準，規則不另外輸出 plaintiff_is_corp。"""
+        self.assertNotIn("plaintiff_is_corp", [c for c, _ in S.STRUCTURED_COLUMNS])
+        self.assertNotIn("plaintiff_is_corp", S.derive_structured_fields(dict(TestDeriveStructuredFields.BASE)))
+
+    def test_farmers_association_is_financial(self):
+        self.assertEqual(S.normalize_case_type("清償借款", "雲林縣斗南鎮農會")[1], "金融借貸")
+
+    def test_construction_damages_mid(self):
+        row = dict(TestDeriveStructuredFields.BASE, case_type="損害賠償",
+                   case_number="臺灣臺北地方法院 112 年度建字第 12 號民事判決",
+                   facts_and_reasons="原告主張：被告施作工程不符約定，致原告受有損害。")
+        self.assertEqual(S.derive_structured_fields(row)["case_type_mid"], "契約：工程與承攬")
+
+    def test_claim_basis_new_patterns(self):
+        g = lambda t: S.extract_claim_basis(t)["claim_basis_group"]
+        self.assertEqual(g("原告主張：爰依侵權行為關係，請求被告賠償。"), "侵權行為")
+        self.assertEqual(g("原告主張：被告積欠管理費，爰依社區規約請求給付。"), "物權")
+        self.assertEqual(g("原告主張：爰依國家賠償法之規定，請求被告賠償。"), "國家賠償")

@@ -383,8 +383,10 @@ _COUNTER_TOKEN_RE = re.compile(r"反訴")
 # 「原告假執行之聲請駁回」只是不准假執行，不是實體請求被駁回。
 # 把它當成敗訴判項會讓全部勝訴的案件被誤標成一部勝訴一部敗訴。
 # 但「原告之訴及假執行之聲請均駁回」同時駁回實體請求，必須保留。
+# 2.5.0：「之」可省略。「原告其餘假執行聲請駁回」被當成敗訴判項，全部勝訴的案件
+# 被判成一部勝訴一部敗訴（使用者人工核對 M1 發現，v4 中 6 件）。
 _PROV_EXEC_ONLY_DISMISS_RE = re.compile(
-    r"^[一二三四五六七八九十\d、.㈠-㈩]*(?:原告|被告|反訴原告)?(?:其餘)?假執行之聲請(?:均)?駁回$")
+    r"^[一二三四五六七八九十\d、.㈠-㈩]*(?:原告|被告|反訴原告)?(?:其餘)?假執行之?聲請(?:均)?駁回$")
 
 # 結果標籤（與既有資料集詞彙一致，確保可比較）
 WIN = "勝訴"
@@ -1332,8 +1334,9 @@ _CASE_TYPE_RULES: List[Tuple[str, str]] = [
 
 # 金融機構原告。同樣是「清償借款」，銀行告債務人與自然人之間的借貸
 # 在證據結構與到庭率上差很多，不分開的話這個控制變數等於沒用。
+# 2.5.0：農會、漁會的放款都經由信用部，但原告欄常只寫「○○區農會」（實測 120 件被歸為民間借貸）
 _FINANCIAL_PLAINTIFF_RE = re.compile(
-    r"(商業銀行|銀行|信用合作社|農會信用部|漁會信用部|資產管理|融資|租賃股份|"
+    r"(商業銀行|銀行|信用合作社|農會|漁會|資產管理|融資|租賃股份|"
     r"人壽保險|產物保險|證券|投信|票券|信用卡|星展|花旗|匯豐|渣打)")
 
 _CASE_TYPE_NOISE_RE = re.compile(r"[（(].*?[)）]|等$|事件$")
@@ -1448,6 +1451,39 @@ def case_type_mid(category: str, norm: str, claim_text: str = "") -> str:
 _CORP_RE = re.compile(r"(股份有限公司|有限公司|公司|銀行|商業銀行|合作社|基金會|協會|"
                       r"學會|工會|事務所|管理委員會|農會|漁會|社團法人|財團法人)")
 _AGENT_SPLIT_RE = re.compile(r"[；;、,，]+")
+
+# ── 2.5.0 當事人是否為法人（逐一判斷每個當事人名稱）──
+# 2.4.0 只拿 _CORP_RE 比對整個欄位，有三種系統性錯誤（欄位準確度報告第 4 節）：
+#   1. 政府機關、公立學校、醫院不在清單裡，被當成自然人
+#   2. 「王小明即小明建築師事務所」是獨資，不是法人，卻因為「事務所」被當成法人
+#   3. 名稱被解析器截斷：html_parser 的 _NAME_STOP_RE 在「住設居籍」停下來，
+#      「台灣設計股份有限公司」只剩「台灣」（原告 918 件、被告 1,534 件）。
+#      解析器的欄位不在這裡改（要重新解析網頁），判斷法人時回全文補回完整名稱。
+_GOV_RE = re.compile(r"政府|公所|國防部|部$|署|局$|處$|分署|分局|國軍|榮民|(?<!管理)委員會|"
+                     r"國立|市立|縣立|醫院|大學|學校|中學|國小|國中|高中|法院|中央研究院")
+_TRUNC_ORG = r"(?:股份有限公司|有限公司|公司|事務所|企業社|工程行|商行|協會|基金會|合作社|委員會|中心)"
+
+
+def _restore_name(name: str, head: str) -> str:
+    """名稱在「住設居籍」被截斷時，從判決書開頭補回完整名稱；補不回來就原樣回傳。"""
+    m = re.search(re.escape(name) + rf"([設住居籍][^\s　\n]{{0,14}}?{_TRUNC_ORG})", head)
+    return name + m.group(1) if m else name
+
+
+def _name_is_corp(name: str) -> bool:
+    # 獨資商號：「即」前面才是當事人本人
+    core = name.split("即", 1)[0]
+    return bool(_CORP_RE.search(core) or _GOV_RE.search(core))
+
+
+def party_is_corp(names: str, full_text: str) -> int:
+    """
+    任一當事人是法人（含政府機關）就是 1。目前只用在 defendant_is_corp（Base 模型的變數）；
+    當事人類型的正式定義是同學的 parties.py，合併後 defendant_is_corp 建議改由它推算。
+    """
+    head = (full_text or "")[:1500]
+    parts = [p.strip() for p in re.split(r"[；;]", names or "") if p.strip()]
+    return int(any(_name_is_corp(_restore_name(p, head)) for p in parts))
 
 
 # 程序地位。第一審用「原告／被告」，上訴審改用「上訴人／被上訴人」，
@@ -1651,8 +1687,6 @@ def _parse_fraction(frac: str) -> Optional[float]:
 # 實測給付確認類民事判決 57,034 筆，98.4% 切得出三段。
 # 切不出法院判斷時三欄一律留空——寧可沒有資料，也不要給出可能混入判斷的主張段落。
 
-_SEC_CLAIM_RE = re.compile(
-    r"原告(?:起訴)?(?:主張|意旨|略以|陳稱|方面|部分|之主張|起訴主張)|原告[^。；，]{0,6}?(?:主張|起訴)略以")
 _SEC_DEFENSE_RE = re.compile(
     r"(?:被告|相對人)[^。；，]{0,10}?(?:則以|則辯稱|辯稱|辯以|抗辯|答辯|方面|部分|置辯)"
     r"|(?:被告|相對人)[^。；]{0,12}?(?:經合法通知|未於(?:最後)?言詞辯論|未到場|未提出書狀)")
@@ -1660,14 +1694,145 @@ _SEC_DEFENSE_END_RE = re.compile(
     r"等語[^。]{0,12}?(?:抗辯|置辯|答辯|辯解|資為|以資)|(?:免為|請准宣告)假執行"
     r"|未提出(?:任何)?(?:書狀|答辯)[^。]{0,20}?(?:陳述|聲明|答辯)")
 _SEC_COURT_RE = re.compile(
-    r"(?:本院|法院)(?:之|的)?(?:判斷|認定|審酌|得心證)|得心證之理由"
+    r"(?:本院|法院)(?:之|的)?(?:判斷|認定|審酌|得心證)|得心證之?理由"
     r"|兩造(?:不爭執|爭執|之爭點|爭點)|本件(?:之)?爭點|爭點(?:厥為|在於|如下)"
     r"|經查|(?:^|[。：:、])查[，:：]?"
     r"|原告(?:所)?主張之?(?:上開|前揭|上揭|前開|上述)?(?:事實|情節|各情)[^。]{0,20}?(?:業據|有|為被告所不爭執)"
     r"|^按|[。、：:]按[^。]{0,40}?(?:定有明文|規定|者)|茲(?:分述|論述)如下|綜上|從而")
-_SEC_HEAD_RE = re.compile(r"(?:[一二三四五六七八九十]{1,3}|[壹貳參叁肆伍陸柒捌玖拾])、")
-_SEC_TRAILING_HEAD_RE = re.compile(r"(?:[一二三四五六七八九十]{1,3}|[壹貳參叁肆伍陸柒捌玖拾])、$")
 _SEC_SUBSTANTIVE_RE = re.compile(r"(?:實體|本案)(?:方面|部分)")
+
+# ── 2.5.0 的切點（文字資料集核對的 C、D 問題，見進度報告第 2.1 節）──
+# 2.4.0 只要在原告主張之後看到任何一個標記就切，兩種錯誤因此大量出現：
+#   D. 原告主張裡的「系爭地下室為被告之專有部分」「被告雖辯稱…云云」被當成答辯開頭。
+#      實測切分成功的對審案件中，答辯段有 12.5% 是從句子中間開始的，幾乎都是原告的話。
+#   C. 當事人自己寫的「經查」「從而」「按…規定」被當成法院判斷的開頭：
+#      答辯被截斷，或整段答辯被切掉（「被告答辯段空白」的案件約 7,000 件）。
+# 2.5.0 依位置分強弱：
+#   答辯開頭　只認段落標題（「二、被告則以」）；沒有標題時才認句首的明確寫法（「。被告則以：」），
+#             而且那一句不能有「雖」「云云」（原告在轉述、反駁被告）。
+#   法院判斷　明確的寫法（本院之判斷、得心證之理由、爭點、不爭執事項）在哪裡都算；
+#             「經查」「按」「從而」「綜上」這類當事人也會寫的字，只有在段落標題後面才算；
+#             答辯以「等語，資為抗辯」收尾後的第一個段落標題仍然算（2.4.0 的結構規則）。
+#   都找不到時退回 2.4.0 的規則，不讓案件因為改規則而消失。
+# 段落標題。「刑事一、二審」「第一、二次」「唯一、」「附表一、二所示」「週一、週三」不是標題：前面接「第前後唯表週…」或
+# 後面接「二審」「二次」「二年」的不算（全庫抽讀時發現答辯在這些地方被截斷）
+_SEC_BIG_HEAD = (r"(?<![第前後約近逾每唯單同統逐之萬表號欄項款條圖週周期])"
+                 r"(?:[一二三四五六七八九十]{1,3}|[壹貳參叁肆伍陸柒捌玖拾]|[甲乙丙丁戊])、"
+                 r"(?![一二三四五六七八九十]{1,2}(?:審|次|年|樓|個|名|項|款|條|位|期|筆|人|份|層|張|屆|案|週|周|月|日|號|成|倍))")
+_SEC_HEAD_RE = re.compile(_SEC_BIG_HEAD)
+_SEC_SMALL_HEAD = r"(?:[㈠-㈩㊀-㊉]|[(（][一二三四五六七八九十]{1,3}[)）]|\d{1,2}[.、．](?!\d))"
+# 原告主張的開頭要在段落起點：標題、冒號、句號後，或「實體部分」「兩造聲明及陳述要旨」後面。
+# 2.4.0 在任何位置都算，句中的「經查：⒈原告主張…」「故原告主張…應屬無據」「應堪認原告主張…屬實」
+# 會讓原告段從法院判斷或被告答辯開始（全庫抽讀：前面不是標題或標點的 1,757 件中多數是這種）。
+_SEC_CLAIM_WORD = (r"原告(?:\d+人|等\d*人)?(?:起訴)?(?:主張|意旨|略以|陳稱|方面|部分|之主張|起訴主張)"
+                   r"|原告[^。；，]{0,6}?(?:主張|起訴)略以")
+# 段落起點還可以接「本件」「本訴」（「一、本件原告主張」），或原告的名字（「一、原告黃瑞鏱主張」）
+_SEC_CLAIM_POS_RE = re.compile(
+    r"(?:^|(?<=[、：:。；;)）㈠-㈩⒈-⒛①-⑳⑴-⒇.．])|(?<=方面)|(?<=部分)|(?<=事項)|(?<=要旨))(?:本件|本訴)?(?:"
+    + _SEC_CLAIM_WORD + r"|原告[^。；，：:]{1,8}?(?:起訴)?主張)")
+_SEC_TRAILING_HEAD_RE = re.compile(rf"(?:{_SEC_BIG_HEAD}|{_SEC_SMALL_HEAD})+$")
+_SEC_SUBSTANTIVE_HEAD_RE = re.compile(rf"{_SEC_BIG_HEAD}(?:實體|本案)(?:方面|部分|事項)")
+_SEC_CLAIM_HEAD_RE = re.compile(rf"({_SEC_BIG_HEAD})$")
+# 段落標題的層級：「壹、原告主張：一、被告優達客公司…承租…貳、被告抗辯」裡的「一、」是
+# 原告段底下的小點，答辯的標題要和原告主張的標題同一層
+_HEAD_FAMILIES = ("一二三四五六七八九十", "壹貳參叁肆伍陸柒捌玖拾", "甲乙丙丁戊")
+
+
+def _head_family(head: str) -> int:
+    return next((k for k, chars in enumerate(_HEAD_FAMILIES) if head[:1] in chars), -1)
+# 答辯開頭在具名群組 d；前面的標題不算進答辯段。標題後面的寫法有三種：
+#   「二、被告永龍公司、全鴻機電公司則以」　被告後面可以接很長的名稱
+#   「三、本件未經言詞辯論，被告亦未提出書狀」　被告不在標題的第一個字
+#   「二、林妙芬則以：」　直接用名字，不寫「被告」（排除「二、原告則以」的再反駁）
+_SEC_DEFENSE_HEAD_RE = re.compile(
+    rf"{_SEC_BIG_HEAD}(?P<d>(?:被告|相對人)[^。；]{{0,40}}?"
+    r"(?:則以|辯稱|辯以|抗辯|答辯|方面|部分|置辯|陳稱|陳述|稱|略以|以|主張|聲明|同意|認諾|未到場|未提出書狀"
+    r"|經合法通知|未於(?:最後)?言詞辯論)"
+    r"|[^。；]{0,20}?(?:被告|相對人)[^。；]{0,12}?(?:經合法通知|未於(?:最後)?言詞辯論|未到場|未提出書狀|認諾)"
+    # 只檢查「則以」之前有沒有「原告」：往後看的話，答辯內容裡的「原告」會讓「三、周九如則以：
+    # …契約當事人為原告與周和勝」被排除（339960）
+    r"|(?:(?!原告)[^。；]){1,40}?(?:則以|則辯稱|則抗辯|答辯略以|則略以))")
+_SEC_DEFENSE_SENT_RE = re.compile(
+    rf"(?:^|(?<=[。：:]))(?:{_SEC_SMALL_HEAD})?(?P<d>(?:被告|相對人)[^。；，]{{0,10}}?"
+    r"(?:則以|則辯稱|則抗辯|則答辯|答辯略以|辯稱略以|抗辯略以|方面|之答辯|則稱"
+    r"|經合法通知|未於(?:最後)?言詞辯論|未到場|未提出書狀))")
+# 「法院認定」不算：當事人會寫「縱使假設法院認定…」，法院自稱一律是「本院」
+# 「兩造不爭執」不放在這裡：原告段裡也會寫「如後述兩造不爭執事項所載」，改成只在標題後面才算
+_SEC_COURT_STRONG_RE = re.compile(
+    r"本院(?:之|的)?(?:判斷|認定|審酌|得心證)|法院之(?:判斷|認定)|得心證之?理由"
+    r"|本件(?:之)?爭點|爭點(?:厥為|在於|如下)")
+_SEC_COURT_HEAD_RE = re.compile(
+    rf"{_SEC_BIG_HEAD}(?:經查|查[，:：]|按|綜上|從而|茲(?:分述|論述)如下|本件(?:原告)?(?:之)?(?:請求|主張|爭執)"
+    r"|原告(?:所)?主張之?(?:上開|前揭|上揭|前開|上述)?(?:事實|情節|各情)"
+    # 「三、兩造不爭執事項」「貳、兩造不爭執及爭執事項」「三、下列事項為兩造所不爭執」「三、經兩造協商簡化爭點」；
+    # 「二、被告不爭執…」是答辯，所以標題到「爭執」之間不能有被告、原告
+    r"|(?![^。；]{0,12}?(?:被告|原告|相對人))[^。；]{0,12}?(?:不爭執|爭執事項|爭執之事項|爭點))")
+_SEC_HEAD_BEFORE_RE = re.compile(rf"(?:{_SEC_BIG_HEAD}|{_SEC_SMALL_HEAD})$")
+
+
+def _is_rebuttal(body: str, start: int, marker: str, at_head: bool) -> bool:
+    """
+    答辯開頭其實是原告在轉述、反駁被告：「被告雖辯稱…」「。被告抗辯…云云」。
+    段落標題開頭的不看「云云」：法官整理答辯時也會用「…云云」收尾（「二、被告則聲明
+    請求駁回原告之訴，並答辯略以：…云云。」），標題開頭又寫著被告，幾乎不會是原告的話。
+    """
+    if "雖" in marker:
+        return True
+    if at_head:
+        return False
+    end = body.find("。", start)
+    return "云云" in body[start:end if end >= 0 else len(body)]
+
+
+def _first_defense(body: str, start: int, limit: Optional[int], family: int = -1) -> Optional[int]:
+    """family：原告主張標題的層級（_head_family），-1 表示原告主張前面沒有標題。"""
+    stop = len(body) if limit is None else limit
+    for rx in (_SEC_DEFENSE_HEAD_RE, _SEC_DEFENSE_SENT_RE):
+        at_head = rx is _SEC_DEFENSE_HEAD_RE
+        for m in rx.finditer(body, start, stop):
+            if at_head and family >= 0 and _head_family(m.group(0)) != family:
+                continue
+            if not _is_rebuttal(body, m.start("d"), m.group("d"), at_head):
+                return m.start("d")
+    return None
+
+
+_SEC_COURT_IN_DEFENSE_RE = re.compile(r"本院|經查|堪認|堪信")
+
+
+def _in_quote(body: str, start: int, pos: int) -> bool:
+    """
+    pos 是不是在引號裡（start 到 pos 之間「比」多）。答辯引用鑑定報告、法條立法理由時，
+    引號裡的「一、」「五、」不是判決的段落標題（v5 人工核對 413024、357205；全部 v5 中約 400 件）。
+    只看 pos 前 600 字：一個漏打的「」」不會讓後面所有的標題都被當成在引號裡。
+    """
+    start = max(start, pos - 600)
+    return body.count("「", start, pos) > body.count("」", start, pos)
+
+
+def _next_court_head(body: str, start: int, family: int) -> Optional[re.Match]:
+    """
+    start 之後下一個同層、而且不是另一位被告答辯的段落標題。
+    多位被告各寫一段時（「二、乙○○則以：…等語置辯。三、聖功醫院則以：…」），第二段也是答辯。
+    只有「看起來就是答辯」的段落才跳過：以答辯的收尾（等語置辯、免為假執行）結束、
+    而且沒有本院、經查、堪認——法院段裡的「四、被告抗辯…等語，惟查…」不會被當成答辯。
+    """
+    heads = [h for h in _SEC_HEAD_RE.finditer(body, start)
+             if (family < 0 or _head_family(h.group(0)) == family) and not _in_quote(body, start, h.start())]
+    for k, h in enumerate(heads):
+        m = _SEC_DEFENSE_HEAD_RE.match(body, h.start())
+        if not m or _is_rebuttal(body, m.start("d"), m.group("d"), True):
+            return h
+        seg = body[h.start():heads[k + 1].start() if k + 1 < len(heads) else len(body)]
+        if not _SEC_DEFENSE_END_RE.search(seg) or _SEC_COURT_IN_DEFENSE_RE.search(seg):
+            return h
+    return None
+
+
+def _back_to_heading(body: str, pos: int) -> int:
+    """切點前緊接段落標題時，標題歸到後一段（「三、本院之判斷」整個算法院判斷）。"""
+    m = _SEC_HEAD_BEFORE_RE.search(body, max(0, pos - 6), pos)
+    return m.start() if m else pos
 
 
 def split_reasoning_sections(facts_and_reasons: str, facts: str, reasons: str) -> Dict[str, str]:
@@ -1683,46 +1848,92 @@ def split_reasoning_sections(facts_and_reasons: str, facts: str, reasons: str) -
     """
     out = {"plaintiff_claim_text": "", "defendant_defense_text": "",
            "court_reasoning_text": "", "section_split_status": ""}
+    # 空白之外，私用區字元（網頁上的圖示，例：段首的 U+F6B0）也去掉，否則段首的「原告主張」
+    # 前面多一個看不見的字，就不算段落起點
+    squeeze = lambda t: re.sub(r"[\s-]+", "", t)
     if facts_and_reasons:
-        body = re.sub(r"\s+", "", facts_and_reasons)
+        body = squeeze(facts_and_reasons)
         court_tail = ""
     elif facts and reasons:
-        body = re.sub(r"\s+", "", facts)
-        court_tail = re.sub(r"\s+", "", reasons)
+        body = squeeze(facts)
+        court_tail = squeeze(reasons)
     else:
-        body = re.sub(r"\s+", "", facts or reasons or "")
+        body = squeeze(facts or reasons or "")
         court_tail = ""
     if not body:
         # 判決書本身沒有事實、理由段（小額判決可只記主文，§436-18），不是切分失敗
         out["section_split_status"] = "無理由段落"
         return out
 
-    sub = _SEC_SUBSTANTIVE_RE.search(body)
-    cm = _SEC_CLAIM_RE.search(body, sub.end() if sub else 0) or _SEC_CLAIM_RE.search(body)
+    # 「貳、實體方面」前面都有段落標題。2.4.0 在任何位置找「實體／本案（方面／部分）」，
+    # 法院段句中的「本案部分」會讓原告主張從法院段開始（例：464482 的原告段是
+    # 「得心證之理由」後面的判斷）。沒有標題時，只認法院判斷之前的。
+    sub = _SEC_SUBSTANTIVE_HEAD_RE.search(body)
+    if not sub:
+        sub = _SEC_SUBSTANTIVE_RE.search(body)
+        first_court = _SEC_COURT_STRONG_RE.search(body)
+        if sub and first_court and sub.start() > first_court.start():
+            sub = None
+    # 只認段落起點的「原告主張」（實體方面之後、再從頭）。2.4.0 找不到時會用任意位置的，
+    # 全庫抽讀這 214 件，10 件中 9 件是法院判斷裡的「經查，本件原告主張之事實，業據…」——
+    # 和找不到法院判斷時一樣，寧可留空，也不要讓法院的話變成原告主張。
+    after = sub.end() if sub else 0
+    cm = _SEC_CLAIM_POS_RE.search(body, after) or _SEC_CLAIM_POS_RE.search(body)
     if not cm:
         out["section_split_status"] = "無原告主張標記"
         return out
 
+    ch = _SEC_CLAIM_HEAD_RE.search(body, max(0, cm.start() - 6), cm.start())
+    family = _head_family(ch.group(1)) if ch else -1
     if court_tail:
         cs = len(body)
+        ds = _first_defense(body, cm.end(), None, family)
     else:
-        co = _SEC_COURT_RE.search(body, cm.end())
-        cs = co.start() if co else None
-        dm = _SEC_DEFENSE_RE.search(body, cm.end())
-        if dm and (cs is None or dm.start() < cs):
-            de = _SEC_DEFENSE_END_RE.search(body, dm.end())
+        found = [m.start() for m in (_SEC_COURT_STRONG_RE.search(body, cm.end()),
+                                     _SEC_COURT_HEAD_RE.search(body, cm.end())) if m]
+        cs = _back_to_heading(body, min(found)) if found else None
+        if cs is None:
+            # 沒有明確的法院判斷標記：答辯只在 2.4.0 的切點之前找，
+            # 否則法院段裡的「五、被告抗辯…」會被當成答辯，前面的判斷全算進原告主張
+            co = _SEC_COURT_RE.search(body, cm.end())
+            ds = _first_defense(body, cm.end(), co.start() if co else None, family)
+        else:
+            ds = _first_defense(body, cm.end(), cs, family)
+        bounds = [] if cs is None else [cs]
+        if ds is not None:
+            de = _SEC_DEFENSE_END_RE.search(body, ds)
             if de:
-                h = _SEC_HEAD_RE.search(body, de.end())
-                if h and (cs is None or h.start() < cs):
-                    cs = h.start()
+                h = _next_court_head(body, de.end(), family)
+                if h:
+                    bounds.append(h.start())
+        else:
+            # 找不到答辯：不晚於 2.4.0 的切點，免得法院段開頭沒有標記時
+            # （「三、原告主張被告…之事實，業據…」）把判斷算進原告主張
+            co = _SEC_COURT_RE.search(body, cm.end())
+            if co:
+                bounds.append(_back_to_heading(body, co.start()))
+        if family >= 0:
+            # 「一、原告主張 二、被告則以 三、（法院）」：法院段最晚從答辯後的下一個同層標題開始
+            # （多位被告各寫一段答辯時，跳過後面幾段答辯）
+            h = (_next_court_head(body, ds, family) if ds is not None
+                 else next((h for h in _SEC_HEAD_RE.finditer(body, cm.end())
+                            if _head_family(h.group(0)) == family), None))
+            if h:
+                bounds.append(h.start())
+        cs = min(bounds) if bounds else None
+        if cs is None:
+            # 退回 2.4.0：任何位置的法院判斷標記都算
+            co = _SEC_COURT_RE.search(body, ds if ds is not None else cm.end())
+            cs = _back_to_heading(body, co.start()) if co else None
         if cs is None:
             out["section_split_status"] = "無法院判斷標記"
             return out
+        if ds is not None and ds >= cs:
+            ds = None
 
-    pre = _SEC_TRAILING_HEAD_RE.sub("", body[cm.start():cs])
-    dm = _SEC_DEFENSE_RE.search(pre, 1)
-    out["plaintiff_claim_text"] = pre[:dm.start()] if dm else pre
-    out["defendant_defense_text"] = pre[dm.start():] if dm else ""
+    claim = body[cm.start():ds if ds is not None else cs]
+    out["plaintiff_claim_text"] = _SEC_TRAILING_HEAD_RE.sub("", claim)
+    out["defendant_defense_text"] = _SEC_TRAILING_HEAD_RE.sub("", body[ds:cs]) if ds is not None else ""
     out["court_reasoning_text"] = body[cs:] + court_tail
     out["section_split_status"] = "成功"
     return out
@@ -1747,9 +1958,13 @@ _BASIS_SENT_RE = re.compile(
     r"(?:依|基於|本於)(?:據)?[^。；]{0,160}?(?:請求|提起|起訴|訴請|求償|主張)")
 # 「依消費借貸之法律關係」與「依系爭信用卡契約起訴」兩種寫法。後者若不收，
 # 信用卡、銀行貸款這類只寫契約名稱的案件會整批沒有請求權類型。
+# 2.5.0 補上三種寫法（請求權空白的案件約 1,100 件寫成這樣）：
+#   「依侵權行為關係」（沒有「法律」兩字）、「依社區規約」、「依國家賠償法之規定」（沒有條號）
 _BASIS_REL_RE = re.compile(
-    r"(?:依|基於|本於)(?:([^。；，依]{2,40}?)(?:之)?法律關係"
-    r"|((?:系爭|兩造間?|上開|前開)?[^。；，依]{1,30}?(?:契約|合約|協議書?|約定書)))")
+    r"(?:依|基於|本於)(?:([^。；，依]{2,40}?)(?:之)?(?:法律)?關係"
+    r"|((?:系爭|兩造間?|上開|前開)?[^。；，依]{1,30}?(?:契約|合約|協議書?|約定書|規約)))")
+_BASIS_LAW_ONLY_RE = re.compile(
+    r"(?:依|基於|本於)[^。；，]{0,10}?([一-鿿]{2,14}?(?:法|條例))(?:第[^。；，]{0,20})?之?(?:相關)?規定")
 
 # 附帶條文：利息、遲延、連帶、損害賠償的方法與範圍、債權讓與、法律行為效力。
 # 它們幾乎出現在每一種請求裡，不能代表「依什麼請求」。
@@ -1786,7 +2001,7 @@ _RELATION_GROUPS: List[Tuple[str, str]] = [
     (r"買賣", "買賣"), (r"承攬|工程", "承攬"), (r"租賃|租約", "租賃"),
     (r"委任|居間|借名登記", "委任、居間等勞務契約"), (r"保險", "保險"),
     (r"票據|本票|支票", "票據"), (r"債務不履行", "債務不履行"),
-    (r"所有權|物上請求|占有", "物權"),
+    (r"所有權|物上請求|占有|規約", "物權"),
     (r"契約|協議|約定|合約", "其他契約"),
 ]
 
@@ -1835,9 +2050,16 @@ def extract_claim_basis(plaintiff_claim_text: str) -> Dict:
             part = re.sub(r"^(?:兩造間|兩造|系爭|上開|前開|上述|前揭|原告|被告)+", "", part).strip()
             if part and not re.search(r"第\d+條|規定", part) and part not in relations:
                 relations.append(part)
+    if not kept:
+        # 只寫法律名稱、沒寫條號（「依國家賠償法之規定」）：法律名稱本身就是類型
+        for m in _BASIS_LAW_ONLY_RE.finditer(plaintiff_claim_text):
+            law = re.sub(r"^(?:系爭|上開|前開|上述|前揭)", "", m.group(1))
+            law = LAW_ALIASES.get(law, law)
+            if law in _LAW_GROUPS and law not in relations:
+                relations.append(law)
     rel_groups = []
     for rel in relations:
-        grp = next((g for pat, g in _RELATION_GROUPS if re.search(pat, rel)), "")
+        grp = _LAW_GROUPS.get(rel) or next((g for pat, g in _RELATION_GROUPS if re.search(pat, rel)), "")
         if grp and grp not in rel_groups and not re.search(r"債權讓", rel):
             rel_groups.append(grp)
 
@@ -1927,7 +2149,7 @@ SOURCE_COLUMNS = [
 ]
 
 # 規則版本。規則異動時遞增，讓回填過的資料可以辨識是用哪一版規則產生的。
-STRUCTURING_VERSION = "2.4.0"
+STRUCTURING_VERSION = "2.5.0"
 
 
 def derive_structured_fields(row: Dict) -> Dict:
@@ -2080,6 +2302,23 @@ def derive_structured_fields(row: Dict) -> Dict:
         sections = {"plaintiff_claim_text": "", "defendant_defense_text": "",
                     "court_reasoning_text": "", "section_split_status": ""}
 
+    # 切不出原告主張段落時，退回理由開頭（主張通常寫在最前面）
+    mid = case_type_mid(
+        ct_cat, ct_norm,
+        sections["plaintiff_claim_text"]
+        or re.sub(r"\s+", "", g("facts_and_reasons") or g("facts"))[:1500])
+    # 2.5.0：建築工程（字別「建」）的損害賠償多半是承攬契約的爭議，案由只寫「損害賠償」
+    # 而落到「侵權：其他」（實測 371 件）。施工損鄰等有具體類型的仍歸侵權。
+    if mid == "侵權：其他" and kind.startswith("建"):
+        mid = "契約：工程與承攬"
+
+    # 2.5.0：主文漏寫「其餘之訴駁回」時會被判成全部勝訴，但訴訟費用的分擔還看得出原告
+    # 有一部分敗訴（金額核對發現，候選 335 件）。原告也可能因撤回、減縮而負擔費用，
+    # 所以只標記、不改結果；y（勝訴＋一部勝訴＝1）不受影響。
+    csp = _cost_share_plaintiff(verdict)
+    if oc["outcome"] == WIN and csp is not None and csp > 0:
+        flags.append("疑似漏寫其餘駁回")
+
     return {
         "case_kind":            kind,
         "case_kind_category":   kind_cat,
@@ -2099,7 +2338,7 @@ def derive_structured_fields(row: Dict) -> Dict:
         "claimed_source":       cl["claimed_source"],
         "grant_ratio":          grant_ratio,
         "grant_ratio_source":   grant_ratio_source,
-        "cost_share_plaintiff": _cost_share_plaintiff(verdict),
+        "cost_share_plaintiff": csp,
         "applicable_laws_json": json.dumps(cites, ensure_ascii=False) if cites else "",
         "law_n_citations":      len(cites),
         "law_primary":          law_primary,
@@ -2113,7 +2352,9 @@ def derive_structured_fields(row: Dict) -> Dict:
         # 上訴審沒有「被告」這一造（被上訴人可能是原審原告），
         # 硬填 0 會讓分析誤以為上訴審的被告都不是法人。留 None 表示不適用。
         "defendant_is_corp":    (None if posture == _POSTURE_APPEAL and not defendant
-                                 else (1 if _CORP_RE.search(defendant) else 0)),
+                                 else party_is_corp(defendant, full_text)),
+        # 原告的當事人類型（公司團體／政府機關…）以同學 parties.py 的「當事人類型」為準，
+        # 這裡不另外輸出 plaintiff_is_corp，免得同一件事有兩種定義。
         # 有沒有律師與審級無關，上訴審讀 appellant/appellee 的代理人即可。
         "plaintiff_has_lawyer": _agent_has_lawyer(
             g("plaintiff_agent") or g("appellant_agent"), full_text),
@@ -2127,11 +2368,7 @@ def derive_structured_fields(row: Dict) -> Dict:
         "reasoning_length":     len(g("reasons")) + len(g("facts_and_reasons")) + len(g("facts")),
         **sections,
         **extract_claim_basis(sections["plaintiff_claim_text"]),
-        # 切不出原告主張段落時，退回理由開頭（主張通常寫在最前面）
-        "case_type_mid":        case_type_mid(
-            ct_cat, ct_norm,
-            sections["plaintiff_claim_text"]
-            or re.sub(r"\s+", "", g("facts_and_reasons") or g("facts"))[:1500]),
+        "case_type_mid":        mid,
         "quality_flags":        "|".join(dict.fromkeys(flags)),
         "structuring_version":  STRUCTURING_VERSION,
     }
