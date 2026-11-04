@@ -11,7 +11,7 @@ import unittest
 from datetime import date
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "data_pipeline"))
 
 from crawler import (            # noqa: E402
     _ad_search, _parse_ad_date, _roc_parts, parse_date_arg, resolve_date_range,

@@ -19,7 +19,7 @@ from contextlib import redirect_stdout
 from datetime import date
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "data_pipeline"))
 
 import crawl_monthly  # noqa: E402
 import html_parser  # noqa: E402
