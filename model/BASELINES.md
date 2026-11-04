@@ -11,8 +11,9 @@ CAIL 格式資料集（罪名、法條、刑期三個任務）的基準模型與
 | `svm_shared.py` | TF-IDF ＋ LinearSVC，在共用實驗包（芸菲 share_national150_100k_5fold）上跑 5 折 | 共用包 10 萬筆 | scikit-learn |
 | `textcnn_gpu.py` | TextCNN（字向量＋寬 2–5 字的卷積），每個任務各一個模型，驗證集提早停止 | 全國全部 | scikit-learn、PyTorch、GPU |
 | `electra_term_gpu.py` | 法律 ELECTRA 刑期（設定同芸菲 PR #15 的罪名、法條），輸出頭與評分同 TextCNN | 共用包 10 萬筆 | PyTorch、transformers、GPU |
+| `svm_term_charge.py` | SVM 刑期加入罪名 one-hot：只看事實／事實＋預測罪名／事實＋正確罪名（上限） | 共用包 10 萬筆 | scikit-learn |
 
-安裝：`pip install -r models/requirements.txt`（PyTorch 依 GPU 環境另外裝；Kaggle 已內建）。
+安裝：`pip install -r model/requirements-baselines.txt`（PyTorch 依 GPU 環境另外裝；Kaggle 已內建）。
 
 ## 資料格式
 

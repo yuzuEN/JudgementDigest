@@ -365,12 +365,15 @@ python crawler.py --recrawl-stubs
 ├── merge.py             # 合併多個匯出 Excel 的一次性小工具（檔名寫死）
 ├── requirements.txt
 │
-├── models/              # 刑事判決預測模型與共用評估（說明見 models/README.md）
+├── model/               # 刑事判決預測模型與共用評估（基準模型說明見 model/BASELINES.md）
 │   ├── evaluate.py      # 共用讀取、切分、評分（所有模型共用）
 │   ├── svm_baseline.py  # TF-IDF ＋ LinearSVC 10-fold 基準線
 │   ├── svm_learning_curve.py # 同上，學習曲線
+│   ├── svm_shared.py    # TF-IDF ＋ LinearSVC，共用實驗包 5 折
+│   ├── svm_term_charge.py # SVM 刑期加入罪名（共用實驗包）
 │   ├── fasttext_gpu.py  # fastText 架構（PyTorch，GPU）
-│   └── textcnn_gpu.py   # TextCNN（PyTorch，GPU）
+│   ├── textcnn_gpu.py   # TextCNN（PyTorch，GPU）
+│   └── electra_term_gpu.py # 法律 ELECTRA 刑期（PyTorch，GPU）
 │
 ├── docs/                # 說明文件
 │   ├── 欄位說明.md      # 各資料表與欄位的說明（民事／刑事）

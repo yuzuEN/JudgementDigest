@@ -10,8 +10,8 @@ TF-IDF（字 1–2 gram）＋ LinearSVC 的 10-fold 基準線。
 適合台北 v1.x（約 5 萬筆）。全國資料（約 100 萬筆）用 SVM 會跑不完，請改用 svm_learning_curve.py 或 fasttext_gpu.py。
 
 用法：
-  python models/svm_baseline.py --data CAIL格式_刑事判決_2018-2025_v1.1.jsonl
-  python models/svm_baseline.py --data ... --folds 0,1,2 --out svm_3fold.md
+  python model/svm_baseline.py --data CAIL格式_刑事判決_2018-2025_v1.1.jsonl
+  python model/svm_baseline.py --data ... --folds 0,1,2 --out svm_3fold.md
 """
 
 import argparse

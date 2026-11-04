@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 """
-models/evaluate.py 的離線測試：所有模型共用的切分與評分，算錯的話每個模型的分數都會錯。
+model/evaluate.py 的離線測試：所有模型共用的切分與評分，算錯的話每個模型的分數都會錯。
 
 只用 numpy（CI 不裝 scikit-learn／PyTorch）；F1 的定義對齊 sklearn f1_score(zero_division=0)。
 """
@@ -15,7 +15,7 @@ from pathlib import Path
 
 import numpy as np
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "models"))
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "model"))
 
 import evaluate as E  # noqa: E402
 
