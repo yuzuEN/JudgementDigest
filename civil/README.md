@@ -24,8 +24,13 @@
 | `train_bert.py` | BERT 微調（勝敗） | `.venv-bert`（GPU） |
 | `train_longformer.py` | Longformer 微調（勝敗或金額），也可以單獨上傳到雲端 GPU 跑 | `.venv-bert`（GPU） |
 | `train_bert_amount.py` | 金額任務的 BERT | `.venv-bert`（GPU） |
+| `service.py` | **平台用的勝敗模型**：只用原告主張的 TF-IDF＋使用者填得出來的特徵（案由、法院、律師、對方是否為法人）。`evaluate` 做 5 折評估，`train` 存到 `artifacts/civil_winloss_v1/` | `.venv` |
 
 目前結果（文字資料集 v5，46,683 件，5 折）：兩造的 TF-IDF＋BERT＋Longformer AUC 0.829、
 TF-IDF＋Longformer＋結構化 0.827；只用原告主張的 TF-IDF 0.769。詳見實驗輸出的 `pr_ensemble_v5.md`。
+
+## insights.py：給使用者的參考
+
+證據對照（相似勝訴判決提到哪些證據）、常見抗辯、判准金額範圍（相似勝訴判決的獲償比例 10%–90% 分位數）、判決導讀的段落標示。全部是關鍵字規則，結果只表示判決裡「提到」，不代表法院採信。
 
 負責：（待填）
