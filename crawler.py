@@ -40,6 +40,10 @@ from webdriver_manager.chrome import ChromeDriverManager
 # ─── 設定 ────────────────────────────────────────────────────────────────────
 BASE_URL    = "https://judgment.judicial.gov.tw/FJUD/default.aspx"
 BASE_URL_AD = "https://judgment.judicial.gov.tw/FJUD/default_AD.aspx"  # 進階搜尋（含日期篩選）
+# 「簡易案件查詢」的進階搜尋：表單欄位與 default_AD.aspx 相同，但法院清單是各簡易庭。
+# 大多數簡易庭（臺北簡易庭 TPEV、竹北簡易庭 CPEV…）的判決不在一般裁判書查詢的索引裡，
+# 只能從這裡查到。
+BASE_URL_E_AD = "https://judgment.judicial.gov.tw/FJUD/Defaulte_AD.aspx"
 DB_PATH   = "judgments.db"
 HTML_DIR  = "html_cache"
 LOG_FILE  = "crawler.log"
@@ -400,7 +404,9 @@ def _save_debug_html(driver: webdriver.Chrome, tag: str = "debug") -> None:
 # ─── Step A: 取得結果列表頁網址 ───────────────────────────────────────────────
 # 搜尋後司法院頁面在 default.aspx 上以 AJAX 顯示摘要，
 # 並提供 qryresultlst.aspx?ty=JUDBOOK&q=<hash> 的「查詢結果」連結。
-_LIST_CSS = "a[href*='qryresultlst.aspx?ty=JUDBOOK']"
+# 簡易案件查詢的清單連結是 ty=SIMJUDBOOK。
+_LIST_CSS = ("a[href*='qryresultlst.aspx?ty=JUDBOOK'],"
+             "a[href*='qryresultlst.aspx?ty=SIMJUDBOOK']")
 
 def _get_results_list_url(driver: webdriver.Chrome) -> Optional[str]:
     """等待並回傳完整結果列表頁的 URL（不含法院篩選參數的版本）。"""
@@ -572,6 +578,46 @@ _COURT_CODES = {
     "臺灣高雄少年及家事法院":     "KSY",
 }
 
+# 「簡易案件查詢」進階搜尋（Defaulte_AD.aspx）的 jud_court 選項值。
+# 新竹、苗栗、基隆簡易庭沿用地院代碼（SCD、MLD、KLD），它們的判決也在一般裁判書查詢裡，
+# 一般查詢爬地院時就會一起抓到。其餘簡易庭用自己的代碼，判決只在簡易案件查詢裡。
+_SIMPLE_COURT_CODES = {
+    "臺北簡易庭": "TPE", "新店簡易庭": "STE", "士林簡易庭": "SLE", "內湖簡易庭": "NHE",
+    "板橋簡易庭": "PCE", "三重簡易庭": "SJE", "桃園簡易庭": "TYE", "中壢簡易庭": "CLE",
+    "新竹簡易庭": "SCD", "竹北簡易庭": "CPE", "苗栗簡易庭": "MLD", "臺中簡易庭": "TCE",
+    "沙鹿簡易庭": "SDE", "豐原簡易庭": "FYE", "彰化簡易庭": "CHE", "員林簡易庭": "OLE",
+    "北斗簡易庭": "PDE", "南投簡易庭": "NTE", "斗六簡易庭": "TLE", "虎尾簡易庭": "HUE",
+    "嘉義簡易庭": "CYE", "北港簡易庭": "PKE", "臺南簡易庭": "TNE", "柳營簡易庭": "SYE",
+    "新市簡易庭": "SSE", "高雄簡易庭": "KSE", "鳳山簡易庭": "FSE", "橋頭簡易庭": "CDE",
+    "岡山簡易庭": "GSE", "旗山簡易庭": "CSE", "屏東簡易庭": "PTE", "潮州簡易庭": "CCE",
+    "臺東簡易庭": "TTE", "花蓮簡易庭": "HLE", "宜蘭簡易庭": "ILE", "羅東簡易庭": "LTE",
+    "基隆簡易庭": "KLD", "馬公簡易庭": "MKE", "金城簡易庭": "KME",
+}
+# 只在簡易案件查詢裡、一般查詢查不到的簡易庭（補爬時用這份清單）
+SIMPLE_ONLY_COURTS = [n for n, c in _SIMPLE_COURT_CODES.items() if c not in ("SCD", "MLD", "KLD")]
+
+# 簡易庭 → 所屬地方法院（分析時把簡易庭判決歸回地院比較）
+SIMPLE_COURT_PARENT = {
+    "臺北簡易庭": "臺灣臺北地方法院", "新店簡易庭": "臺灣臺北地方法院",
+    "士林簡易庭": "臺灣士林地方法院", "內湖簡易庭": "臺灣士林地方法院",
+    "板橋簡易庭": "臺灣新北地方法院", "三重簡易庭": "臺灣新北地方法院",
+    "桃園簡易庭": "臺灣桃園地方法院", "中壢簡易庭": "臺灣桃園地方法院",
+    "新竹簡易庭": "臺灣新竹地方法院", "竹北簡易庭": "臺灣新竹地方法院",
+    "苗栗簡易庭": "臺灣苗栗地方法院",
+    "臺中簡易庭": "臺灣臺中地方法院", "沙鹿簡易庭": "臺灣臺中地方法院", "豐原簡易庭": "臺灣臺中地方法院",
+    "彰化簡易庭": "臺灣彰化地方法院", "員林簡易庭": "臺灣彰化地方法院", "北斗簡易庭": "臺灣彰化地方法院",
+    "南投簡易庭": "臺灣南投地方法院",
+    "斗六簡易庭": "臺灣雲林地方法院", "虎尾簡易庭": "臺灣雲林地方法院", "北港簡易庭": "臺灣雲林地方法院",
+    "嘉義簡易庭": "臺灣嘉義地方法院",
+    "臺南簡易庭": "臺灣臺南地方法院", "柳營簡易庭": "臺灣臺南地方法院", "新市簡易庭": "臺灣臺南地方法院",
+    "高雄簡易庭": "臺灣高雄地方法院", "鳳山簡易庭": "臺灣高雄地方法院",
+    "橋頭簡易庭": "臺灣橋頭地方法院", "岡山簡易庭": "臺灣橋頭地方法院", "旗山簡易庭": "臺灣橋頭地方法院",
+    "屏東簡易庭": "臺灣屏東地方法院", "潮州簡易庭": "臺灣屏東地方法院",
+    "臺東簡易庭": "臺灣臺東地方法院", "花蓮簡易庭": "臺灣花蓮地方法院",
+    "宜蘭簡易庭": "臺灣宜蘭地方法院", "羅東簡易庭": "臺灣宜蘭地方法院",
+    "基隆簡易庭": "臺灣基隆地方法院", "馬公簡易庭": "臺灣澎湖地方法院", "金城簡易庭": "福建金門地方法院",
+}
+
 # 進階搜尋的「案件類別」（jud_sys checkbox）值。未勾選 = 全選。
 _CASE_SYS_CODES = {
     "憲法": "C", "民事": "V", "刑事": "M", "行政": "A", "懲戒": "P",
@@ -593,6 +639,8 @@ def _court_code(name: str) -> str:
     norm = raw.replace("台", "臺")
     if norm in _COURT_CODES:
         return _COURT_CODES[norm]
+    if norm in _SIMPLE_COURT_CODES:
+        return _SIMPLE_COURT_CODES[norm]
     # 允許簡寫（例如「臺北地方法院」「臺北地院」）—— 僅在唯一命中時接受
     cand = [c for n, c in _COURT_CODES.items() if norm in n]
     if len(cand) == 1:
@@ -600,6 +648,11 @@ def _court_code(name: str) -> str:
     if not cand and norm.endswith("地院"):
         return _court_code(norm[:-2] + "地方法院")
     return ""
+
+
+def _is_simple_court(name: str) -> bool:
+    """法院名稱是不是簡易庭（要改用簡易案件查詢頁）。"""
+    return (name or "").strip().replace("台", "臺") in _SIMPLE_COURT_CODES
 
 
 def _sys_code(name: str) -> str:
@@ -749,7 +802,8 @@ def _ad_search(
             return None, None
         values[f"dy{label}"], values[f"dm{label}"], values[f"dd{label}"] = parts
 
-    driver.get(BASE_URL_AD)
+    # 簡易庭的判決只在「簡易案件查詢」裡；兩個查詢頁的表單欄位相同，只換網址。
+    driver.get(BASE_URL_E_AD if _is_simple_court(court) else BASE_URL_AD)
     time.sleep(2.5)
     _dismiss_alert(driver)
 
@@ -808,6 +862,10 @@ def _ad_search(
     return url, total
 
 
+# 小額案件的字別：「臺北簡易庭 113 年度 北小 字第 1 號」「勞小」「店小」
+_SMALL_CLAIM_RE = re.compile(r"年度\s*\S*小\s*字第")
+
+
 # ─── Step B: 從結果列表頁解析個別案件 ────────────────────────────────────────
 # qryresultlst.aspx 上每筆案件的連結指向
 # data.aspx?ty=JD&id=<court>,<year>,<type>,<num>,<date>
@@ -820,7 +878,7 @@ _CASE_LINK_CSS = (
 # 例：「臺灣新竹地方法院 113 年度…」→「臺灣新竹地方法院」
 _COURT_RE = re.compile(
     r'^(.*?(?:憲法法庭|少年及家事法院|地方法院|高等法院|最高行政法院|最高法院|高等行政法院'
-    r'|行政法院|智慧財產及商業法院|智慧財產法院|海事法院)'
+    r'|行政法院|智慧財產及商業法院|智慧財產法院|海事法院|簡易庭)'
     r'(?:\s+\S+分院|\s+地方庭)?)'
 )
 
@@ -1013,6 +1071,7 @@ def search_and_crawl(
     driver:      Optional[webdriver.Chrome] = None,
     pacer:       Optional["Pacer"] = None,
     skip_if_truncated: bool = False,
+    skip_small_claims: bool = False,
 ) -> Dict[str, object]:
     """
     以「關鍵字 + 裁判日期區間 + 法院 + 案件類別」搜尋並爬取裁判書。
@@ -1048,10 +1107,13 @@ def search_and_crawl(
       skip_if_truncated           True 時，一旦偵測到結果被截斷就立即返回不翻頁
 
     回傳 {"collected": 實際下載數, "total": 該區間總筆數, "truncated": 是否被截斷,
-          "page_errors": 清單頁錯誤且復原失敗的次數,
+          "page_errors": 這一段沒有完整爬完的次數（清單頁錯誤且復原失敗、已知有資料
+                         清單卻空白、取不到結果清單網址、WebDriver 例外、
+                         裁判書重試後仍下載失敗）,
           "truncated_buckets": 本身即達 500 上限的分群桶（資料不完整、重跑也救不回）,
           "driver": 目前有效的 WebDriver}
-    page_errors > 0 代表該區段的清單沒有翻完，資料不完整，呼叫端應重跑該區段。
+    page_errors > 0 代表該區段資料不完整，呼叫端應重跑該區段。
+    只有查詢明確回報 0 筆時，collected=0 才代表這段真的沒有資料。
     注意 driver：Phase B 每 80 筆會重建 session（舊的會被 quit），
     因此傳入自己的 driver 時，下一次呼叫務必改用回傳的這一個。
     """
@@ -1068,8 +1130,11 @@ def search_and_crawl(
     truncated_buckets: List[str] = []   # 分群桶本身 >= 500 筆而被截斷（重跑也救不回）
     # 只要某種裁判（判決／裁定）且沒有關鍵字時，以該詞做全文檢索當伺服器端粗篩：
     # 每份判決書本文（標題「…民事判決」、「判決如下」）必含「判決」，大量本票類裁定則不含，
-    # 實測單日 976 筆 → 55 筆、漏抓 0。結果集縮小後幾乎不會再破 500 上限，翻頁量也大減。
+    # 實測單日 976 筆 → 55 筆。結果集縮小後幾乎不會再破 500 上限，翻頁量也大減。
     # 清單頁仍會依裁判字號精篩，所以粗篩多抓進來的裁定不會被下載。
+    # 已知會漏：網站把裁定標成「民事判決」的司法事務官文書（司消債核、司聲等），
+    # 本文寫的是「裁定」、沒有「判決」二字，全文檢索搜不到（臺北 2025/03/05 單日 6 筆）。
+    # 這類文書實質是非對審的裁定；要完全不漏只能拿掉粗篩，翻頁量約多 18 倍。
     query_keyword = keyword or judgment_type
     total: Optional[int] = None
     truncated = False
@@ -1082,7 +1147,11 @@ def search_and_crawl(
         base_results_url, total = _ad_search(
             driver, query_keyword, start_date, end_date, court, tuple(case_types))
         if not base_results_url:
-            logger.error("Advanced search returned no results URL — aborting")
+            # 查無資料時摘要頁本來就沒有清單連結（total=0），這是正常的空區段；
+            # 其餘情況（頁面沒載完、查詢被拒）都不能當成「這段沒有資料」
+            if total != 0:
+                page_errors += 1
+            logger.error("Advanced search returned no results URL (total=%s) — aborting", total)
             return {"collected": 0, "total": total, "truncated": False,
                     "page_errors": page_errors,
             "truncated_buckets": truncated_buckets, "driver": driver}
@@ -1153,10 +1222,17 @@ def search_and_crawl(
             ]
 
         def _filter_by_judgment_type(items: List[Dict]) -> List[Dict]:
-            """裁判種類過濾（清單頁的裁判字號尾端就寫明「…民事判決」／「…民事裁定」）。"""
-            if not judgment_type:
-                return items
-            return [it for it in items if judgment_type in (it.get("case_number") or "")]
+            """裁判種類過濾（清單頁的裁判字號尾端就寫明「…民事判決」／「…民事裁定」）。
+
+            skip_small_claims：一併略過小額案件（字別含「小」：北小、店小、勞小…）。
+            簡易庭的判決約四分之三是小額，小額判決多半只有主文和理由要領，
+            分析用不到時在下載前就略過，可省下大部分的爬取時間。
+            """
+            if judgment_type:
+                items = [it for it in items if judgment_type in (it.get("case_number") or "")]
+            if skip_small_claims:
+                items = [it for it in items if not _SMALL_CLAIM_RE.search(it.get("case_number") or "")]
+            return items
 
         def _recover_list_page(base_url: str, page: int, marker: str, label: str) -> bool:
             """
@@ -1197,16 +1273,19 @@ def search_and_crawl(
             logger.info("  ↳ 重新查詢後%s（page=%d）", "復原成功" if ok else "仍失敗", page)
             return ok
 
-        def _paginate(label: str, base_url: str = "") -> int:
+        def _paginate(label: str, base_url: str = "", expect_rows: bool = False) -> int:
             """
             從目前頁面一路翻頁收集，直到無下一頁或達 max_results。
             回傳翻到的原始列數（過濾前）—— 判斷分群桶是否撞到 500 上限必須看這個，
             看過濾後的筆數會在只收判決時嚴重低估，截斷就會被忽略。
+            expect_rows：已知這個清單有資料（查詢有結果、或是分群連結），
+            第一頁就空白代表沒載到，不是翻完。
             """
             nonlocal page_errors
             page = 1
             raw_seen = 0
             jumped = False    # 目前這頁是翻頁失敗後以頁碼網址跳過來的：一定要有資料
+            empty_retried = False
             while len(all_items) < max_results:
                 raw_items = _parse_case_rows(driver)
                 if not raw_items:
@@ -1226,6 +1305,18 @@ def search_and_crawl(
                         page_errors += 1
                         logger.error("翻頁復原後 page=%d 仍無資料%s — 此區段資料不完整",
                                      page, label or "")
+                    elif expect_rows and raw_seen == 0:
+                        # 已知有資料，清單頁卻一個案件連結都沒有、也不是已知的錯誤頁
+                        # （頁面沒載完等）。當成翻完會整段少收，月份仍標成 done。
+                        # 只重試一次：_recover_list_page 只認得已知錯誤頁，重載後沒有
+                        # 錯誤訊息就會回報成功，不設上限會在同一頁無限重試
+                        if not empty_retried:
+                            empty_retried = True
+                            if _recover_list_page(base_url, page, "清單頁沒有案件連結", label):
+                                continue
+                        page_errors += 1
+                        logger.error("查詢有結果（total=%s），清單頁卻沒有案件連結%s — "
+                                     "此區段資料不完整", total, label or "")
                     break
                 jumped = False
                 raw_seen += len(raw_items)
@@ -1265,7 +1356,8 @@ def search_and_crawl(
                 logger.info("  [Court] %s", court_label)
                 driver.get(court_url)
                 time.sleep(2.0)
-                raw = _paginate(f"  [{court_label}]", court_url)
+                # 分群連結只會出現在有結果的分群上：第一頁空白就是沒載到
+                raw = _paginate(f"  [{court_label}]", court_url, expect_rows=True)
                 if raw >= _RESULT_LIMIT:
                     truncated_buckets.append(f"{start_date}~{end_date} {court_label}")
                     logger.warning(
@@ -1283,7 +1375,7 @@ def search_and_crawl(
                 logger.info("  [CaseYear] %s", tag)
                 driver.get(year_url)
                 time.sleep(2.0)
-                raw = _paginate(f"  [{tag}]", year_url)
+                raw = _paginate(f"  [{tag}]", year_url, expect_rows=True)
                 if raw >= _RESULT_LIMIT:
                     truncated_buckets.append(f"{start_date}~{end_date} {tag}")
                     logger.warning(
@@ -1293,13 +1385,15 @@ def search_and_crawl(
         else:
             driver.get(base_results_url)
             time.sleep(2.5)
-            _paginate("", base_results_url)
+            # 讀不到總筆數（None）時也要求有資料：查無資料時摘要頁不會有清單連結，
+            # 走得到這裡就代表查詢有結果
+            _paginate("", base_results_url, expect_rows=total != 0)
 
         # 防護：摘要頁的總筆數若讀不到（頁面改版等），改以「恰好收滿上限」反推截斷。
         # 未指定案號年度過濾時，收到剛好 _RESULT_LIMIT 筆幾乎必然代表被截斷。
         if (total is None and not truncated and not court_links
                 and case_year_start is None and case_year_end is None
-                and not judgment_type
+                and not judgment_type and not skip_small_claims
                 and len(all_items) >= _RESULT_LIMIT
                 and max_results >= _RESULT_LIMIT):
             truncated = True
@@ -1328,7 +1422,19 @@ def search_and_crawl(
             logger.info("New WebDriver session ready.")
             return driver
 
+        def _record(item: Dict, case_number: str, existing, html_file: str) -> None:
+            pacer.on_success()
+            if existing:
+                _mark_recrawled(case_number, html_file)
+            else:
+                upsert_record(
+                    case_number, item["court"], item["case_title"],
+                    item["judgment_date"], item["url"], html_file,
+                    keyword_label or keyword,
+                )
+
         logger.info("Phase B: downloading case pages …")
+        failed: List[Tuple[Dict, str, object]] = []   # (item, 案號, 既有紀錄)：第一輪下載失敗的
         for item in all_items:
             case_number = item["case_number"] or f"unknown_{collected + 1}"
             logger.info("[%d/%d] %s", collected + 1, len(all_items), case_number)
@@ -1374,20 +1480,44 @@ def search_and_crawl(
                     pacer.on_failure("detail page retry failed")
 
             if html_file:
-                pacer.on_success()
-                if existing:
-                    _mark_recrawled(case_number, html_file)
-                else:
-                    upsert_record(
-                        case_number, item["court"], item["case_title"],
-                        item["judgment_date"], item["url"], html_file,
-                        keyword_label or keyword,
-                    )
+                _record(item, case_number, existing, html_file)
                 collected += 1
+            else:
+                failed.append((item, case_number, existing))
 
             pacer.wait("detail")
 
+        # 下載失敗（逾時後頁面停在上一筆、標題與案號不符、連線被重設…）不能就此略過：
+        # 該段仍會被當成完成、月份標成 done，這筆裁判書就永久遺漏
+        # （實例：基隆、臺南、宜蘭等 8 院共 40 筆）。多半是暫時性的，
+        # 換新 session 後再試一次；仍失敗才計入 page_errors，讓呼叫端重跑這一段。
+        if failed:
+            logger.warning("Phase B: %d 筆下載失敗，換新 session 後重試 …", len(failed))
+            driver = _renew_driver()
+            still_failed = []
+            for item, case_number, existing in failed:
+                logger.info("[retry] %s", case_number)
+                html_file = None
+                try:
+                    html_file = crawl_detail_page(driver, item["url"], case_number)
+                except WebDriverException as exc:
+                    logger.warning("  Retry failed for %s: %s", case_number, exc)
+                    driver = _renew_driver()
+                if html_file:
+                    _record(item, case_number, existing, html_file)
+                    collected += 1
+                else:
+                    still_failed.append(case_number)
+                pacer.wait("detail")
+            if still_failed:
+                page_errors += 1
+                logger.error("以下 %d 筆裁判書重試後仍下載失敗 — 此區段資料不完整：%s",
+                             len(still_failed), "、".join(still_failed))
+
     except WebDriverException as exc:
+        # 查詢頁沒載入、瀏覽器異常等：這一段沒有爬完，必須讓呼叫端知道要重跑，
+        # 否則會以 collected=0 回報成功（實例：高雄 2024/02/01~14 整段遺漏）
+        page_errors += 1
         logger.error("WebDriver error (outer): %s", exc, exc_info=True)
     finally:
         # 由呼叫端傳入的 driver 交還呼叫端管理（供跨區間重複使用），不在此關閉

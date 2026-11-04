@@ -124,6 +124,7 @@ def batched_crawl(
     delay:         float = _DEFAULT_DELAY,
     pacer:         Optional[Pacer] = None,
     stats:         Optional[dict] = None,
+    skip_small_claims: bool = False,
 ) -> int:
     """
     依裁判日期遞迴細分爬取，嚴格由新到舊。
@@ -158,7 +159,7 @@ def batched_crawl(
     total_new = 0
     processed = 0
     truncated_days: List[date] = []
-    # 清單頁錯誤且復原失敗的區段 —— 這些區段沒有翻完，資料不完整，需要重跑
+    # 沒有完整爬完的區段（清單頁錯誤未復原、清單空白、裁判書下載失敗等）—— 資料不完整，需要重跑
     failed_segments: List[Tuple[date, date, int]] = []
     # 單日改用分群後，某個分群桶本身仍 >= 500 筆 → 該桶較舊的部分取不到
     truncated_buckets: List[str] = []
@@ -207,6 +208,7 @@ def batched_crawl(
                 pacer=pacer,
                 # 單日已無法再細分 → 不再探測，直接把能拿的拿走
                 skip_if_truncated=not single_day,
+                skip_small_claims=skip_small_claims,
             )
             # Phase B 每 80 筆會重建 WebDriver session，舊的已被 quit
             # → 必須換用回傳的 driver，否則下一段會用到失效的 session
@@ -218,7 +220,7 @@ def batched_crawl(
             if errs:
                 failed_segments.append((cs, ce, errs))
                 logger.error(
-                    "  ✗ %s → %s 有 %d 次清單頁錯誤無法復原 —— 此區段資料不完整",
+                    "  ✗ %s → %s 有 %d 個問題未解決（清單頁錯誤或裁判書下載失敗）—— 此區段資料不完整",
                     _fmt(cs), _fmt(ce), errs,
                 )
             total_new += new
@@ -272,9 +274,9 @@ def batched_crawl(
         )
     if failed_segments:
         logger.error(
-            "以下 %d 個區段因清單頁錯誤未翻完，請以相同條件重跑這些日期：\n%s",
+            "以下 %d 個區段沒有完整爬完，請以相同條件重跑這些日期：\n%s",
             len(failed_segments),
-            "\n".join(f"  --start-date {_fmt(a)} --end-date {_fmt(b)}（{n} 次錯誤）"
+            "\n".join(f"  --start-date {_fmt(a)} --end-date {_fmt(b)}（{n} 個問題）"
                       for a, b, n in failed_segments),
         )
     if stats is not None:

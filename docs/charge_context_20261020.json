@@ -1,0 +1,295 @@
+{
+  "counts": {
+    "all_rows": 107098,
+    "cohort": 70197,
+    "before_law_empty": 1949,
+    "before_law_partial": 299,
+    "before_law_empty_slots": 2134,
+    "before_charge_empty": 1019,
+    "before_charge_partial": 221,
+    "after_law_empty": 1949,
+    "after_law_partial": 299,
+    "after_law_empty_slots": 2134,
+    "after_charge_empty": 1019,
+    "after_charge_partial": 223,
+    "changed_rows": 3,
+    "changed_cohort_rows": 2
+  },
+  "changed_fields": {
+    "罪名（標準化）": 3,
+    "標準化缺值欄位": 3,
+    "罪名（對應標準化）": 3
+  },
+  "gates": {
+    "before": {
+      "accusation": 64184,
+      "article": 62457,
+      "imprisonment": 44590
+    },
+    "after": {
+      "accusation": 64182,
+      "article": 62457,
+      "imprisonment": 44590
+    }
+  },
+  "sample_groups": {
+    "explicit_resolved": 5,
+    "ambiguous_resolved": 5,
+    "ambiguous_unresolved": 5
+  },
+  "cohort_id_sha256": "75fae88bf4da0a4e9ad36dc64f25757196bc372c6990cb358511414b26c1eaeb",
+  "source_rows_sha256": "dca11b8dab12c1cff0e8d6c9e86459385dcad402583060afbc9386bd4bcd962c",
+  "code_sha256": {
+    "normalize.py": "bead7f6a7963a993266563e1ea5384238eca5dfac8a47091357861936ae83e12",
+    "structure_tasks.py": "9b46c245f1f341fbe2b9d8fbcd7e8d40ed4bc48e2f0083aa64ab71412aa78081",
+    "driving_charge.py": "2e4a030d281c04cf1126d0c460209d95a623a22a71a2be33b94d5c099a432c93",
+    "law_fallback.py": "d441c94591fdc848781b866f8bd0c84bbe83d6b1cdafce849a85f12eaaa6a28a"
+  },
+  "baseline_commit": "2fe4ca5d83fdc758af579246983dad0dc7987f39",
+  "seconds": 371.008586,
+  "modeldata": {
+    "counts": {
+      "rows": 54214,
+      "accusation_valid": 45540,
+      "article_valid": 44391,
+      "imprisonment_valid": 35363,
+      "fallback_records": 1077,
+      "fallback_article_eligible": 997,
+      "invalid_article_with_partial_evidence": 6846
+    },
+    "changed_records": 2,
+    "prepared": {
+      "accusation": {
+        "classes": 50,
+        "splits": {
+          "train": 30447,
+          "valid": 6201,
+          "test": 7495
+        }
+      },
+      "article": {
+        "classes": 59,
+        "splits": {
+          "train": 29640,
+          "valid": 5956,
+          "test": 7562
+        }
+      },
+      "imprisonment": {
+        "classes": 11,
+        "splits": {
+          "train": 23596,
+          "valid": 4868,
+          "test": 6861
+        }
+      }
+    },
+    "fact_sequence_sha256": "f0157cf3a19bc2a203630f46fc136bd7be29c5c9047b598f8570f5c0a913b0f5",
+    "consumer": "../BERT-base-prediction/Taiwan",
+    "consumer_code_sha256": {
+      "data.py": "f2f102e5138aa02adcbd0fb64f34d8df855abfb7d406366fc47bdd0f22d94c68",
+      "analyze.py": "58faa4db944484ca95bac286566d453c14a14fb7ad033ddd8d781b0f86f26fd7"
+    }
+  },
+  "clean_checkout_tests": 587,
+  "changed_cases": [
+    {
+      "id": 84235,
+      "case": "臺灣臺北地方法院 113 年度審交簡字第 118 號刑事判決",
+      "in_cohort": true,
+      "raw_charges": [
+        "吐氣所含酒精濃度達每公升零點二五毫克以上而駕駛動力交通工具",
+        "駕駛動力交通工具妨害公務執行罪"
+      ],
+      "before": [
+        [
+          "酒駕罪"
+        ],
+        [
+          "酒駕罪"
+        ]
+      ],
+      "after": [
+        [
+          "酒駕罪"
+        ],
+        []
+      ],
+      "raw_laws": [
+        [],
+        [
+          "刑法第135條第3項第1款"
+        ]
+      ],
+      "law_sources": [
+        "",
+        "理由"
+      ],
+      "task_validity": {
+        "before": {
+          "accusation": true,
+          "article": false,
+          "imprisonment": true
+        },
+        "after": {
+          "accusation": false,
+          "article": false,
+          "imprisonment": true
+        }
+      }
+    },
+    {
+      "id": 145163,
+      "case": "臺灣臺北地方法院 112 年度審交訴字第 90 號刑事判決",
+      "in_cohort": true,
+      "raw_charges": [
+        "犯駕駛動力交通工具而有其他情事足認服用酒類致不能安全駕駛",
+        "駕駛動力交通工具妨害公務執行罪"
+      ],
+      "before": [
+        [
+          "酒駕罪"
+        ],
+        [
+          "酒駕罪"
+        ]
+      ],
+      "after": [
+        [
+          "酒駕罪"
+        ],
+        []
+      ],
+      "raw_laws": [
+        [],
+        [
+          "刑法第135條第3項第1款"
+        ]
+      ],
+      "law_sources": [
+        "",
+        "理由"
+      ],
+      "task_validity": {
+        "before": {
+          "accusation": true,
+          "article": false,
+          "imprisonment": true
+        },
+        "after": {
+          "accusation": false,
+          "article": false,
+          "imprisonment": true
+        }
+      }
+    },
+    {
+      "id": 146765,
+      "case": "臺灣臺北地方法院 112 年度交簡上字第 77 號刑事判決",
+      "in_cohort": false,
+      "raw_charges": [
+        "不能安全駕駛動力交通工具罪",
+        "侮辱公務員罪",
+        "不能安全駕駛動力交通工具罪",
+        "侮辱公務員罪"
+      ],
+      "before": [
+        [
+          "酒駕罪"
+        ],
+        [
+          "侮辱公務員罪"
+        ],
+        [
+          "酒駕罪"
+        ],
+        [
+          "侮辱公務員罪"
+        ]
+      ],
+      "after": [
+        [],
+        [
+          "侮辱公務員罪"
+        ],
+        [],
+        [
+          "侮辱公務員罪"
+        ]
+      ],
+      "raw_laws": [
+        [
+          "刑法第185條之3第1項第1款",
+          "刑法第140條"
+        ],
+        [
+          "刑法第140條"
+        ],
+        [
+          "刑法第185條之3第1項第1款",
+          "刑法第140條"
+        ],
+        [
+          "刑法第140條"
+        ]
+      ],
+      "law_sources": [
+        "舊版備援（案件法條備援）",
+        "理由",
+        "舊版備援（案件法條備援）",
+        "理由"
+      ],
+      "task_validity": {
+        "before": {
+          "accusation": false,
+          "article": false,
+          "imprisonment": false
+        },
+        "after": {
+          "accusation": false,
+          "article": false,
+          "imprisonment": false
+        }
+      }
+    }
+  ],
+  "verification": {
+    "sheet_rows": {
+      "罪法刑": 107098,
+      "有罪_單被告": 71692,
+      "單一應執行刑": 9340,
+      "單一宣告刑": 52695,
+      "非單一刑期": 9657,
+      "罪法_有值但標準化無值": 2271,
+      "罪法_原始無值": 2691,
+      "刑期_有值但月數無值": 6,
+      "刑期_原始無值": 66687
+    },
+    "fixed_samples": {
+      "reviewer": {
+        "rows": 100,
+        "changed_rows": 0
+      },
+      "fallback": {
+        "rows": 100,
+        "changed_rows": 0
+      }
+    },
+    "excel_audits_over_cell_limit": 2,
+    "historical_evidence_hashes_unchanged": true,
+    "structured_integrity": "ok",
+    "xlsx_zip_integrity": "ok",
+    "outputs": {
+      "2018-2025_罪法刑.db": {
+        "sha256": "14751e6ceb4dda4a69e8f895e412499c05b4b87b4aeab9f0b855332f251f2b9c",
+        "previous_version": "finaldata/formal_fallback_20261020/2018-2025_罪法刑.db",
+        "previous_sha256": "bd2a0b7e9488e0d3c14415efad543ee6823ea28fb580a9114c6ae8d76b924bcc"
+      },
+      "2018-2025_罪法刑.xlsx": {
+        "sha256": "e30304aac95ab2adbabe3716b997724ac8edacd1d0242e3191a01fc3ba30676e",
+        "previous_version": "finaldata/formal_fallback_20261020/2018-2025_罪法刑.xlsx",
+        "previous_sha256": "77394da1c84a42c219ac8be49cf4d9187ea25e2579650670b51dcf64c66c7127"
+      }
+    }
+  }
+}

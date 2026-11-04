@@ -7,7 +7,7 @@
   中途斷掉（電腦睡眠、重開機、斷網）就得從頭重翻所有清單頁。
   本腳本以「月」為單位執行，並把每個月的結果記在狀態檔（JSON）：
     - 已完成的月份，重跑時自動跳過
-    - 有「清單頁錯誤未復原」的月份不算完成，重跑時會再試一次
+    - 有區段沒爬完（清單頁錯誤未復原、裁判書下載失敗等）的月份不算完成，重跑時會再試一次
     - 全部月份跑完才解析並匯出成「一份」Excel
   重跑同一個月時，已下載的裁判書會自動跳過，只有清單頁需要重翻。
 
@@ -36,7 +36,7 @@ from typing import Dict, List, Optional, Tuple
 
 import crawler
 from crawl_batched import batched_crawl, build_label
-from crawler import Pacer, _COURT_CODES, _JUDGMENT_TYPES, _court_code
+from crawler import Pacer, _COURT_CODES, _JUDGMENT_TYPES, _court_code, _is_simple_court
 
 # 只用於 --dry-run 的預估。2 月未加全文粗篩時實測 55 分鐘／月；加上粗篩後清單頁
 # 大幅減少（實測單日 976 → 55 筆），保守估每月 25 分鐘。開跑後會改依實測顯示剩餘時間。
@@ -187,13 +187,14 @@ def crawl_months(
     state_path:    str,
     headless:      bool = True,
     force:         bool = False,
+    skip_small_claims: bool = False,
 ) -> Dict:
     """
     依序爬取各月份，每個月結束就更新狀態檔。回傳最新的狀態。
 
     月份狀態：
       done         完整跑完，重跑時跳過
-      incomplete   跑完但有區段清單頁錯誤未復原，重跑時再試
+      incomplete   跑完但有區段沒爬完（清單頁錯誤、下載失敗等），重跑時再試
       error        發生例外（斷網、瀏覽器異常等），重跑時再試
       interrupted  被 Ctrl+C 中斷，重跑時再試
     """
@@ -228,7 +229,7 @@ def crawl_months(
                 keyword="", total_target=0,
                 start_date=start, end_date=end, headless=headless,
                 court=court, case_types=case_types, judgment_type=judgment_type,
-                pacer=pacer, stats=stats,
+                pacer=pacer, stats=stats, skip_small_claims=skip_small_claims,
             )
         except KeyboardInterrupt:
             record.update(status="interrupted",
@@ -280,6 +281,9 @@ def crawl_months(
 
 # ─── 匯出 ─────────────────────────────────────────────────────────────────────
 def _court_full_name(court: str) -> str:
+    if _is_simple_court(court):
+        # 簡易庭名稱本身就是全名；代碼（SCD 等）和地院共用，不能反查
+        return court.strip().replace("台", "臺")
     code = _court_code(court)
     if not code:
         return court
@@ -457,6 +461,8 @@ def main(argv: Optional[List[str]] = None) -> int:
     ap.add_argument("--allow-sleep", action="store_true",
                     help="不阻止 Windows 睡眠（預設執行期間會保持喚醒）")
     ap.add_argument("--no-headless", action="store_true", help="顯示瀏覽器視窗（debug 用）")
+    ap.add_argument("--skip-small-claims", action="store_true",
+                    help="下載前略過小額案件（北小、勞小…），補爬簡易庭時用")
     args = ap.parse_args(argv)
 
     try:
@@ -469,6 +475,10 @@ def main(argv: Optional[List[str]] = None) -> int:
 
     label      = build_label("", args.court, case_types, args.judgment_type)
     state_path = args.state or default_state_path(label, args.year)
+    if args.skip_small_claims and not args.state:
+        # 略過小額的進度不能和完整爬取共用狀態檔：之後改成要小額時，
+        # 月份不能因為「已完成」而被跳過
+        state_path = state_path.replace(".json", "_無小額.json")
     export_m   = list(range(1, 13)) if args.export_all else months
 
     print("=" * 60)
@@ -492,7 +502,8 @@ def main(argv: Optional[List[str]] = None) -> int:
             try:
                 state = crawl_months(args.year, months, args.court, case_types,
                                      args.judgment_type, args.delay, state_path,
-                                     headless=not args.no_headless, force=args.force)
+                                     headless=not args.no_headless, force=args.force,
+                                     skip_small_claims=args.skip_small_claims)
             except KeyboardInterrupt:
                 return 130
 
