@@ -11,7 +11,7 @@ import sqlite3
 import sys
 import tempfile
 import unittest
-from contextlib import redirect_stdout
+from contextlib import closing, redirect_stdout
 from pathlib import Path
 from unittest import mock
 
@@ -38,7 +38,7 @@ class _TempDbCase(unittest.TestCase):
         html_parser.DB_PATH = self.db
         html_parser.init_db()
         html_parser.DB_PATH = self._orig
-        with sqlite3.connect(self.db) as c:
+        with closing(sqlite3.connect(self.db)) as c, c:
             c.executemany("INSERT INTO judgments (id, crawl_id, judges, clerk, full_text) "
                           "VALUES (?,?,?,?,?)", [(i, i, j, k, t) for i, j, k, t in ROWS])
         self.patches = [mock.patch.object(R, "DB_PATH", self.db),
@@ -63,7 +63,7 @@ class _TempDbCase(unittest.TestCase):
         return rc, out.getvalue()
 
     def judges(self):
-        with sqlite3.connect(self.db) as c:
+        with closing(sqlite3.connect(self.db)) as c, c:
             return dict(c.execute("SELECT id, judges FROM judgments"))
 
     def backups(self):
@@ -90,7 +90,7 @@ class TestRefreshJudges(_TempDbCase):
         backups = self.backups()
         self.assertEqual(len(backups), 1)
         self.assertTrue(backups[0].endswith("-judges"))
-        with sqlite3.connect(backups[0]) as c:      # 備份是寫入前的內容
+        with closing(sqlite3.connect(backups[0])) as c, c:      # 備份是寫入前的內容
             self.assertEqual(c.execute("SELECT judges FROM judgments WHERE id=2").fetchone()[0], "")
 
     def test_nothing_to_change_skips_backup(self):

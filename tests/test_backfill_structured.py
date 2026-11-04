@@ -12,7 +12,7 @@ import sqlite3
 import sys
 import tempfile
 import unittest
-from contextlib import redirect_stdout
+from contextlib import closing, redirect_stdout
 from pathlib import Path
 from unittest import mock
 
@@ -51,7 +51,7 @@ class _TempDbCase(unittest.TestCase):
         self._orig = (B.DB_PATH, html_parser.DB_PATH)
         B.DB_PATH = html_parser.DB_PATH = self.db
         html_parser.init_db()
-        with sqlite3.connect(self.db) as c:
+        with closing(sqlite3.connect(self.db)) as c, c:
             c.executemany("INSERT INTO judgments (id, crawl_id, case_number, court, judgment_date, "
                           "case_type, judgment_type, verdict) VALUES (?,?,?,?,?,'民事','判決',?)",
                           [(r[0], *r) for r in ROWS])
@@ -67,7 +67,7 @@ class _TempDbCase(unittest.TestCase):
             return B.run(**kw)
 
     def column(self, name):
-        with sqlite3.connect(self.db) as c:
+        with closing(sqlite3.connect(self.db)) as c, c:
             return dict(c.execute(f"SELECT id, {name} FROM judgments"))
 
 
@@ -86,12 +86,12 @@ class TestRun(_TempDbCase):
         self.assertEqual(glob.glob(self.db + ".bak-*"), [])
 
     def test_backfill_writes_structured_columns_only(self):
-        with sqlite3.connect(self.db) as c:
+        with closing(sqlite3.connect(self.db)) as c, c:
             before = c.execute("SELECT verdict, case_number FROM judgments ORDER BY id").fetchall()
         self.assertEqual(self.run_backfill(no_backup=True), 3)
         self.assertEqual(set(self.column("structuring_version").values()), {STRUCTURING_VERSION})
         self.assertEqual(self.column("outcome"), {1: "勝訴", 2: "敗訴", 3: "敗訴"})
-        with sqlite3.connect(self.db) as c:
+        with closing(sqlite3.connect(self.db)) as c, c:
             after = c.execute("SELECT verdict, case_number FROM judgments ORDER BY id").fetchall()
         self.assertEqual(before, after, "原始欄位不能被改動")
 
@@ -106,7 +106,7 @@ class TestRun(_TempDbCase):
 
     def test_only_missing_refreshes_old_versions(self):
         self.run_backfill(no_backup=True)
-        with sqlite3.connect(self.db) as c:
+        with closing(sqlite3.connect(self.db)) as c, c:
             c.execute("UPDATE judgments SET structuring_version='0.0.0' WHERE id=3")
         self.assertEqual(self.run_backfill(only_missing=True, no_backup=True), 1)
         self.assertEqual(self.run_backfill(only_missing=True, no_backup=True), 0)

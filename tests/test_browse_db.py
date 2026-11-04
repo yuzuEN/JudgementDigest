@@ -10,7 +10,7 @@ import sqlite3
 import sys
 import tempfile
 import unittest
-from contextlib import redirect_stdout
+from contextlib import closing, redirect_stdout
 from pathlib import Path
 from unittest import mock
 
@@ -25,7 +25,7 @@ class _TempRoot(unittest.TestCase):
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory()
         self.db = os.path.join(self.tmp.name, "judgments.db")
-        with sqlite3.connect(self.db) as c:
+        with closing(sqlite3.connect(self.db)) as c, c:
             c.execute("CREATE TABLE judgments (id INTEGER, court TEXT, judgment_date TEXT)")
         self.root = mock.patch.object(B, "ROOT", self.tmp.name)
         self.root.start()
@@ -35,7 +35,7 @@ class _TempRoot(unittest.TestCase):
         self.tmp.cleanup()
 
     def indexes(self):
-        with sqlite3.connect(self.db) as c:
+        with closing(sqlite3.connect(self.db)) as c, c:
             return {r[0] for r in c.execute("SELECT name FROM sqlite_master WHERE type='index'")}
 
     def run_main(self, *argv, call=None):

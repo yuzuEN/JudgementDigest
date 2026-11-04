@@ -12,7 +12,7 @@ import subprocess
 import sys
 import tempfile
 import unittest
-from contextlib import nullcontext, redirect_stdout
+from contextlib import closing, nullcontext, redirect_stdout
 from pathlib import Path
 from unittest import mock
 
@@ -67,7 +67,7 @@ class TestPendingMonths(_TempCwd):
 
 class TestRecordCount(_TempCwd):
     def test_counts_crawl_records(self):
-        with sqlite3.connect("judgments.db") as c:
+        with closing(sqlite3.connect("judgments.db")) as c, c:
             c.execute("CREATE TABLE crawl_records (id INTEGER PRIMARY KEY)")
             c.executemany("INSERT INTO crawl_records VALUES (?)", [(1,), (2,), (3,)])
         self.assertEqual(C.record_count(), 3)

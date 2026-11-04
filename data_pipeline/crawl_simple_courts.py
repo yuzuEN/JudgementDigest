@@ -21,6 +21,7 @@ import sqlite3
 import subprocess
 import sys
 import time
+from contextlib import closing
 from datetime import datetime
 
 import crawl_monthly
@@ -45,7 +46,7 @@ def now() -> str:
 
 
 def record_count() -> int:
-    with sqlite3.connect("judgments.db") as c:
+    with closing(sqlite3.connect("judgments.db")) as c:
         return c.execute("SELECT COUNT(*) FROM crawl_records").fetchone()[0]
 
 
