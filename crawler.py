@@ -40,6 +40,10 @@ from webdriver_manager.chrome import ChromeDriverManager
 # ─── 設定 ────────────────────────────────────────────────────────────────────
 BASE_URL    = "https://judgment.judicial.gov.tw/FJUD/default.aspx"
 BASE_URL_AD = "https://judgment.judicial.gov.tw/FJUD/default_AD.aspx"  # 進階搜尋（含日期篩選）
+# 「簡易案件查詢」的進階搜尋：表單欄位與 default_AD.aspx 相同，但法院清單是各簡易庭。
+# 大多數簡易庭（臺北簡易庭 TPEV、竹北簡易庭 CPEV…）的判決不在一般裁判書查詢的索引裡，
+# 只能從這裡查到。
+BASE_URL_E_AD = "https://judgment.judicial.gov.tw/FJUD/Defaulte_AD.aspx"
 DB_PATH   = "judgments.db"
 HTML_DIR  = "html_cache"
 LOG_FILE  = "crawler.log"
@@ -400,7 +404,9 @@ def _save_debug_html(driver: webdriver.Chrome, tag: str = "debug") -> None:
 # ─── Step A: 取得結果列表頁網址 ───────────────────────────────────────────────
 # 搜尋後司法院頁面在 default.aspx 上以 AJAX 顯示摘要，
 # 並提供 qryresultlst.aspx?ty=JUDBOOK&q=<hash> 的「查詢結果」連結。
-_LIST_CSS = "a[href*='qryresultlst.aspx?ty=JUDBOOK']"
+# 簡易案件查詢的清單連結是 ty=SIMJUDBOOK。
+_LIST_CSS = ("a[href*='qryresultlst.aspx?ty=JUDBOOK'],"
+             "a[href*='qryresultlst.aspx?ty=SIMJUDBOOK']")
 
 def _get_results_list_url(driver: webdriver.Chrome) -> Optional[str]:
     """等待並回傳完整結果列表頁的 URL（不含法院篩選參數的版本）。"""
@@ -572,6 +578,46 @@ _COURT_CODES = {
     "臺灣高雄少年及家事法院":     "KSY",
 }
 
+# 「簡易案件查詢」進階搜尋（Defaulte_AD.aspx）的 jud_court 選項值。
+# 新竹、苗栗、基隆簡易庭沿用地院代碼（SCD、MLD、KLD），它們的判決也在一般裁判書查詢裡，
+# 一般查詢爬地院時就會一起抓到。其餘簡易庭用自己的代碼，判決只在簡易案件查詢裡。
+_SIMPLE_COURT_CODES = {
+    "臺北簡易庭": "TPE", "新店簡易庭": "STE", "士林簡易庭": "SLE", "內湖簡易庭": "NHE",
+    "板橋簡易庭": "PCE", "三重簡易庭": "SJE", "桃園簡易庭": "TYE", "中壢簡易庭": "CLE",
+    "新竹簡易庭": "SCD", "竹北簡易庭": "CPE", "苗栗簡易庭": "MLD", "臺中簡易庭": "TCE",
+    "沙鹿簡易庭": "SDE", "豐原簡易庭": "FYE", "彰化簡易庭": "CHE", "員林簡易庭": "OLE",
+    "北斗簡易庭": "PDE", "南投簡易庭": "NTE", "斗六簡易庭": "TLE", "虎尾簡易庭": "HUE",
+    "嘉義簡易庭": "CYE", "北港簡易庭": "PKE", "臺南簡易庭": "TNE", "柳營簡易庭": "SYE",
+    "新市簡易庭": "SSE", "高雄簡易庭": "KSE", "鳳山簡易庭": "FSE", "橋頭簡易庭": "CDE",
+    "岡山簡易庭": "GSE", "旗山簡易庭": "CSE", "屏東簡易庭": "PTE", "潮州簡易庭": "CCE",
+    "臺東簡易庭": "TTE", "花蓮簡易庭": "HLE", "宜蘭簡易庭": "ILE", "羅東簡易庭": "LTE",
+    "基隆簡易庭": "KLD", "馬公簡易庭": "MKE", "金城簡易庭": "KME",
+}
+# 只在簡易案件查詢裡、一般查詢查不到的簡易庭（補爬時用這份清單）
+SIMPLE_ONLY_COURTS = [n for n, c in _SIMPLE_COURT_CODES.items() if c not in ("SCD", "MLD", "KLD")]
+
+# 簡易庭 → 所屬地方法院（分析時把簡易庭判決歸回地院比較）
+SIMPLE_COURT_PARENT = {
+    "臺北簡易庭": "臺灣臺北地方法院", "新店簡易庭": "臺灣臺北地方法院",
+    "士林簡易庭": "臺灣士林地方法院", "內湖簡易庭": "臺灣士林地方法院",
+    "板橋簡易庭": "臺灣新北地方法院", "三重簡易庭": "臺灣新北地方法院",
+    "桃園簡易庭": "臺灣桃園地方法院", "中壢簡易庭": "臺灣桃園地方法院",
+    "新竹簡易庭": "臺灣新竹地方法院", "竹北簡易庭": "臺灣新竹地方法院",
+    "苗栗簡易庭": "臺灣苗栗地方法院",
+    "臺中簡易庭": "臺灣臺中地方法院", "沙鹿簡易庭": "臺灣臺中地方法院", "豐原簡易庭": "臺灣臺中地方法院",
+    "彰化簡易庭": "臺灣彰化地方法院", "員林簡易庭": "臺灣彰化地方法院", "北斗簡易庭": "臺灣彰化地方法院",
+    "南投簡易庭": "臺灣南投地方法院",
+    "斗六簡易庭": "臺灣雲林地方法院", "虎尾簡易庭": "臺灣雲林地方法院", "北港簡易庭": "臺灣雲林地方法院",
+    "嘉義簡易庭": "臺灣嘉義地方法院",
+    "臺南簡易庭": "臺灣臺南地方法院", "柳營簡易庭": "臺灣臺南地方法院", "新市簡易庭": "臺灣臺南地方法院",
+    "高雄簡易庭": "臺灣高雄地方法院", "鳳山簡易庭": "臺灣高雄地方法院",
+    "橋頭簡易庭": "臺灣橋頭地方法院", "岡山簡易庭": "臺灣橋頭地方法院", "旗山簡易庭": "臺灣橋頭地方法院",
+    "屏東簡易庭": "臺灣屏東地方法院", "潮州簡易庭": "臺灣屏東地方法院",
+    "臺東簡易庭": "臺灣臺東地方法院", "花蓮簡易庭": "臺灣花蓮地方法院",
+    "宜蘭簡易庭": "臺灣宜蘭地方法院", "羅東簡易庭": "臺灣宜蘭地方法院",
+    "基隆簡易庭": "臺灣基隆地方法院", "馬公簡易庭": "臺灣澎湖地方法院", "金城簡易庭": "福建金門地方法院",
+}
+
 # 進階搜尋的「案件類別」（jud_sys checkbox）值。未勾選 = 全選。
 _CASE_SYS_CODES = {
     "憲法": "C", "民事": "V", "刑事": "M", "行政": "A", "懲戒": "P",
@@ -593,6 +639,8 @@ def _court_code(name: str) -> str:
     norm = raw.replace("台", "臺")
     if norm in _COURT_CODES:
         return _COURT_CODES[norm]
+    if norm in _SIMPLE_COURT_CODES:
+        return _SIMPLE_COURT_CODES[norm]
     # 允許簡寫（例如「臺北地方法院」「臺北地院」）—— 僅在唯一命中時接受
     cand = [c for n, c in _COURT_CODES.items() if norm in n]
     if len(cand) == 1:
@@ -600,6 +648,11 @@ def _court_code(name: str) -> str:
     if not cand and norm.endswith("地院"):
         return _court_code(norm[:-2] + "地方法院")
     return ""
+
+
+def _is_simple_court(name: str) -> bool:
+    """法院名稱是不是簡易庭（要改用簡易案件查詢頁）。"""
+    return (name or "").strip().replace("台", "臺") in _SIMPLE_COURT_CODES
 
 
 def _sys_code(name: str) -> str:
@@ -749,7 +802,8 @@ def _ad_search(
             return None, None
         values[f"dy{label}"], values[f"dm{label}"], values[f"dd{label}"] = parts
 
-    driver.get(BASE_URL_AD)
+    # 簡易庭的判決只在「簡易案件查詢」裡；兩個查詢頁的表單欄位相同，只換網址。
+    driver.get(BASE_URL_E_AD if _is_simple_court(court) else BASE_URL_AD)
     time.sleep(2.5)
     _dismiss_alert(driver)
 
@@ -808,6 +862,10 @@ def _ad_search(
     return url, total
 
 
+# 小額案件的字別：「臺北簡易庭 113 年度 北小 字第 1 號」「勞小」「店小」
+_SMALL_CLAIM_RE = re.compile(r"年度\s*\S*小\s*字第")
+
+
 # ─── Step B: 從結果列表頁解析個別案件 ────────────────────────────────────────
 # qryresultlst.aspx 上每筆案件的連結指向
 # data.aspx?ty=JD&id=<court>,<year>,<type>,<num>,<date>
@@ -820,7 +878,7 @@ _CASE_LINK_CSS = (
 # 例：「臺灣新竹地方法院 113 年度…」→「臺灣新竹地方法院」
 _COURT_RE = re.compile(
     r'^(.*?(?:憲法法庭|少年及家事法院|地方法院|高等法院|最高行政法院|最高法院|高等行政法院'
-    r'|行政法院|智慧財產及商業法院|智慧財產法院|海事法院)'
+    r'|行政法院|智慧財產及商業法院|智慧財產法院|海事法院|簡易庭)'
     r'(?:\s+\S+分院|\s+地方庭)?)'
 )
 
@@ -1013,6 +1071,7 @@ def search_and_crawl(
     driver:      Optional[webdriver.Chrome] = None,
     pacer:       Optional["Pacer"] = None,
     skip_if_truncated: bool = False,
+    skip_small_claims: bool = False,
 ) -> Dict[str, object]:
     """
     以「關鍵字 + 裁判日期區間 + 法院 + 案件類別」搜尋並爬取裁判書。
@@ -1163,10 +1222,17 @@ def search_and_crawl(
             ]
 
         def _filter_by_judgment_type(items: List[Dict]) -> List[Dict]:
-            """裁判種類過濾（清單頁的裁判字號尾端就寫明「…民事判決」／「…民事裁定」）。"""
-            if not judgment_type:
-                return items
-            return [it for it in items if judgment_type in (it.get("case_number") or "")]
+            """裁判種類過濾（清單頁的裁判字號尾端就寫明「…民事判決」／「…民事裁定」）。
+
+            skip_small_claims：一併略過小額案件（字別含「小」：北小、店小、勞小…）。
+            簡易庭的判決約四分之三是小額，小額判決多半只有主文和理由要領，
+            分析用不到時在下載前就略過，可省下大部分的爬取時間。
+            """
+            if judgment_type:
+                items = [it for it in items if judgment_type in (it.get("case_number") or "")]
+            if skip_small_claims:
+                items = [it for it in items if not _SMALL_CLAIM_RE.search(it.get("case_number") or "")]
+            return items
 
         def _recover_list_page(base_url: str, page: int, marker: str, label: str) -> bool:
             """
@@ -1327,7 +1393,7 @@ def search_and_crawl(
         # 未指定案號年度過濾時，收到剛好 _RESULT_LIMIT 筆幾乎必然代表被截斷。
         if (total is None and not truncated and not court_links
                 and case_year_start is None and case_year_end is None
-                and not judgment_type
+                and not judgment_type and not skip_small_claims
                 and len(all_items) >= _RESULT_LIMIT
                 and max_results >= _RESULT_LIMIT):
             truncated = True

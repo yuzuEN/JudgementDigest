@@ -205,6 +205,22 @@ class TestOutcome(unittest.TestCase):
         v = "一、被告應給付原告新臺幣26,000元。二、原告其餘之訴駁回。三、訴訟費用由被告負擔5/100，餘由原告負擔。"
         self.assertEqual(S.classify_outcome(v)["outcome"], S.PARTIAL)
 
+    def test_rest_dismissed_with_unlisted_grant_verb_is_partial(self):
+        # 准許判項的動詞不在清單裡，但「其餘之訴駁回」表示有准許的部分，不是敗訴
+        v = "被告應將如附表所示之帳冊提供原告查核及影印。原告其餘之訴駁回。訴訟費用由被告負擔。"
+        self.assertEqual(S.classify_outcome(v)["outcome"], S.PARTIAL)
+
+    def test_newly_listed_grant_verbs_are_wins(self):
+        for v in ("被告應提繳新臺幣35,976元至原告之勞工退休金個人專戶。訴訟費用由被告負擔。",
+                  "被告應將土地交還原告。訴訟費用由被告負擔。",
+                  "被告不得持本院109年度司票字第1671號本票裁定為執行名義對原告為強制執行。",
+                  "本院111年度司執字第1號強制執行事件製作之分配表，次序5被告受分配金額，應予剔除。"):
+            self.assertEqual(S.classify_outcome(v)["outcome"], S.WIN, v)
+
+    def test_correcting_a_judgment_stays_non_final(self):
+        v = "原判決之原本及其正本當事人欄關於被告「甲有限公司」之記載，應更正為「甲股份有限公司」。"
+        self.assertEqual(S.classify_outcome(v)["outcome"], S.NON_FINAL)
+
     # ── 以下為回歸測試 ────────────────────────────────────────────────
 
     def test_dismissal_with_provisional_execution_is_still_a_loss(self):
@@ -469,10 +485,23 @@ class TestJointReleaseClause(unittest.TestCase):
         "前二項給付，如任一被告為給付，其餘被告於給付範圍內，免除給付責任。"
     )
 
-    def test_total_is_withheld_not_summed(self):
+    def test_identical_items_count_once(self):
+        # 各判項金額相同 → 同一筆債務列兩次，總額就是那一筆
         r = S.extract_awarded_amounts(self.VERDICT)
-        self.assertIsNone(r["awarded_total"])       # 不是 881794
+        self.assertEqual(r["awarded_total"], 440897)   # 不是 881794
         self.assertEqual(r["awarded_joint_release"], 1)
+
+    def test_total_is_withheld_when_items_differ(self):
+        # 金額不同是部分重疊，總額無從得知
+        v = ("被告甲應給付原告新臺幣10萬元。被告乙應給付原告新臺幣6萬元。"
+             "前二項給付，如任一被告為給付，其餘被告於給付範圍內，免除給付責任。")
+        self.assertIsNone(S.extract_awarded_amounts(v)["awarded_total"])
+
+    def test_claim_with_release_clause_is_not_summed(self):
+        far = ("並聲明：㈠被告甲應給付原告998,415元。㈡被告乙應給付原告998,415元。"
+               "㈢第一項、第二項給付，如任一被告已為給付，於給付範圍內，其他被告免給付義務。"
+               "㈣願供擔保請准宣告假執行。")
+        self.assertEqual(S.extract_claimed_amount(far, "", None, "")["claimed_total"], 998415)
 
     def test_items_are_still_recorded(self):
         # 明細是事實記錄，不因總額作廢而消失——下游要能自行判斷
@@ -536,6 +565,49 @@ class TestReliefType(unittest.TestCase):
         flags = r["quality_flags"].split("|")
         self.assertIn("非金錢給付", flags)
         self.assertNotIn("金額抽取失敗", flags)
+
+
+class TestAmountShapes(unittest.TestCase):
+    """抽樣核對找到的金額寫法：各、定期給付、提繳、聲明變更。"""
+
+    def test_each_multiplies_by_recipients(self):
+        v = "被告應連帶給付原告蔡政宏、黃婉芹各新臺幣50萬元，及均自民國112年10月27日起算利息。"
+        self.assertEqual(S.extract_awarded_amounts(v)["awarded_total"], 1000000)
+
+    def test_respectively_listed_amounts_are_not_multiplied(self):
+        v = "被告應給付原告甲女、乙女、丙男各400,000元、200,000元、150,000元，及均自起訴狀繕本送達翌日起"
+        self.assertEqual(S.extract_awarded_amounts(v)["awarded_total"], 750000)
+
+    def test_periodic_payment_is_not_added_to_lump_sum(self):
+        v = ("被告應給付原告新臺幣1萬8000元，及自民國112年9月11日起至清償日止，按年息百分之5計算之利息。"
+             "被告應自民國112年5月1日起至騰空遷讓返還上開房屋之日止，按月給付原告新臺幣9000元。")
+        r = S.extract_awarded_amounts(v)
+        self.assertEqual(r["awarded_total"], 18000)
+        self.assertEqual([i.get("periodic") for i in r["awarded_items"]], [None, 1])
+
+    def test_only_periodic_payment_has_no_total(self):
+        v = "被告應自民國一○九年十二月十五日起至遷讓返還前項房屋之日止，按月連帶給付原告新臺幣參仟捌佰壹拾元。"
+        self.assertIsNone(S.extract_awarded_amounts(v)["awarded_total"])
+
+    def test_pension_contribution_counts_as_money(self):
+        v = "被告應給付原告新臺幣9萬4,252元。被告應提繳新臺幣2萬6,046元至原告之勞工退休金專戶。"
+        self.assertEqual(S.extract_awarded_amounts(v)["awarded_total"], 120298)
+
+    def test_claim_changed_by_amended_pleading(self):
+        far = ("原告起訴時聲明：被告應給付原告60萬元。嗣於113年4月23日以民事變更訴之聲明狀聲明："
+               "㈠被告應給付原告168萬4683元，及自起訴狀繕本送達翌日起。㈡願供擔保請准宣告假執行。")
+        self.assertEqual(S.extract_claimed_amount(far, "", None, "")["claimed_total"], 1684683)
+
+    def test_claim_changed_in_court(self):
+        far = ("原告聲明：被告應給付原告15萬元。嗣於114年6月3日言詞辯論期日當庭變更為："
+               "一、被告應給付原告64,333元。二、被告應給付原告5,000元。三、願供擔保請准宣告假執行。")
+        self.assertEqual(S.extract_claimed_amount(far, "", None, "")["claimed_total"], 69333)
+
+    def test_amount_only_change_uses_later_claim(self):
+        far = ("原告起訴聲明：被告應給付原告1,115,783元。嗣於113年11月28日當庭擴張請求之金額為"
+               "1,348,820元如後原告聲明所示，應予准許。貳、實體方面一、原告主張：並聲明："
+               "被告應給付原告1,348,820元，及自起訴狀繕本送達翌日起。二、被告則以：")
+        self.assertEqual(S.extract_claimed_amount(far, "", None, "")["claimed_total"], 1348820)
 
 
 class TestCostShare(unittest.TestCase):

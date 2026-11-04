@@ -63,7 +63,7 @@ _ZERO_WIDTH_RE = re.compile("[​‌‍⁠﻿]")
 # 從「裁判字號」全文解析法院名稱
 _COURT_RE = re.compile(
     r'^(.*?(?:憲法法庭|少年及家事法院|地方法院|高等法院|最高行政法院|最高法院|高等行政法院'
-    r'|行政法院|智慧財產及商業法院|智慧財產法院|海事法院)'
+    r'|行政法院|智慧財產及商業法院|智慧財產法院|海事法院|簡易庭)'
     r'(?:\s+\S+分院|\s+地方庭)?)'
 )
 
@@ -160,7 +160,7 @@ _PREAMBLE_STOP_RE = re.compile(
     r"|如不服本(?:判決|裁定)"
 )
 # 驗證 court_hint / date_hint 來自舊版 crawl_records 時是否有效
-_COURT_VALID_RE = re.compile(r"法院")
+_COURT_VALID_RE = re.compile(r"法院|簡易庭")
 _DATE_HINT_RE   = re.compile(r"\d{2,3}[./年]\d{1,2}")
 
 
@@ -923,15 +923,19 @@ def _cited_clause(text: str) -> str:
 
 
 # ─── Step 6：法官 / 書記官擷取 ───────────────────────────────────────────────
-_JUDGE_NOISE_RE = re.compile(r"獨任|審理|書記|主任|股長|庭長")
+# 「辦理」：頁尾「法院得不將書狀分與法官辦理」會被當成一位叫「辦理」的法官
+_JUDGE_NOISE_RE = re.compile(r"獨任|審理|書記|主任|股長|庭長|辦理|諭知|本判決|不得上")
 
 # CJK 姓名：允許字間「水平」空格（不跨行），最多 6 字（含空格前後各字）
 # [^\S\n]* = 任意非換行空白，可為零寬，不會跨行
-_CJK_NAME_RE = r"([一-鿿](?:[^\S\n]*[一-鿿]){1,5})"
+# 字元範圍含擴展 A／B 區：「陳䊹伊」的「䊹」、「高清𡍼」的「𡍼」不在基本區，
+# 只用 [一-鿿] 的話整位法官都抓不到（實測是 judge_count=0 的主因之一）。
+_CJK_CHARS = "㐀-䶿一-鿿\U00020000-\U0003134F"
+_CJK_NAME_RE = rf"([{_CJK_CHARS}](?:[^\S\n]*[{_CJK_CHARS}]){{1,5}})"
 
 # 頁尾常見詞語：出現在姓名後代表已到達文件結尾或附件標記
 _NAME_TAIL_NOISE_RE = re.compile(
-    r"(?:以上|附表|附件|附錄|正本|如不|書記|係照|據上|所犯|中華)"
+    r"(?:以上|附表|附件|附錄|正本|如不|書記|係照|據上|所犯|中華|法官|審判長)"
 )
 
 
@@ -946,7 +950,7 @@ def _is_signature_match(text: str, m: re.Match) -> bool:
     頁面把職稱與姓名放在不同的 <span>，拆掉行內標籤後會變成「法 官王伯文」；
     但論理裡的「法官認為…」也長這樣，用行長區分兩者。
     """
-    if re.search(r"官\s", m.group(0)):
+    if re.search(r"[官長]\s", m.group(0)):
         return True
     start = text.rfind("\n", 0, m.start()) + 1
     end = text.find("\n", m.end())
@@ -957,6 +961,9 @@ def _is_signature_match(text: str, m: re.Match) -> bool:
 def _clean_cjk_name(raw: str) -> str:
     """去除姓名內的空白並截斷頁尾雜訊（同行的「以上正本」、「附表」等）。"""
     n = re.sub(r"\s+", "", raw)
+    # 「法 官 法 官 劉以全」：職稱重複時，姓名前還黏著一個「法官」，先剝掉再找尾端雜訊，
+    # 否則雜訊比對在第 0 字就命中，整個姓名被切成空字串
+    n = re.sub(r"^(?:審判長|法官)+", "", n)
     m = _NAME_TAIL_NOISE_RE.search(n)
     return n[: m.start()] if m else n
 
@@ -974,7 +981,9 @@ def _extract_judges_and_clerk(full_text: str) -> Tuple[str, str]:
     """
     # 在全文找所有法官 pattern（不限尾端窗口大小）
     all_matches = [m for m in re.finditer(
-        rf"(?:審判長\s*)?法\s*官\s*{_CJK_NAME_RE}", full_text
+        # 「審判長 陳秋如」：審判長後面直接接姓名、沒有「法官」二字，也是簽名。
+        # 這種寫法要求中間有空白，否則論理裡的「審判長諭知…」也會被當成簽名。
+        rf"(?:審判長\s*法\s*官\s*|審判長[^\S\n]+|法\s*官\s*){_CJK_NAME_RE}", full_text
     ) if _is_signature_match(full_text, m)]
 
     # 過濾假名（獨任、審理…）

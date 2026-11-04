@@ -313,7 +313,10 @@ _GRANT_VERBS = (r"給付|返還|交付|移轉|塗銷|遷讓|遷出|遷離|騰空
                 r"協同|容忍|停止|除去|回復|支付|賠償|清償|開立|提出|登記|變賣|分配|"
                 # 士林／新北樣本補上的寫法：遷離住所、分割後的找補、保留通道、
                 # 變更要保人、供查閱帳簿、調整租金（實測共 17 筆落入「其他/不明確」）
-                r"補償|保留|變更為|供[^。；]{0,6}查閱|調整為")
+                r"補償|保留|變更為|供[^。；]{0,6}查閱|調整為|"
+                # 全國資料補上的寫法：交還物品、提繳勞退、修繕、清空、同意領取、
+                # 刊登道歉啟事、簡體「给付」（實測 416 筆落入敗訴，見 _classify_side）
+                r"交還|提繳|修繕|清空|同意|刊登|公告|给付")
 
 # 「應」與動詞之間的最大間隔。不動產類主文的受詞極長，例如
 # 「應將臺北市○○區○○段000000000地號土地（權利範圍：10000分之435）及其上
@@ -354,7 +357,10 @@ _PARTITION_RE = re.compile(
 # 「原告請求撤銷…之訴駁回」「不予准許」誤判成勝訴判項。
 _OTHER_GRANT_RE = re.compile(
     r"(?:准予(?!分割)|准[^。；]{0,12}(?:離婚|終止收養|認領)|應予准許|應予撤銷|"
-    r"(?:執行)?程序.{0,8}應予撤銷|不得執[^。]{0,40}強制執行|"
+    r"(?:執行)?程序.{0,8}應予撤銷|不得[執持][^。]{0,80}強制執行|"
+    # 分配表剔除／更正（分配表異議之訴）、共有物分歸某人所有。
+    # 「應更正」限定分配表：「原判決正本…應更正為…」是更正裁判，屬非終局。
+    r"應予剔除|分配表[^。]{0,200}?應更正|分歸[^。；]{0,60}?所有|"
     # 撤銷決議、解任董事、確認決議無效、禁止被告妨害——形成或不作為判項。
     # 一律排除同一子句裡出現駁回的情形（「原告請求撤銷決議之訴駁回」）。
     r"(?:均|應)?予(?:以)?(?:撤銷|解任)(?![^。；]{0,30}駁回)|"
@@ -437,6 +443,12 @@ def _classify_side(clauses: List[str], is_counter: bool) -> str:
         return LOSE
     if any_grant and full_dismiss:
         # 同時有准許與全部駁回 → 通常是「先位駁回、備位准許」
+        return PARTIAL
+    if has_rest_dismiss and not is_counter:
+        # 「其餘之訴駁回」本身就表示前面有准許的部分，只是准許判項的動詞
+        # 不在清單裡（提供帳冊、定地上權期間、修繕…，寫法窮舉不完）。
+        # 舊規則落到下面的「有駁回、無准許 → 敗訴」，實測 416 筆一部勝訴
+        # 被記成敗訴，連帶 grant_ratio 被填成 0。
         return PARTIAL
     if _any(_DISMISS_ANY_RE, clauses) and not any_grant:
         return LOSE
@@ -540,7 +552,7 @@ _CURRENCY_RE = re.compile("(" + "|".join(sorted(
 
 # 與 _GRANT_RE 同樣允許「應」與動詞之間夾受詞（「應於繼承…範圍內給付」）
 _MONEY_VERB_RE = re.compile(
-    r"應(?![^。；]{0,40}駁回)[^。；]{0,40}?(?:給付|返還|賠償|支付|清償)")
+    r"應(?![^。；]{0,40}駁回)[^。；]{0,40}?(?:給付|返還|賠償|支付|清償|提繳)")
 _NON_MONEY_VERB_RE = re.compile(
     r"應(?![^。；]{0,40}駁回)[^。；]{0,40}?(?:交付|移轉|塗銷|遷讓|拆除|辦理|協同|容忍|停止|除去|回復|登記|開立|提出)")
 
@@ -645,7 +657,16 @@ def _iter_amounts_in_clause(clause: str, default_currency: str = "TWD") -> List[
         if cut:
             window = window[: cut.start()]
 
-        for am in _AMOUNT_RE.finditer(window):
+        ams = [am for am in _AMOUNT_RE.finditer(window)]
+        # 「給付原告甲、乙各50萬元」：一筆金額、多個受領人，總額是 50 萬 × 2。
+        # 「各40萬元、20萬元、15萬元」是分別列舉，金額已逐筆抽出，不再相乘。
+        mult = 1
+        if len(ams) == 1:
+            m_each = _EACH_RE.search(window[: ams[0].start()])
+            if m_each:
+                mult = len(re.findall(r"、|及|與|和", m_each.group("who"))) + 1
+
+        for am in ams:
             span = (start + am.start(), start + am.end())
             if span in seen_spans:
                 continue
@@ -654,8 +675,30 @@ def _iter_amounts_in_clause(clause: str, default_currency: str = "TWD") -> List[
                 continue
             seen_spans.add(span)
             cur = _CURRENCY_MAP.get(am.group("cur"), default_currency) if am.group("cur") else default_currency
-            out.append({"amount": num, "currency": cur, "raw": am.group(0).strip()})
+            it = {"amount": num * mult, "currency": cur, "raw": am.group(0).strip()}
+            if mult > 1:
+                it["each"] = mult
+            # 定期給付（「應自…起至…止，按月給付原告9,000元」）的金額是每期金額，
+            # 不是總額，加進總額會讓「1萬8000元＋按月9000元」變成 2萬7000元。
+            # 「按月」可能在動詞片語裡，也可能在金額前面（「應自…遷讓返還之日止，
+            # 按月給付」的動詞先停在「返還」）；逐筆看金額之前的文字，
+            # 才不會把同一視窗裡前面的一次性金額也標成定期。
+            if _PERIODIC_RE.search(vm.group(0) + window[: am.start()]):
+                it["periodic"] = 1
+            out.append(it)
     return out
+
+
+# 每期給付：按月、每月、按年、每年、按日、按季
+_PERIODIC_RE = re.compile(r"(?:按|每)(?:月|年|日|季)")
+# 「…甲、乙各」緊接在金額前：who 是受領人列舉（至少有一個分隔符才算多人）
+_EACH_RE = re.compile(r"(?P<who>[^，。；]{1,40}?(?:、|及|與|和)[^，。；]{1,20}?)各\s*$")
+
+
+def _lump_sum(items: List[Dict]) -> Optional[int]:
+    """非定期給付的金額合計；全部都是定期給付時回傳 None（沒有總額可言）。"""
+    lump = [i["amount"] for i in items if not i.get("periodic")]
+    return sum(lump) if lump else None
 
 
 # 不真正連帶的「重複給付免責」條款。
@@ -749,8 +792,15 @@ def extract_awarded_amounts(verdict: str) -> Dict:
     # 只有單一幣別才合計；混幣不做匯率換算，避免捏造數字。
     # 重複給付免責同理：實際總額取決於免責範圍（實測 26 筆中有 14 筆各判項
     # 金額不同，屬部分重疊），去重或取最大值都是猜測——留空並以旗標說明。
-    if len(currencies) == 1 and not res["awarded_joint_release"]:
-        res["awarded_total"] = sum(i["amount"] for i in main_items)
+    # 例外是各判項金額完全相同：那就是同一筆債務列了幾次，總額就是那一筆。
+    # 定期給付的每期金額不計入總額（見 _iter_amounts_in_clause）。
+    if len(currencies) == 1:
+        if not res["awarded_joint_release"]:
+            res["awarded_total"] = _lump_sum(main_items)
+        else:
+            amounts = {i["amount"] for i in main_items if not i.get("periodic")}
+            if len(amounts) == 1:
+                res["awarded_total"] = amounts.pop()
     return res
 
 
@@ -817,10 +867,14 @@ _CLAIM_STOP_RE = re.compile(
 #   聲明減縮為請求被告給付56萬元（聲明在前）
 #   變更請求被告應給付78萬1,000元（沒有「聲明」二字）
 # (?!者) 排除法條引文「擴張或減縮應受判決事項之聲明者，不在此限」。
+#   最終於…以民事變更訴之聲明狀聲明：（書狀名稱裡有「聲明」，後面才是聲明本身）
+#   嗣於言詞辯論期日當庭變更為：（沒有「聲明」二字）
 _CLAIM_CHANGE_RE = re.compile(
     r"(?:變更|減縮|擴張|更正)[^。；]{0,16}?(?:聲明|請求)(?!者)[^。；]{0,8}?(?:為|如下)\s*[:：]?"
     r"|聲明[^。；]{0,6}?(?:變更|減縮|擴張|更正)為\s*[:：]?"
-    r"|(?:變更|減縮|擴張)為?請求(?=被告[^。；]{0,20}?給付)")
+    r"|(?:變更|減縮|擴張)為?請求(?=被告[^。；]{0,20}?給付)"
+    r"|(?:變更|減縮|擴張|追加)[^。；]{0,12}?聲明[^。；]{0,8}?狀[^。；]{0,10}?聲明\s*[:：]"
+    r"|(?:當庭|具狀|嗣)[^。；]{0,4}?(?:變更|減縮|擴張)為\s*[:：]")
 _AS_VERDICT_RE = re.compile(r"如主文(?:第[一二三四五六七八九十\d]+項)?所示")
 # 聲明段落中的編號符號，先剝除才能正確判斷「如主文所示」是否為整段內容
 _ENUM_PREFIX_RE = re.compile(r"^[\s\d一二三四五六七八九十㈠-㈩\(（][\s\d一二三四五六七八九十㈠-㈩\)）.、,]*")
@@ -854,8 +908,13 @@ def extract_claimed_amount(
         text = re.sub(r"\s+", "", body)
         seg = ""
         changes = list(_CLAIM_CHANGE_RE.finditer(text))
-        anchor_matches = ([[changes[-1]]] if changes else []) + \
-                         [list(a.finditer(text)) for a in _CLAIM_ANCHORS]
+        anchor_matches = [list(a.finditer(text)) for a in _CLAIM_ANCHORS]
+        if changes:
+            # 變更句本身沒寫出聲明時（「擴張請求金額為134萬元如後聲明所示」），
+            # 真正的聲明是變更之後出現的聲明段，先找那裡，最後才退回起訴時的聲明。
+            last = changes[-1].start()
+            after = [[m for m in ms if m.start() > last] for ms in anchor_matches]
+            anchor_matches = [[changes[-1]]] + after + anchor_matches
         for matches in anchor_matches:
             for am in matches:
                 cand = text[am.end(): am.end() + 1500]
@@ -890,8 +949,19 @@ def extract_claimed_amount(
             currencies = dict.fromkeys(i["currency"] for i in items)
             res["claimed_n_items"] = len(items)
             res["claimed_currency"] = "/".join(currencies)
-            if len(currencies) == 1:
-                res["claimed_total"] = sum(i["amount"] for i in items)
+            total = _lump_sum(items)
+            if len(items) > 1 and _JOINT_RELEASE_RE.search(seg):
+                # 聲明也會寫不真正連帶：「被告甲應給付99萬…被告乙應給付99萬…
+                # 任一被告為給付，其餘被告免給付責任」——原告只請求一次 99 萬，
+                # 加總會變成 297 萬（判准主文那邊早已處理，聲明這邊漏了）。
+                # 金額相同的重複項目只算一次。金額都不同時照常相加：免責條款常常
+                # 只是在說明第一項連帶給付的內部關係（「㈠甲乙連帶給付150萬 ㈡乙給付15萬
+                # ㈢第一項任一被告給付後其他被告免責」），兩項本來就要相加。
+                lump = [i["amount"] for i in items if not i.get("periodic")]
+                if len(set(lump)) < len(lump):
+                    total = sum(set(lump))
+            if len(currencies) == 1 and total:
+                res["claimed_total"] = total
                 # 沒有聲明錨點時讀的是全文開頭，會把事實敘述裡的金額一起加總。
                 # 實測全部勝訴的案件中，這類金額算出的比值有 45% 小於 1，
                 # 有錨點者只有 7%，所以分開標記，不拿來計算 grant_ratio。
@@ -1157,7 +1227,8 @@ def _pick_primary_law(cites: List[Dict]) -> str:
 _JUDGE_SPLIT_RE = re.compile(r"[；;、,，/｜|]+")
 
 # 中文姓名長度 2–4 字。超出此範圍的一定不是姓名。
-_JUDGE_NAME_RE = re.compile(r"^[一-鿿]{2,4}$")
+# 含擴展 A／B 區的罕用字（「陳䊹伊」），與 html_parser 的簽名擷取一致
+_JUDGE_NAME_RE = re.compile(r"^[㐀-䶿一-鿿\U00020000-\U0003134F]{2,4}$")
 
 # 判決書後面常附筆錄或譯文，裡面出現「法官」二字後接對話，上游的
 # _extract_judges_and_clerk 會把那些文字當成姓名抓進來，例如
@@ -1194,7 +1265,8 @@ def split_judges(judges: str, full_text: str = "") -> List[Dict]:
         # 「審判長法 官 姜悌文\n法 官 賴錦華」一路吃到下一行，
         # 於是抓到「姜悌文法官賴錦」這種不存在的姓名，審判長就永遠對不上。
         for m in re.finditer(
-                r"審判長[^\S\n]*法[^\S\n]*官[^\S\n]*([一-鿿](?:[^\S\n]*[一-鿿]){1,5})",
+                r"審判長(?:[^\S\n]*法[^\S\n]*官)?[^\S\n]*"
+                r"([㐀-䶿一-鿿\U00020000-\U0003134F](?:[^\S\n]*[㐀-䶿一-鿿\U00020000-\U0003134F]){1,5})",
                 full_text):
             presiding.add(re.sub(r"\s+", "", m.group(1)))
 
@@ -1606,6 +1678,7 @@ def split_reasoning_sections(facts_and_reasons: str, facts: str, reasons: str) -
       成功           — 三段都切出來（被告未到場時答辯段是那句「未到場」的陳述）
       無原告主張標記 — 找不到「原告主張」等起點
       無法院判斷標記 — 找得到主張、找不到法院判斷的起點（三欄留空，理由見上方）
+      無理由段落     — 判決書沒有事實、理由段（多為只記主文的小額判決）
     舊式判決把「事實」與「理由」分成兩段時，事實段是兩造主張、理由段是法院判斷。
     """
     out = {"plaintiff_claim_text": "", "defendant_defense_text": "",
@@ -1620,6 +1693,8 @@ def split_reasoning_sections(facts_and_reasons: str, facts: str, reasons: str) -
         body = re.sub(r"\s+", "", facts or reasons or "")
         court_tail = ""
     if not body:
+        # 判決書本身沒有事實、理由段（小額判決可只記主文，§436-18），不是切分失敗
+        out["section_split_status"] = "無理由段落"
         return out
 
     sub = _SEC_SUBSTANTIVE_RE.search(body)
@@ -1852,7 +1927,7 @@ SOURCE_COLUMNS = [
 ]
 
 # 規則版本。規則異動時遞增，讓回填過的資料可以辨識是用哪一版規則產生的。
-STRUCTURING_VERSION = "2.3.0"
+STRUCTURING_VERSION = "2.4.0"
 
 
 def derive_structured_fields(row: Dict) -> Dict:
@@ -1961,6 +2036,10 @@ def derive_structured_fields(row: Dict) -> Dict:
         flags.append("混合幣別未合計")
     if aw["awarded_joint_release"]:
         flags.append("重複給付免責")
+    if aw["awarded_total"] and any(i.get("periodic") and i.get("side") == "本訴"
+                                   for i in aw["awarded_items"]):
+        # 判准金額只算一次性給付；按月給付的部分在 awarded_items_json 裡
+        flags.append("定期給付未計入")
     if aw["awarded_has_counter_items"] and aw["awarded_total"]:
         # awarded_amount 只計本訴。標出來，免得有人拿它跟主文上看得到的
         # 反訴金額對不起來而以為抽漏了。
