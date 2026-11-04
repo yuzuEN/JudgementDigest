@@ -86,6 +86,20 @@ class TestMarkdownLinks(unittest.TestCase):
         self.assertEqual(broken, [], "連結指到不存在的檔案")
 
 
+class TestTextFiles(unittest.TestCase):
+    def test_no_control_characters(self):
+        """用程式產生文件時，跳脫字元寫錯會變成看不見的控制字元（曾把 README 的 \\activate 變成 BEL）。"""
+        bad = []
+        for pattern in ("*.md", "**/*.md", "**/*.py", "frontend/src/**/*.ts", "frontend/src/**/*.tsx"):
+            for p in ROOT.glob(pattern):
+                if "node_modules" in p.parts or not p.is_file():
+                    continue
+                text = p.read_text(encoding="utf-8", errors="replace")
+                if re.search(r"[\x00-\x08\x0b\x0c\x0e-\x1f]", text):
+                    bad.append(str(p.relative_to(ROOT)))
+        self.assertEqual(sorted(set(bad)), [], "這些檔案有看不見的控制字元")
+
+
 @unittest.skipUnless(shutil.which("git") and (ROOT / ".git").exists(), "需要 git 與 repo")
 class TestGitignore(unittest.TestCase):
     def test_code_and_docs_not_ignored(self):

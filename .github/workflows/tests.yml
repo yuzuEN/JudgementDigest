@@ -15,6 +15,7 @@ on:
 jobs:
   unit:
     runs-on: ${{ matrix.os }}
+    timeout-minutes: 15   # 預設是 6 小時；測試卡住時 15 分鐘就失敗
     strategy:
       fail-fast: false
       matrix:
