@@ -68,9 +68,9 @@ export default function CriminalResult() {
                   {report.similar.map((c) => (
                     <tr key={c.case_id}>
                       <td>{c.case_number}<br /><span className="hint">{c.summary}</span></td>
-                      <td>{c.mid}</td>
-                      <td>{c.sentence ?? "—"}</td>
-                      <td>{c.similarity.toFixed(2)}</td>
+                      <td data-label="罪名">{c.mid}</td>
+                      <td data-label="宣告刑">{c.sentence ?? "—"}</td>
+                      <td data-label="相似度">{c.similarity.toFixed(2)}</td>
                       <td className="no-print"><Link to={`/judgment/criminal/${c.case_id}`}>判決導讀</Link></td>
                     </tr>
                   ))}

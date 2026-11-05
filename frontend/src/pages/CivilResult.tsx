@@ -154,9 +154,9 @@ function SimilarCases({ cases, onlyWin, setOnlyWin }: { cases: SimilarCase[]; on
             {shown.map((c) => (
               <tr key={c.case_id}>
                 <td>{c.case_number}<br /><span className="hint">{c.summary}</span></td>
-                <td><span className={`tag ${outcomeTone(c.outcome)}`}>{outcomeLabel(c.outcome)}</span></td>
-                <td>{c.claimed_amount ? `${money(c.awarded_amount ?? 0)}／${money(c.claimed_amount)}` : "—"}</td>
-                <td>{c.similarity.toFixed(2)}</td>
+                <td data-label="結果"><span className={`tag ${outcomeTone(c.outcome)}`}>{outcomeLabel(c.outcome)}</span></td>
+                <td data-label="判准／請求">{c.claimed_amount ? `${money(c.awarded_amount ?? 0)}／${money(c.claimed_amount)}` : "—"}</td>
+                <td data-label="相似度">{c.similarity.toFixed(2)}</td>
                 <td className="no-print"><Link to={`/judgment/civil/${c.case_id}`} style={{ whiteSpace: "nowrap" }}>判決導讀</Link></td>
               </tr>
             ))}

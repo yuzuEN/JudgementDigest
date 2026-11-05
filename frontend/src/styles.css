@@ -169,6 +169,21 @@ details.faq summary { cursor: pointer; font-weight: 500; }
 .site-footer { background: var(--surface); border-top: 1px solid var(--line); font-size: 14px; color: var(--muted); }
 .site-footer .container { padding-top: 20px; padding-bottom: 20px; }
 
+/* ── 手機：表格改成一列一張卡片，觸控目標至少 44px（只套用在螢幕，不影響列印）── */
+@media screen and (max-width: 760px) {
+  table.cases { min-width: 0; display: block; }
+  table.cases thead { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
+  table.cases tbody, table.cases tr, table.cases td { display: block; }
+  table.cases tr { padding: 12px 0; border-bottom: 1px solid var(--line); }
+  table.cases td { padding: 3px 0; border: 0; }
+  table.cases td[data-label] { display: flex; justify-content: space-between; gap: 12px; }
+  table.cases td[data-label]::before { content: attr(data-label); color: var(--muted); font-size: 14px; }
+  table.cases td a { display: inline-flex; align-items: center; min-height: 44px; }
+  .brand { min-height: 44px; }
+  .site-header nav a { display: inline-flex; align-items: center; min-height: 44px; }
+  .tab { display: inline-flex; align-items: center; min-height: 44px; }
+}
+
 /* ── 列印／下載 PDF ── */
 .print-only { display: none; }
 @media print {
