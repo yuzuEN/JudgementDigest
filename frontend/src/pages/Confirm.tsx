@@ -114,7 +114,7 @@ export default function Confirm() {
               <li>蒐集者：JudgementDigest 專題團隊；目的：產生類案判決參考結果。</li>
               <li>送出的是上面遮名後的內容；本平台不保存你的描述，結果只顯示在你的瀏覽器裡。</li>
               {llmAvailable && <li>只有在你按下「請 AI 幫我看還缺什麼」時，遮名後的內容才會傳給 Google Gemini 付費 API，不用於改善 Google 的產品。</li>}
-              <li>你可以不提供健康相關資料，只是參考結果可能比較不準。</li>
+              <li>你可以不提供健康相關資料：不同意的話，回上一步刪掉這些描述就能繼續，只是參考結果可能比較不準。</li>
             </ul>
             {health && (
               <label className="consent">
@@ -122,6 +122,7 @@ export default function Confirm() {
                 <span><strong>我同意</strong>本平台處理我提供的健康、醫療相關資料（例如受傷、住院的描述），只用於產生這次的參考結果。</span>
               </label>
             )}
+            {health && !intake.healthConsent && <div><Link to="/start" className="btn secondary small">不同意，回上一步刪掉這些描述</Link></div>}
           </section>
 
           {choosing && (
@@ -156,7 +157,7 @@ export default function Confirm() {
 
           <div className="actions">
             <button type="button" className="btn" disabled={!ready} onClick={() => navigate(resultPath)}>看參考結果</button>
-            {health && !intake.healthConsent && <span className="warn-text">內容包含健康資料，請先勾選同意，或回上一步刪掉相關描述。</span>}
+            {health && !intake.healthConsent && <span className="warn-text">內容包含健康資料，請先在上面選擇同意或不同意。</span>}
           </div>
         </div>
 

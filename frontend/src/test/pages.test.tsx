@@ -55,6 +55,28 @@ describe("描述案情", () => {
   });
 });
 
+describe("確認與遮名：健康資料", () => {
+  it("不同意時可以回上一步，同意後這個選項消失", async () => {
+    mockApi({ "POST /intake/mask": (b: { text: string }) => ({ masked_text: b.text, spans: [] }),
+      "POST /intake/followup": () => ({ questions: [], source: "rules" }) });
+    const user = userEvent.setup();
+    renderAt("/confirm", <Confirm />, "/confirm", { text: "我開刀後休養三個月" });
+    const decline = await screen.findByRole("link", { name: "不同意，回上一步刪掉這些描述" });
+    expect(decline).toHaveAttribute("href", "/start");
+    expect(screen.getByRole("button", { name: "看參考結果" })).toBeDisabled();
+    await user.click(screen.getByRole("checkbox", { name: /我同意/ }));
+    expect(screen.queryByRole("link", { name: "不同意，回上一步刪掉這些描述" })).not.toBeInTheDocument();
+  });
+
+  it("沒有健康資料就不用選", async () => {
+    mockApi({ "POST /intake/mask": (b: { text: string }) => ({ masked_text: b.text, spans: [] }),
+      "POST /intake/followup": () => ({ questions: [], source: "rules" }) });
+    renderAt("/confirm", <Confirm />, "/confirm", { text: "朋友借錢沒還" });
+    await screen.findByText("朋友借錢沒還");
+    expect(screen.queryByRole("link", { name: /不同意/ })).not.toBeInTheDocument();
+  });
+});
+
 describe("確認與遮名：AI 追問", () => {
   const AI_BUTTON = "請 AI 幫我看還缺什麼";
   type Body = { text: string; allow_llm: boolean };

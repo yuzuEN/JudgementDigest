@@ -28,7 +28,7 @@ export function outcomeLabel(outcome: string): string {
 }
 
 /** 描述裡有健康、醫療相關的內容時，送出前要另外取得同意（個資法第 6 條的特種個資）。 */
-export const HEALTH_RE = /受傷|傷害|骨折|住院|手術|診斷|病歷|醫院|就醫|看診|復健|疾病|生病|懷孕|精神科|身心障礙/;
+export const HEALTH_RE = /受傷|傷害|傷口|骨折|住院|手術|開刀|鋼釘|縫合|縫了|診斷|病歷|醫院|診所|就醫|看診|驗傷|復健|休養|看護|疾病|生病|懷孕|中風|癌症|精神科|憂鬱|失眠|身心障礙/;
 
 export function needsHealthConsent(text: string): boolean {
   return HEALTH_RE.test(text);
