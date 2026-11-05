@@ -21,7 +21,7 @@ from civil.models import service as model_service
 from retrieval import build as retrieval_build
 from retrieval.engine import TfidfIndex
 
-SHORT_TEXT = 150          # 描述少於這個字數時提醒：測試資料中 150 字時 AUC 從 0.769 降到 0.692
+SHORT_TEXT = 150          # 描述少於這個字數時提醒：測試資料只給前 150 字時，勝訴 recall 從 0.81 降到 0.64
 N_NEIGHBORS = 30          # 相似判決統計（證據、抗辯、金額）用的件數，只算對審
 N_SHOWN = 10              # 頁面上列出的相似判決
 N_CANDIDATES = 60         # 列表從這麼多件裡挑（要去重、限制一造辯論的件數）
@@ -76,8 +76,8 @@ class CivilService:
         if self.mock:
             return {"name": "mock", "description": "示例資料（伺服器上沒有模型檔）"}
         m = self.meta.get("metrics", {}).get("原告主張＋特徵", {})
-        return {"name": self.meta["name"], "description": self.meta["description"],
-                "auc": m.get("auc"), "ece": m.get("ece")}
+        return {"name": self.meta["name"], "description": self.meta["description"], "ece": m.get("ece"),
+                **{k: m.get(k) for k in ("win_precision", "win_recall", "lose_precision", "lose_recall")}}
 
     @staticmethod
     def answers(req) -> Dict:

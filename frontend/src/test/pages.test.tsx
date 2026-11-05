@@ -72,6 +72,24 @@ describe("頁首的步驟", () => {
   });
 });
 
+describe("模型表現", () => {
+  it("用 precision、recall 說明，不顯示 AUC", async () => {
+    mockApi({ "POST /civil/report": () => CIVIL_REPORT });
+    renderAt("/result/civil", <CivilResult />, "/result/civil", { text: "內容", maskedText: "內容" });
+    expect(await screen.findByText(/判勝訴的案件有 73% 真的勝訴/)).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: /Precision、Recall 說明/ })).toBeInTheDocument();
+    expect(screen.queryByText(/AUC/)).not.toBeInTheDocument();
+  });
+
+  it("舊的模型檔沒有這些數字時不顯示", async () => {
+    const { win_precision: _, ...model } = CIVIL_REPORT.prediction.model;
+    mockApi({ "POST /civil/report": () => ({ ...CIVIL_REPORT, prediction: { ...CIVIL_REPORT.prediction, model } }) });
+    renderAt("/result/civil", <CivilResult />, "/result/civil", { text: "內容", maskedText: "內容" });
+    await screen.findByText("62%");
+    expect(screen.queryByText(/真的勝訴/)).not.toBeInTheDocument();
+  });
+});
+
 describe("相似度說明", () => {
   it("表格旁有 i 和文字說明，不會讓人以為是百分比", async () => {
     mockApi({ "POST /civil/report": () => CIVIL_REPORT });

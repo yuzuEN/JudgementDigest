@@ -88,7 +88,10 @@ class CivilInput(BaseModel):
 class ModelInfo(BaseModel):
     name: str
     description: str
-    auc: Optional[float] = None
+    win_precision: Optional[float] = None
+    win_recall: Optional[float] = None
+    lose_precision: Optional[float] = None
+    lose_recall: Optional[float] = None
     ece: Optional[float] = None
 
 

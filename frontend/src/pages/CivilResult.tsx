@@ -96,10 +96,22 @@ function Probability({ report }: { report: CivilReport }) {
       <p className="hint" style={{ fontSize: 14 }}>模型是用判決書的文字訓練的。初步測試中，一般口語描述算出來的機率常常偏低，也比較分不出輸贏，請當成粗略的參考。</p>
       {report.prediction.warnings.map((w) => <p key={w} className="warn-text" style={{ margin: 0, fontSize: 14 }}>{w}</p>)}
       <p className="hint" style={{ fontSize: 13 }}>
-        模型：{report.prediction.model.description}
-        {report.prediction.model.auc ? `（測試資料 AUC ${report.prediction.model.auc.toFixed(3)}）` : ""}。你的描述越完整，結果越可靠。
+        模型：{report.prediction.model.description}。你的描述越完整，結果越可靠。
       </p>
+      <ModelScore model={report.prediction.model} />
     </section>
+  );
+}
+
+function ModelScore({ model }: { model: CivilReport["prediction"]["model"] }) {
+  const { win_precision: wp, win_recall: wr, lose_precision: lp, lose_recall: lr } = model;
+  if (wp == null || wr == null || lp == null || lr == null) return null;
+  return (
+    <p className="hint" style={{ fontSize: 13 }}>
+      用判決文字測試時，模型判勝訴的案件有 {percent(wp)} 真的勝訴，實際勝訴的案件有 {percent(wr)} 被判出來；
+      判敗訴的案件有 {percent(lp)} 真的敗訴，實際敗訴的案件有 {percent(lr)} 被判出來。
+      <InfoLink to="Precision、Recall" label="Precision、Recall 說明" />
+    </p>
   );
 }
 

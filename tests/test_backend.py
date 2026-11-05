@@ -29,7 +29,7 @@ TRAFFIC = "去年三月我騎機車在路口直行，被右轉的汽車撞到，
 
 def build_artifacts(base: Path):
     d = synthetic(150)
-    service.train(d, "test", service.artifact_dir(base), {"原告主張＋特徵": {"auc": 0.77, "ece": 0.01, "brier": 0.2}})
+    service.train(d, "test", service.artifact_dir(base), {"原告主張＋特徵": {"win_precision": 0.73, "ece": 0.01, "brier": 0.2}})
     corpus = pd.DataFrame({
         "id": d.id, "case_number": [f"臺灣臺北地方法院 113 年度訴字第 {i} 號" for i in d.id],
         "court": "臺灣臺北地方法院", "year": "2024", "case_type_category": d.case_type_category,
@@ -257,7 +257,7 @@ class TestTwoTiers(unittest.TestCase):
         cls.tmp = tempfile.TemporaryDirectory()
         base = Path(cls.tmp.name)
         d = synthetic(150)
-        service.train(d, "test", service.artifact_dir(base), {"原告主張＋特徵": {"auc": 0.77, "ece": 0.01, "brier": 0.2}})
+        service.train(d, "test", service.artifact_dir(base), {"原告主張＋特徵": {"win_precision": 0.73, "ece": 0.01, "brier": 0.2}})
         n_default = 40
         default = np.arange(len(d)) < n_default
         text = np.where(default, [f"一造案件{i}，" + TRAFFIC[:40] for i in range(len(d))],
@@ -359,7 +359,8 @@ class TestWithModel(unittest.TestCase):
         lose = self.client.post("/api/civil/predict", json={"text": LOSE[0] * 5, "mid": "侵權：交通事故"}).json()
         self.assertFalse(win["mock"])
         self.assertGreater(win["win_probability"], lose["win_probability"])
-        self.assertEqual(win["model"]["auc"], 0.77)
+        self.assertEqual(win["model"]["win_precision"], 0.73)
+        self.assertNotIn("auc", win["model"])
         self.assertEqual(win["warnings"], [])
 
     def test_warnings(self):
