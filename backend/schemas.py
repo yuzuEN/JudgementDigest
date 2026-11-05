@@ -65,6 +65,7 @@ class Question(BaseModel):
     id: str
     text: str
     why: str
+    skip_if: Optional[str] = None      # 描述符合這個規則時不用問（正規表達式）
 
 
 class FollowupResponse(BaseModel):

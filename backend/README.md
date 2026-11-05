@@ -25,7 +25,7 @@ API 文件（可以直接在網頁上試）：http://127.0.0.1:8000/docs
 |---|---|---|
 | `GET /api/health` | 各部分是真的模型還是示例資料 | |
 | `GET /api/meta/options` | 問卷選項：糾紛類型（案由中類）、法院、證據 | 來自模型的訓練資料 |
-| `POST /api/intake/mask` | 遮掉身分證字號、電話、電子郵件、地址、指定的名字 | 規則 |
+| `POST /api/intake/mask` | 遮掉身分證字號、電話、電子郵件、地址、指定的名字 | 規則；網站改在瀏覽器遮名，這個 API 留給其他用途 |
 | `POST /api/intake/followup` | 追問描述裡缺少的事實 | 固定題庫（`source: rules`） |
 | `POST /api/civil/predict` | 民事勝訴機率 | 模型 |
 | `POST /api/civil/report` | 結果頁的全部內容：機率、金額範圍、相似判決、證據對照、常見抗辯 | 模型＋檢索 |

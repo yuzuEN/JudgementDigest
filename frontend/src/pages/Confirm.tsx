@@ -2,48 +2,45 @@ import { useEffect, useMemo, useState } from "react";
 import { Link, Navigate, useNavigate } from "react-router-dom";
 import { api } from "../api/client";
 import type { Question } from "../api/types";
-import { ErrorBox, Loading } from "../components/Common";
+import { Loading } from "../components/Common";
 import { Layout } from "../components/Layout";
 import { money, parseAmount, sensitiveKinds, splitMasked } from "../format";
+import { maskText } from "../mask";
 import { fullText, useIntake } from "../state";
 
 const DEFENDANT_LABEL = { person: "個人", company: "公司、行號", government: "政府機關、學校、醫院" } as const;
 const CASE_LABEL = { civil: "民事", criminal: "刑事", unsure: "不確定（民事、刑事都查）" } as const;
 
+const MAX_QUESTIONS = 4;
+
 export default function Confirm() {
   const { intake, update } = useIntake();
   const navigate = useNavigate();
   const [questions, setQuestions] = useState<Question[]>([]);
-  const [masking, setMasking] = useState(false);
   const [aiQuestions, setAiQuestions] = useState<Question[]>([]);
   const [llmAvailable, setLlmAvailable] = useState(false);
   const [aiState, setAiState] = useState<"idle" | "asking" | "done" | "failed" | "unrelated" | "limited" | "declined">("idle");
-  const [error, setError] = useState("");
   const [nameInput, setNameInput] = useState("");
   const text = useMemo(() => fullText(intake), [intake]);
 
-  // 打開頁面時只用固定題庫，文字不離開伺服器。傳給 LLM 要等使用者加好姓名、同意之後自己按按鈕（askLlm）
+  // 打開頁面時只用固定題庫，描述不離開瀏覽器。傳給 LLM 要等使用者加好姓名、同意之後自己按按鈕（askLlm）
   useEffect(() => {
     if (!intake.text.trim()) return;
     let stale = false;
-    api.mask(intake.text, intake.names)
-      .then((r) => api.followup(intake.caseType, intake.mid || null, r.masked_text))
-      .then((r) => { if (!stale) { setQuestions(r.questions); setLlmAvailable(Boolean(r.llm_available)); } })
+    // 這時使用者還沒加好姓名，所以不送描述：只拿題庫，在瀏覽器篩掉已經回答的問題
+    api.followup(intake.caseType, intake.mid || null, "")
+      .then((r) => {
+        if (stale) return;
+        setQuestions(r.questions.filter((q) => !q.skip_if || !new RegExp(q.skip_if).test(intake.text)).slice(0, MAX_QUESTIONS));
+        setLlmAvailable(Boolean(r.llm_available));
+      })
       .catch(() => { if (!stale) setQuestions([]); });   // 追問失敗不影響後面的流程
     return () => { stale = true; };
     // 不放 names：加名字不用重問，也不能蓋掉 AI 問過的問題
   }, [intake.caseType, intake.mid, intake.text]);
 
   useEffect(() => {
-    if (!text) return;
-    setMasking(true);
-    const timer = setTimeout(() => {
-      api.mask(text, intake.names)
-        .then((r) => { update({ maskedText: r.masked_text }); setError(""); })
-        .catch((e: Error) => setError(e.message))
-        .finally(() => setMasking(false));
-    }, 300);
-    return () => clearTimeout(timer);
+    update({ maskedText: maskText(text, intake.names) });
     // 不把 update 放進依賴：它會隨 intake 變動，放進去會一直重跑
   }, [text, intake.names]);
 
@@ -51,7 +48,7 @@ export default function Confirm() {
 
   const kinds = sensitiveKinds(text);
   const sensitive = kinds.length > 0;
-  const ready = !masking && !error && intake.maskedText !== "" && (!sensitive || intake.sensitiveConsent);
+  const ready = intake.maskedText !== "" && (!sensitive || intake.sensitiveConsent);
   const addName = () => {
     const n = nameInput.trim();
     if (n.length >= 2 && !intake.names.includes(n)) update({ names: [...intake.names, n] });
@@ -59,8 +56,7 @@ export default function Confirm() {
   };
   const askLlm = () => {
     setAiState("asking");
-    api.mask(intake.text, intake.names)
-      .then((r) => api.followup(intake.caseType, intake.mid || null, r.masked_text, true))
+    api.followup(intake.caseType, intake.mid || null, maskText(intake.text, intake.names), true)
       .then((r) => { if (r.source === "llm") setAiQuestions(r.questions); setAiState(r.source === "llm" ? "done" : r.fallback === "not_dispute" ? "unrelated" : r.fallback === "limited" ? "limited" : "failed"); })
       .catch(() => setAiState("failed"));
   };
@@ -87,10 +83,8 @@ export default function Confirm() {
           <section className="card" aria-labelledby="mask-title">
             <h2 id="mask-title">會送出的內容（已遮名）</h2>
             <p className="hint">身分證字號、電話、電子郵件、地址已自動遮掉，標成<mark className="masked">橘色</mark>。姓名請在下面加上，送出前會一起遮掉。</p>
-            {error && <ErrorBox message={error} />}
             <div className="masked-preview" aria-live="polite">
-              {masking && !intake.maskedText ? <Loading>遮名中……</Loading> :
-                splitMasked(intake.maskedText).map((part, i) =>
+              {splitMasked(intake.maskedText).map((part, i) =>
                   part.masked ? <mark key={i} className="masked">{part.text}</mark> : <span key={i}>{part.text}</span>)}
             </div>
             <div className="actions" style={{ alignItems: "flex-end" }}>
@@ -117,7 +111,7 @@ export default function Confirm() {
             <h2 id="notice-title">資料使用說明</h2>
             <ul className="plain" style={{ fontSize: 15 }}>
               <li>蒐集者：JudgementDigest 專題團隊；目的：產生類案判決參考結果。</li>
-              <li>送出的是上面遮名後的內容；本平台不保存你的描述，結果只顯示在你的瀏覽器裡。</li>
+              <li>遮名在你的瀏覽器裡完成，原文和你加入的姓名不會傳到我們的伺服器。送出的是上面遮名後的內容；本平台不保存你的描述，結果只顯示在你的瀏覽器裡。</li>
               {llmAvailable && <li>只有在你按下「請 AI 幫我看還缺什麼」時，遮名後的內容才會傳給 Google Gemini 付費 API，不用於改善 Google 的產品。</li>}
               <li>病歷、醫療、健康檢查、基因、性生活、犯罪前科是法律特別保護的資料。你可以不提供：不同意的話，回上一步刪掉這些描述就能繼續，只是參考結果可能比較不準。</li>
             </ul>

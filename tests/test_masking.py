@@ -4,6 +4,7 @@ retrieval/masking.py 的離線測試：使用者輸入與判決顯示的遮名�
 漏遮就是把個資送出去或顯示出來，所以每一種格式都用具體的例子釘住。
 """
 
+import json
 import sys
 import unittest
 from pathlib import Path
@@ -55,6 +56,22 @@ class TestPatterns(unittest.TestCase):
 
     def test_empty(self):
         self.assertEqual(mask(None), ("", []))
+
+
+class TestSameRulesAsBrowser(unittest.TestCase):
+    """瀏覽器（frontend/src/mask.ts）和這裡的規則要一致，兩邊跑同一份案例。"""
+
+    def test_shared_cases(self):
+        path = Path(__file__).resolve().parents[1] / "frontend" / "src" / "test" / "masking_cases.json"
+        cases = json.loads(path.read_text(encoding="utf-8"))
+        self.assertGreater(len(cases), 20)
+        for case in cases:
+            self.assertEqual(mask(case["text"], case["names"])[0], case["expected"], case["text"])
+
+    def test_full_width_spans_point_at_the_original_text(self):
+        text = "電話０９１２３４５６７８"
+        (span,) = find_spans(text)
+        self.assertEqual(span.text, "０９１２３４５６７８")
 
 
 class TestParties(unittest.TestCase):

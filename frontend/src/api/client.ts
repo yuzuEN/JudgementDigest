@@ -6,7 +6,6 @@ import type {
   FollowupResponse,
   Guide,
   Health,
-  MaskResponse,
   Options,
 } from "./types";
 
@@ -36,7 +35,6 @@ async function request<T>(path: string, body?: unknown): Promise<T> {
 export const api = {
   health: () => request<Health>("/health"),
   options: () => request<Options>("/meta/options"),
-  mask: (text: string, names: string[]) => request<MaskResponse>("/intake/mask", { text, names }),
   followup: (case_type: CaseType, mid: string | null, text: string, allow_llm = false) =>
     request<FollowupResponse>("/intake/followup", { case_type, mid, text, allow_llm }),
   civilReport: (input: CivilInput) => request<CivilReport>("/civil/report", input),
