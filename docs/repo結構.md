@@ -15,6 +15,7 @@
 JudgementDigest/
 ├── README.md              系統介紹
 ├── requirements.txt
+├── config.py              資料庫、資料集、實驗輸出、模型檔的路徑（可用環境變數改）
 │
 ├── data_pipeline/         ── 資料蒐集與處理（民刑共用，見下方說明）
 │
@@ -48,11 +49,12 @@ JudgementDigest/
 │   ├── 欄位說明.md         資料庫各欄位的定義
 │   ├── 心證層欄位規格.md
 │   ├── repo結構.md         本文件
+│   ├── 資料版本.md          資料庫與資料集的版本、怎麼產生
 │   └── criminal/          刑事結構化規則（structure.md）、白名單、標準化問題與萃取報告
 └── tests/                 ── 測試
 ```
 
-`civil/`、`criminal/`、`retrieval/`、`annotation/`、`backend/`、`frontend/` 目前只有一份 README，程式之後依上面的分法放進去。每個資料夾的 README 寫明內容、怎麼執行、負責人。
+`criminal/`、`annotation/`、`backend/`、`frontend/` 目前只有一份 README，程式之後依上面的分法放進去。`civil/`、`retrieval/` 已經有程式（`retrieval/criminal.py` 待刑事組加入）。每個資料夾的 README 寫明內容、怎麼執行、負責人。
 
 ## `data_pipeline/` 為什麼不再分子資料夾
 
@@ -114,7 +116,5 @@ python -m unittest discover -s tests -t .
 |---|---|---|
 | PR #14 | `facts.py` | `criminal/dataset/` |
 | PR #15、#16 | `model/` | `criminal/models/` |
-| 本機的民事分析程式 | 資料集（`build_dataset.py` 等）、模型（`tfidf.py`、`train_bert.py`、金額模型等） | `civil/dataset/`、`civil/models/` |
-| 本機的民事分析程式 | `retrieval_v5.py` | 拆成 `retrieval/engine.py`、`retrieval/civil.py` |
 
-PR #14–16 照現在的位置合併即可，合併後再另外搬。實驗輸出、資料、單次比較用的程式不進 repo。資料庫與模型檔的路徑之後統一寫在 `config.py`。
+PR #14–16 照現在的位置合併即可，合併後再另外搬。民事的資料集、模型與檢索程式已經搬進 `civil/`、`retrieval/`；實驗輸出、資料、單次比較用的程式不進 repo。資料庫與模型檔的路徑寫在 `config.py`。

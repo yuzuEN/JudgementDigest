@@ -44,6 +44,8 @@ update_pptx.py
 *.ipynb
 
 finaldata/
+# 上線用的模型與檢索索引（由 civil/、retrieval/ 的程式產生，見 docs/資料版本.md）
+artifacts/
 
 # 測試 fixture 不受上面 *_page.html 規則影響
 !tests/fixtures/*.html
