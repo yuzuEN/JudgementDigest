@@ -1,6 +1,6 @@
 # 一行啟動整個平台（在 repo 根目錄）：
 #   docker compose up --build
-# 開 http://localhost:8080 。沒有 artifacts/ 時民事會顯示示例資料，流程照樣走得完。
+# 開 http://localhost:8080 （port 被占用時：JD_PORT=8180 docker compose up）。沒有 artifacts/ 時民事會顯示示例資料，流程照樣走得完。
 services:
   backend:
     build:
@@ -9,12 +9,12 @@ services:
     volumes:
       - ./artifacts:/app/artifacts:ro
     environment:
-      JD_CORS_ORIGINS: http://localhost:8080
+      JD_CORS_ORIGINS: http://localhost:${JD_PORT:-8080}
   frontend:
     build:
       context: .
       dockerfile: frontend/Dockerfile
     ports:
-      - "8080:80"
+      - "${JD_PORT:-8080}:80"
     depends_on:
       - backend

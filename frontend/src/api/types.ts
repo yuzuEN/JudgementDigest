@@ -95,6 +95,7 @@ export interface SimilarCase {
   claimed_amount?: number | null;
   awarded_amount?: number | null;
   sentence?: string | null;
+  default_judgment?: boolean;
 }
 
 export interface EvidenceRow {

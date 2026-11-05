@@ -22,9 +22,16 @@ class TfidfIndex:
         self.vectorizer: Optional[TfidfVectorizer] = None
         self.matrix = None
 
-    def fit(self, texts: Sequence[str]) -> "TfidfIndex":
+    def fit(self, texts: Sequence[str], sample: Optional[int] = None, seed: int = 0) -> "TfidfIndex":
+        """sample：語料很大時只用這麼多筆建字典與 IDF，再轉換全部（字元 n-gram 的完整字典很吃記憶體）。"""
         self.vectorizer = TfidfVectorizer(**self.params)
-        self.matrix = self.vectorizer.fit_transform(texts).tocsr()
+        texts = list(texts)
+        if sample and len(texts) > sample:
+            picked = np.random.default_rng(seed).choice(len(texts), sample, replace=False)
+            self.vectorizer.fit([texts[i] for i in picked])
+            self.matrix = self.vectorizer.transform(texts).tocsr()
+        else:
+            self.matrix = self.vectorizer.fit_transform(texts).tocsr()
         return self
 
     def __len__(self) -> int:
@@ -35,7 +42,14 @@ class TfidfIndex:
         一筆查詢的前 k 件：回傳（列號, 相似度），相似度由高到低。
         allowed：布林陣列，只在 True 的列裡找（例如同一案由）；沒有任何一列符合時回傳空陣列。
         """
-        sim = (self.matrix @ self.vectorizer.transform([query]).T).toarray().ravel()
+        return self.top(self.scores(query), k, allowed)
+
+    def scores(self, query: str) -> np.ndarray:
+        """查詢和每一列的相似度。同一筆查詢要取好幾種前 k 件時，算一次再用 top()。"""
+        return (self.matrix @ self.vectorizer.transform([query]).T).toarray().ravel()
+
+    @staticmethod
+    def top(sim: np.ndarray, k: int, allowed: Optional[np.ndarray] = None) -> Tuple[np.ndarray, np.ndarray]:
         if allowed is not None:
             sim = np.where(allowed, sim, -1.0)
         k = min(k, int((sim >= 0).sum()))
@@ -46,10 +60,11 @@ class TfidfIndex:
         return top, sim[top].astype(np.float32)
 
     def neighbors(self, rows: np.ndarray, k: int = 10, groups: Optional[np.ndarray] = None,
-                  chunk: int = 500) -> Tuple[np.ndarray, np.ndarray]:
+                  chunk: int = 500, allowed: Optional[np.ndarray] = None) -> Tuple[np.ndarray, np.ndarray]:
         """
         索引內每一列（rows）的前 k 個鄰居，排除本身；評估用。
         groups：每一列的類別（例如案由中類），給了就只在同一類裡找。
+        allowed：布林陣列，鄰居只能是 True 的列。
         """
         X = self.matrix
         nn, sim = [], []
@@ -59,6 +74,8 @@ class TfidfIndex:
             S[np.arange(len(qq)), qq] = -1                     # 排除本身
             if groups is not None:
                 S[groups[qq][:, None] != groups[None, :]] = -1
+            if allowed is not None:
+                S[:, ~allowed] = -1
             o = np.argsort(-S, axis=1)[:, :k]
             nn.append(o)
             sim.append(np.take_along_axis(S, o, 1))

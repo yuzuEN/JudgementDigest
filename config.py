@@ -2,6 +2,7 @@
 資料、實驗輸出與模型檔的路徑。資料與模型不進 repo，預設是作者本機的位置，
 其他人用環境變數指到自己的位置即可（例：set JD_DATASET_DIR=D:\\jd\\data）。
 
+    JD_MAIN_DB        正式資料庫（judgments.db，含簡易庭；相似判決檢索用）
     JD_WORK_DB        分析用資料庫（judgments_work_20261014.db，規則 2.4.0 的固定副本）
     JD_DATASET_DIR    文字資料集 text_dataset_{版本}.csv 所在的資料夾
     JD_FIELDS_PKL     analysis_fields.pkl（v5 的樣本母體與結構化變數，見 docs/資料版本.md）
@@ -20,6 +21,7 @@ def _path(env: str, default: Path) -> Path:
     return Path(value) if value else default
 
 
+MAIN_DB = _path("JD_MAIN_DB", ROOT / "judgments.db")
 WORK_DB = _path("JD_WORK_DB", ROOT / "judgments_work_20261014.db")
 DATASET_DIR = _path("JD_DATASET_DIR", ROOT / "text_analysis" / "data")
 FIELDS_PKL = _path("JD_FIELDS_PKL", ROOT / "field_validation" / "analysis_fields.pkl")

@@ -40,9 +40,18 @@ API 文件（可以直接在網頁上試）：http://127.0.0.1:8000/docs
 讀 `artifacts/`（`config.py` 的 `ARTIFACTS_DIR`，可用環境變數 `JD_ARTIFACTS_DIR` 改）：
 
 - `civil_winloss_v1/`：`python -m civil.models.service train` 產生
-- `retrieval_civil_v1/`：`python -m retrieval.build` 產生
+- `retrieval_civil_v2/`：`python -m retrieval.build` 產生
 
 任一個不存在時，民事改回傳示例資料，伺服器照樣能啟動。`JD_BACKEND_MODE=mock` 可以強制使用示例資料。
+
+## 相似判決的兩層
+
+檢索語料有 158,327 件，但不是每一件都適合算統計（見 `retrieval/README.md`）：
+
+- 金額範圍、證據對照、常見抗辯：只用對審且有被告答辯的案件（前 30 件）
+- 相似判決列表：全部案件都可以出現；去掉內容幾乎相同的制式判決，一造辯論最多 3 件並標示 `default_judgment`
+
+資源（Docker）：後端記憶體約 1.1 GB，查詢約 0.65 秒。
 
 ## 接上其他組的功能
 

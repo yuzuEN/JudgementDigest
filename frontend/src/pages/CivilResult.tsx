@@ -154,7 +154,7 @@ function SimilarCases({ cases, onlyWin, setOnlyWin }: { cases: SimilarCase[]; on
             {shown.map((c) => (
               <tr key={c.case_id}>
                 <td>{c.case_number}<br /><span className="hint">{c.summary}</span></td>
-                <td data-label="結果"><span className={`tag ${outcomeTone(c.outcome)}`}>{outcomeLabel(c.outcome)}</span></td>
+                <td data-label="結果"><span className={`tag ${outcomeTone(c.outcome)}`}>{outcomeLabel(c.outcome)}</span>{c.default_judgment && <><br /><span className="tag neutral">被告未到庭</span></>}</td>
                 <td data-label="判准／請求">{c.claimed_amount ? `${money(c.awarded_amount ?? 0)}／${money(c.claimed_amount)}` : "—"}</td>
                 <td data-label="相似度">{c.similarity.toFixed(2)}</td>
                 <td className="no-print"><Link to={`/judgment/civil/${c.case_id}`} style={{ whiteSpace: "nowrap" }}>判決導讀</Link></td>
@@ -164,6 +164,7 @@ function SimilarCases({ cases, onlyWin, setOnlyWin }: { cases: SimilarCase[]; on
         </table>
       </div>
       {shown.length === 0 && <p className="hint">沒有符合的判決。</p>}
+      {shown.some((c) => c.default_judgment) && <p className="hint">「被告未到庭」的判決沒有經過雙方攻防，原告幾乎都會贏，不代表你的案件也會這樣。上面的金額範圍、證據與抗辯統計不包含這些判決。</p>}
     </section>
   );
 }
