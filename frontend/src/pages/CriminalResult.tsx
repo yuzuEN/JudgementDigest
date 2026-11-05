@@ -23,19 +23,18 @@ export default function CriminalResult() {
 
   if (!intake.maskedText) return <Navigate to={intake.text ? "/confirm" : "/start"} replace />;
 
-  const charge = report?.charges[selected];
   return (
     <ResultFrame active="criminal" title="刑事參考結果" mock={report?.mock ?? false} maskedText={intake.maskedText}
       lead="依你描述的事實，推估可能涉及的罪名、法條與刑期範圍。">
       {report?.mock && <p className="hint no-print">刑事模型由刑事組開發中，目前顯示的是示例資料。</p>}
       {error && <ErrorBox message={error} onRetry={load} />}
       {!report && !error && <Loading />}
-      {report && charge && (
+      {report && report.charges.length > 0 && (
         <>
           <div className="grid-2">
             <section className="card" aria-labelledby="charge-title">
               <h2 id="charge-title">可能的罪名</h2>
-              <p className="hint">點選罪名，查看相似案件的刑期分布。</p>
+              <p className="hint no-print">點選罪名，查看相似案件的刑期分布。</p>
               <div role="group" aria-labelledby="charge-title" className="stack" style={{ gap: 10 }}>
                 {report.charges.map((c, i) => (
                   <button key={c.name} type="button" className="charge" aria-pressed={i === selected} onClick={() => setSelected(i)}>
@@ -46,24 +45,27 @@ export default function CriminalResult() {
                 ))}
               </div>
             </section>
-            <section className="card" aria-labelledby="sentence-title">
-              <h2 id="sentence-title">刑期範圍：{charge.name}</h2>
-              <p className="hint">相似的有罪判決中，宣告刑落在各區間的比例。</p>
-              {charge.sentence.map((b) => (
-                <div key={b.label} className="bucket">
-                  <span>{b.label}</span>
-                  <div className="bar warm" role="img" aria-label={`${b.label} ${percent(b.share)}`}><span style={{ width: percent(b.share) }} /></div>
-                  <span className="pct">{percent(b.share)}</span>
-                </div>
-              ))}
-              <p className="hint">實際刑期還會受到是否和解、有無前科、犯後態度等影響。</p>
-            </section>
+            {/* 畫面上只顯示選到的罪名；列印時每個罪名都要印出來 */}
+            {report.charges.map((c, i) => (
+              <section key={c.name} className={`card${i === selected ? "" : " screen-hidden"}`} aria-labelledby={`sentence-title-${i}`}>
+                <h2 id={`sentence-title-${i}`}>刑期範圍：{c.name}</h2>
+                <p className="hint">相似的有罪判決中，宣告刑落在各區間的比例。</p>
+                {c.sentence.map((b) => (
+                  <div key={b.label} className="bucket">
+                    <span>{b.label}</span>
+                    <div className="bar warm" role="img" aria-label={`${b.label} ${percent(b.share)}`}><span style={{ width: percent(b.share) }} /></div>
+                    <span className="pct">{percent(b.share)}</span>
+                  </div>
+                ))}
+                <p className="hint">實際刑期還會受到是否和解、有無前科、犯後態度等影響。</p>
+              </section>
+            ))}
           </div>
           <section className="card" aria-labelledby="crim-sim-title">
             <h2 id="crim-sim-title">相似的真實判決</h2>
             <div className="table-wrap">
               <table className="cases">
-                <thead><tr><th scope="col">字號</th><th scope="col">罪名</th><th scope="col">宣告刑</th><th scope="col">相似度 <InfoLink to="相似度" label="相似度說明" /></th><th scope="col"><span className="sr-only">動作</span></th></tr></thead>
+                <thead><tr><th scope="col">字號</th><th scope="col">罪名</th><th scope="col">宣告刑</th><th scope="col">相似度 <InfoLink to="相似度" label="相似度說明" /></th><th scope="col" className="no-print"><span className="sr-only">動作</span></th></tr></thead>
                 <tbody>
                   {report.similar.map((c) => (
                     <tr key={c.case_id}>

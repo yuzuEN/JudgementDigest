@@ -263,15 +263,22 @@ details.faq summary { cursor: pointer; font-weight: 500; }
 
 /* ── 列印／下載 PDF ── */
 .print-only { display: none; }
+@media screen { .screen-hidden { display: none !important; } }   /* 畫面上收起來，列印時仍要出現 */
 @media print {
   @page { margin: 16mm; }
   body, :root { background: #fff; }
-  .site-header, .site-footer, .no-print, .tabs { display: none !important; }
+  .site-header, .site-footer, .no-print, .tabs, .info-link { display: none !important; }
   .print-only { display: block; }
   .page { padding: 0; max-width: none; }
   .card { break-inside: avoid; border-color: #bbb; }
   .grid-2 { grid-template-columns: repeat(2, minmax(0, 1fr)) !important; }
   a { color: inherit; text-decoration: none; }
+  a[href^="http"]::after { content: "（" attr(href) "）"; font-size: 12px; overflow-wrap: anywhere; }
+  .bar, .bar > span, .range .track, .range .fill, .tag { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  .table-wrap { overflow: visible; }
+  table.cases { min-width: 0; }
+  table.cases tr { break-inside: avoid; }
+  .amount-detail summary { color: inherit; }
 }
 
 .loading { display: flex; align-items: center; gap: 8px; }

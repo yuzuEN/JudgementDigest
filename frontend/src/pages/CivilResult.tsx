@@ -179,7 +179,8 @@ function Amount({ range }: { range: AmountRange | null }) {
 }
 
 function SimilarCases({ cases, onlyWin, setOnlyWin }: { cases: SimilarCase[]; onlyWin: boolean; setOnlyWin: (v: boolean) => void }) {
-  const shown = onlyWin ? cases.filter((c) => outcomeTone(c.outcome) !== "lose") : cases;
+  const visible = (c: SimilarCase) => !onlyWin || outcomeTone(c.outcome) !== "lose";
+  const shown = cases.filter(visible);
   return (
     <section className="card" aria-labelledby="sim-title">
       <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", justifyContent: "space-between", gap: 12 }}>
@@ -188,10 +189,10 @@ function SimilarCases({ cases, onlyWin, setOnlyWin }: { cases: SimilarCase[]; on
       </div>
       <div className="table-wrap">
         <table className="cases">
-          <thead><tr><th scope="col">字號</th><th scope="col">結果</th><th scope="col">判准／請求</th><th scope="col">相似度 <InfoLink to="相似度" label="相似度說明" /></th><th scope="col"><span className="sr-only">動作</span></th></tr></thead>
+          <thead><tr><th scope="col">字號</th><th scope="col">結果</th><th scope="col">判准／請求</th><th scope="col">相似度 <InfoLink to="相似度" label="相似度說明" /></th><th scope="col" className="no-print"><span className="sr-only">動作</span></th></tr></thead>
           <tbody>
-            {shown.map((c) => (
-              <tr key={c.case_id}>
+            {cases.map((c) => (
+              <tr key={c.case_id} className={visible(c) ? undefined : "screen-hidden"}>
                 <td>{c.case_number}<br /><span className="hint">{c.summary}</span></td>
                 <td data-label="結果"><span className={`tag ${outcomeTone(c.outcome)}`}>{outcomeLabel(c.outcome)}</span>{c.default_judgment && <><br /><span className="tag neutral">被告未到庭</span></>}</td>
                 <td data-label="判准／請求">{c.claimed_amount ? `${money(c.awarded_amount ?? 0)}／${money(c.claimed_amount)}` : "—"}</td>
@@ -202,9 +203,9 @@ function SimilarCases({ cases, onlyWin, setOnlyWin }: { cases: SimilarCase[]; on
           </tbody>
         </table>
       </div>
-      {shown.length === 0 && <p className="hint">沒有符合的判決。</p>}
-      {shown.length > 0 && <p className="hint">{SIMILARITY_NOTE}</p>}
-      {shown.some((c) => c.default_judgment) && <p className="hint">「被告未到庭」的判決沒有經過雙方攻防，原告幾乎都會贏，不代表你的案件也會這樣。上面的金額範圍、證據與抗辯統計不包含這些判決。</p>}
+      {shown.length === 0 && <p className="hint no-print">沒有符合的判決。</p>}
+      <p className={`hint${shown.length ? "" : " screen-hidden"}`}>{SIMILARITY_NOTE}</p>
+      {cases.some((c) => c.default_judgment) && <p className={`hint${shown.some((c) => c.default_judgment) ? "" : " screen-hidden"}`}>「被告未到庭」的判決沒有經過雙方攻防，原告幾乎都會贏，不代表你的案件也會這樣。上面的金額範圍、證據與抗辯統計不包含這些判決。</p>}
     </section>
   );
 }
