@@ -41,6 +41,50 @@ def evidence_mentions(text: str) -> List[str]:
     return [k for k, rx in _EVIDENCE_RE if rx.search(text or "")]
 
 
+QUESTION_PREFIX = "追問："
+ANSWER_PREFIX = "回答："
+_NEGATION = re.compile(r"沒有|沒|無|未|不")
+_YES = re.compile(r"^(?:有|有的|有喔|是|是的|對|對的)[。！!]?$")
+_SENTENCE = re.compile(r"[。；！？，,\n]")
+
+
+def without_questions(text: str) -> str:
+    """拿掉追問的問題，只留回答：問題裡的字（例如「鑑定」）不是使用者說的，不能進模型和檢索。"""
+    lines = [line for line in (text or "").split("\n") if not line.startswith(QUESTION_PREFIX)]
+    return "\n".join(line[len(ANSWER_PREFIX):] if line.startswith(ANSWER_PREFIX) else line for line in lines)
+
+
+def _stated(sentence: str) -> List[str]:
+    """這句話提到、而且前面沒有否定的證據。"""
+    found = []
+    for key, rx in _EVIDENCE_RE:
+        hit = rx.search(sentence)
+        if hit and not _NEGATION.search(sentence[max(0, hit.start() - 6):hit.start()]):
+            found.append(key)
+    return found
+
+
+def user_evidence(text: str, checked: Iterable[str] = ()) -> List[str]:
+    """
+    使用者有的證據：問卷勾選的，加上描述與追問回答裡提到的。
+    回答只有「有」時才看問題的內容；回答否定時整題不算。
+    """
+    found = set(checked)
+    question = ""
+    for line in (text or "").split("\n"):
+        if line.startswith(QUESTION_PREFIX):
+            question = line[len(QUESTION_PREFIX):]
+            continue
+        is_answer = line.startswith(ANSWER_PREFIX)
+        body = line[len(ANSWER_PREFIX):].strip() if is_answer else line
+        if is_answer and _YES.match(body):
+            found.update(evidence_mentions(question))
+            continue
+        for sentence in _SENTENCE.split(body):
+            found.update(_stated(sentence))
+    return [k for k, _, _ in EVIDENCE if k in found]
+
+
 def defense_types(text: str) -> List[str]:
     return [k for k, rx in _DEFENSE_RE if rx.search(text or "")]
 

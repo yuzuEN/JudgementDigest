@@ -37,7 +37,7 @@ export const EMPTY_INTAKE: Intake = {
 export function fullText(intake: Intake): string {
   const extra = Object.values(intake.followupAnswers)
     .filter((a) => a.answer.trim())
-    .map((a) => `${a.question}${a.answer.trim()}`);
+    .map((a) => `追問：${a.question}\n回答：${a.answer.trim()}`);   // 後端靠這兩個開頭分辨問題和回答
   return [intake.text.trim(), ...extra].filter(Boolean).join("\n");
 }
 

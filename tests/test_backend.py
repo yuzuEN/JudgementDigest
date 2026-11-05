@@ -298,6 +298,17 @@ class TestTwoTiers(unittest.TestCase):
         self.assertEqual(sum(c["default_judgment"] for c in cases), MAX_DEFAULT_SHOWN)
         self.assertEqual(len(cases), 5)
 
+    def test_evidence_from_answers_is_recognized(self):
+        text = TRAFFIC + "\n追問：有診斷證明嗎？\n回答：有診斷證明書"
+        rows = self.client.post("/api/civil/report", json={"text": text, "mid": "侵權：交通事故"}).json()["evidence"]
+        self.assertTrue(next(r for r in rows if r["key"] == "medical")["user_has"])
+
+    def test_questions_do_not_reach_the_model(self):
+        with mock.patch("civil.models.service.ServiceModel.predict_one", return_value=0.5) as predict:
+            self.client.post("/api/civil/predict", json={"text": TRAFFIC + "\n追問：有車禍鑑定嗎？\n回答：沒有"})
+        self.assertNotIn("鑑定", predict.call_args[0][0])
+        self.assertIn("沒有", predict.call_args[0][0])
+
     def test_unrelated_text_gets_a_warning(self):
         r = self.client.post("/api/civil/report", json={"text": "今天天氣很好，我想去海邊走走。" * 12}).json()
         self.assertTrue(any("不像法律糾紛" in w for w in r["prediction"]["warnings"]))

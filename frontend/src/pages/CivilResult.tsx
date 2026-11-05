@@ -48,7 +48,7 @@ export default function CivilResult() {
                 <div key={e.key} className="ev-row">
                   <div className="top">
                     <span>{e.label}</span>
-                    <span className={e.user_has ? "good-text" : "warn-text"}>{e.user_has ? "✓ 你有" : "✗ 你沒有"}</span>
+                    <span className={e.user_has ? "good-text" : "hint"}>{e.user_has ? "✓ 你有提到" : "沒有提到"}</span>
                   </div>
                   <div className="line">
                     <div className="bar thin soft" role="img" aria-label={`${percent(e.share)} 的相似勝訴判決提到`}>
