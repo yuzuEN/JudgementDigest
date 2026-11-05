@@ -87,8 +87,12 @@ export default function Intake() {
               </div>
               {error && <ErrorBox message={`選項載入失敗：${error}`} onRetry={load} />}
               <div className="form-grid">
-                <label className="field">糾紛類型
-                  <select value={intake.mid} onChange={(e) => update({ mid: e.target.value })}>
+                <div className="field">
+                  <span className="label-row"><label htmlFor="mid">糾紛類型</label>
+                    <a className="info" href={`/guide#${intake.mid ? encodeURIComponent(intake.mid) : "dispute-types"}`} target="_blank"
+                      rel="noreferrer" aria-label="糾紛類型說明（開新分頁）" title="糾紛類型說明">i</a>
+                  </span>
+                  <select id="mid" value={intake.mid} onChange={(e) => update({ mid: e.target.value })}>
                     <option value="">不確定</option>
                     {options?.mid_groups.map((g) => (
                       <optgroup key={g.category} label={g.category}>
@@ -96,7 +100,7 @@ export default function Intake() {
                       </optgroup>
                     ))}
                   </select>
-                </label>
+                </div>
                 <label className="field">想請求的金額（新臺幣）
                   <input type="text" inputMode="numeric" placeholder="例如 500000 或 50萬" value={intake.claimedAmount}
                     aria-invalid={amountInvalid} onChange={(e) => update({ claimedAmount: e.target.value })} />

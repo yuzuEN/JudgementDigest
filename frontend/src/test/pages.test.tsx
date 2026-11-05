@@ -55,6 +55,69 @@ describe("描述案情", () => {
   });
 });
 
+describe("頁首的步驟", () => {
+  it("可以點回之前的步驟，還沒到的步驟不能點", async () => {
+    mockApi({ "POST /intake/followup": () => ({ questions: [], source: "rules" }) });
+    renderAt("/confirm", <Confirm />, "/confirm", { text: "朋友借錢沒還" });
+    expect(await screen.findByRole("link", { name: "1 描述案情" })).toHaveAttribute("href", "/start");
+    expect(screen.queryByRole("link", { name: "2 確認與遮名" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: "3 參考結果" })).not.toBeInTheDocument();
+  });
+
+  it("結果頁可以回到前兩步", async () => {
+    mockApi({ "POST /civil/report": () => CIVIL_REPORT });
+    renderAt("/result/civil", <CivilResult />, "/result/civil", { text: "內容", maskedText: "內容" });
+    expect(await screen.findByRole("link", { name: "2 確認與遮名" })).toHaveAttribute("href", "/confirm");
+    expect(screen.getByRole("link", { name: "1 描述案情" })).toHaveAttribute("href", "/start");
+  });
+});
+
+describe("金額明細", () => {
+  it("展開後看到各範圍的件數", async () => {
+    const buckets = [{ low: 0, high: 0.2, count: 3 }, { low: 0.2, high: 0.4, count: 7 }];
+    const range = { ...CIVIL_REPORT.amount_range!, buckets };
+    mockApi({ "POST /civil/report": () => ({ ...CIVIL_REPORT, amount_range: range }) });
+    renderAt("/result/civil", <CivilResult />, "/result/civil", { text: "內容", maskedText: "內容" });
+    expect(await screen.findByText("看各金額範圍有幾件")).toBeInTheDocument();
+    expect(screen.getByText("10 萬～20 萬")).toBeInTheDocument();
+    expect(screen.getByText("7 件")).toBeInTheDocument();
+  });
+
+  it("沒有明細時不顯示", async () => {
+    mockApi({ "POST /civil/report": () => CIVIL_REPORT });
+    renderAt("/result/civil", <CivilResult />, "/result/civil", { text: "內容", maskedText: "內容" });
+    await screen.findByText("62%");
+    expect(screen.queryByText("看各金額範圍有幾件")).not.toBeInTheDocument();
+  });
+});
+
+describe("說明與知識", () => {
+  it("每個頁面都能到說明頁", () => {
+    renderApp("/");
+    expect(screen.getByRole("link", { name: "說明" })).toHaveAttribute("href", "/guide");
+  });
+
+  it("說明頁有糾紛類型和名詞", () => {
+    renderApp("/guide");
+    expect(screen.getByRole("heading", { name: "糾紛類型說明" })).toBeInTheDocument();
+    expect(screen.getByText("侵權：交通事故")).toBeInTheDocument();
+    expect(screen.getByText("被告未到庭（一造辯論）")).toBeInTheDocument();
+    expect(document.getElementById("民間借貸")).not.toBeNull();
+  });
+
+  it("糾紛類型旁邊有 i，選了類型就連到那一項", async () => {
+    mockApi({ "GET /meta/options": () => OPTIONS });
+    const user = userEvent.setup();
+    renderAt("/start", <Intake />);
+    const info = await screen.findByRole("link", { name: /糾紛類型說明/ });
+    expect(info).toHaveAttribute("href", "/guide#dispute-types");
+    expect(info).toHaveAttribute("target", "_blank");
+    await screen.findByRole("option", { name: "侵權：交通事故" });
+    await user.selectOptions(screen.getByLabelText("糾紛類型"), "侵權：交通事故");
+    expect(screen.getByRole("link", { name: /糾紛類型說明/ }).getAttribute("href")).toContain(encodeURIComponent("侵權：交通事故"));
+  });
+});
+
 describe("確認與遮名：敏感個人資料", () => {
   it("日常用語不需要同意，同意時會列出偵測到的類別", async () => {
     mockApi({ "POST /intake/followup": () => ({ questions: [], source: "rules" }) });

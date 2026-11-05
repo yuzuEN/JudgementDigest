@@ -103,6 +103,30 @@ function Probability({ report }: { report: CivilReport }) {
   );
 }
 
+function AmountDetail({ range }: { range: AmountRange }) {
+  const buckets = range.buckets ?? [];
+  if (buckets.length === 0) return null;
+  const most = Math.max(...buckets.map((b) => b.count), 1);
+  const label = (low: number, high: number) => (range.claimed
+    ? `${money(range.claimed * low)}～${money(range.claimed * high)}`
+    : `${percent(low)}～${percent(high)}`);
+  return (
+    <details className="amount-detail">
+      <summary>看各金額範圍有幾件</summary>
+      <ul>
+        {buckets.map((b) => (
+          <li key={b.low}>
+            <span>{label(b.low, b.high)}</span>
+            <span className="bar soft" aria-hidden="true"><span style={{ width: `${(b.count / most) * 100}%` }} /></span>
+            <span className="count">{b.count} 件</span>
+          </li>
+        ))}
+      </ul>
+      <p className="hint" style={{ fontSize: 13 }}>相似的勝訴判決判准了請求金額的幾成，換算成你的金額。不是每件都和你的案情一樣。</p>
+    </details>
+  );
+}
+
 function Amount({ range }: { range: AmountRange | null }) {
   if (!range) {
     return (
@@ -119,6 +143,7 @@ function Amount({ range }: { range: AmountRange | null }) {
         <h2 id="a-title">如果勝訴，可能拿到請求金額的</h2>
         <span className="mid-number">{percent(range.ratio_low)}～{percent(range.ratio_high)}</span>
         <p className="hint" style={{ fontSize: 15 }}>{pct}。回上一步填寫想請求的金額，就會換算成金額。</p>
+        <AmountDetail range={range} />
       </section>
     );
   }
@@ -136,6 +161,7 @@ function Amount({ range }: { range: AmountRange | null }) {
         <span className="tick" style={{ right: 0 }}>請求 {money(range.claimed)}</span>
       </div>
       <p className="hint" style={{ fontSize: 15 }}>{pct}（依 {range.n_cases} 件相似的勝訴判決）。金額只能給範圍，不能給單一數字。</p>
+      <AmountDetail range={range} />
     </section>
   );
 }

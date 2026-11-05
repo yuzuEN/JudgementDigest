@@ -2,7 +2,11 @@ import { useState, type ReactNode } from "react";
 import { Link } from "react-router-dom";
 import { applyTheme, initialTheme, type Theme } from "../theme";
 
-const STEPS = ["描述案情", "確認與遮名", "參考結果"];
+const STEPS = [
+  { label: "描述案情", path: "/start" },
+  { label: "確認與遮名", path: "/confirm" },
+  { label: "參考結果", path: "" },
+];
 
 function Logo() {
   return (
@@ -42,16 +46,21 @@ export function Layout({ step, nav, children }: { step?: 1 | 2 | 3; nav?: ReactN
       <header className="site-header">
         <div className="container">
           <Link to="/" className="brand"><Logo />類案判決參考</Link>
-          {step ? (
-            <nav aria-label="步驟">
-              <ol className="steps">
-                {STEPS.map((label, i) => (
-                  <li key={label} aria-current={i + 1 === step ? "step" : undefined}>{i + 1} {label}</li>
-                ))}
-              </ol>
-            </nav>
-          ) : nav}
-          <ThemeToggle />
+          <div className="header-right">
+            {step ? (
+              <nav aria-label="步驟">
+                <ol className="steps">
+                  {STEPS.map(({ label, path }, i) => (
+                    <li key={label} aria-current={i + 1 === step ? "step" : undefined}>
+                      {i + 1 < step ? <Link to={path}>{i + 1} {label}</Link> : <span>{i + 1} {label}</span>}
+                    </li>
+                  ))}
+                </ol>
+              </nav>
+            ) : nav}
+            <Link to="/guide" className="header-link">說明</Link>
+            <ThemeToggle />
+          </div>
         </div>
       </header>
       {children}
