@@ -7,7 +7,7 @@ export interface Health {
   status: string;
   civil: "model" | "mock";
   criminal: "mock";
-  followup: "rules";
+  followup: "rules" | "llm";
   model: string | null;
 }
 
@@ -44,6 +44,8 @@ export interface Question {
 export interface FollowupResponse {
   questions: Question[];
   source: "rules" | "llm";
+  llm_available?: boolean;
+  fallback?: "not_dispute" | "error" | null;
 }
 
 export interface CivilInput {

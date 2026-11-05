@@ -42,7 +42,9 @@ JudgementDigest/
 │   ├── main.py            路由（/api）
 │   ├── schemas.py         輸入輸出格式（前端的 src/api/types.ts 和它一一對應）
 │   ├── civil_service.py   民事：讀模型與檢索資料，組成結果頁的內容
-│   ├── followup.py        追問的固定題庫（之後改成 LLM）
+│   ├── followup.py        追問的固定題庫
+│   ├── llm/               LLM 介面：廠商（gemini、fake）與任務（tasks.py）
+│   ├── quality.py         描述的品質檢查
 │   └── mock.py            示例資料（刑事、沒有模型檔時的民事）
 │
 ├── frontend/              ── 網頁（React＋Vite）：首頁、描述案情、確認與遮名、結果、判決導讀

@@ -1,3 +1,6 @@
+# 金鑰（範本是 .env.example）
+.env
+
 # 虛擬環境
 .venv/
 

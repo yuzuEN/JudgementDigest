@@ -7,7 +7,7 @@ export function MockBadge({ show, children = "示例資料：數字與判決都�
 }
 
 export function Loading({ children = "載入中……" }: { children?: ReactNode }) {
-  return <p role="status" className="hint">{children}</p>;
+  return <p role="status" className="hint loading"><span className="spinner" aria-hidden="true" />{children}</p>;
 }
 
 export function ErrorBox({ message, onRetry }: { message: string; onRetry?: () => void }) {

@@ -8,6 +8,9 @@ services:
       dockerfile: backend/Dockerfile
     volumes:
       - ./artifacts:/app/artifacts:ro
+    env_file:
+      - path: .env
+        required: false
     environment:
       JD_CORS_ORIGINS: http://localhost:${JD_PORT:-8080}
     # 後端要載入模型與檢索資料，好了才開放前端，否則剛啟動時 API 會回 502

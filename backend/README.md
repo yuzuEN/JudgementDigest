@@ -61,10 +61,28 @@ API 文件（可以直接在網頁上試）：http://127.0.0.1:8000/docs
 - 沒選糾紛類型：用最相似的 30 件對審判決投票，比例超過 0.4 才採用並告知使用者，否則列出可能的類型。
   72 件口語測試中全部採用只對 47%，比例超過 0.4 的 23 件對 21 件
 
+## LLM
+
+`llm/` 是一層薄薄的介面，廠商由環境變數決定（`.env.example`）：
+
+| 檔案 | 內容 |
+|---|---|
+| `llm/base.py` | 共用介面 `generate_json` 與 `LLMError` |
+| `llm/gemini.py`、`llm/fake.py` | 各廠商的實作；`fake` 不連線、不花錢 |
+| `llm/__init__.py` | 依 `JD_LLM_PROVIDER` 選擇廠商 |
+| `llm/tasks.py` | 任務的 prompt 與結果檢查，不綁廠商；送出的文字都先遮名 |
+
+- 沒有設定 `JD_LLM_PROVIDER` 時完全不呼叫外部服務
+- 有設定時也要 `allow_llm: true` 才傳：打開確認頁只用固定題庫；使用者加好姓名、同意敏感個資的處理後，自己按按鈕才傳
+- LLM 失敗、逾時或格式不對時，追問退回固定題庫，回應的 `source` 會是 `rules`，`fallback` 說明原因
+- 傳給 LLM 的文字最多 3,000 字；說明（`why`）提到法律或法院做法時，換成固定的說明
+- 新增廠商：寫一個有 `generate_json` 的類別，在 `create_client` 加一行
+- Gemini 只能用付費層：免費層的資料會用於改善 Google 的產品
+
 ## 接上其他組的功能
 
 - **刑事**：在 `main.py` 的 `/api/criminal/predict` 把 `mock.criminal_report()` 換成刑事模型，回傳格式照 `schemas.CriminalReport`
-- **LLM 追問**：`/api/intake/followup` 改呼叫 LLM，回傳 `source: "llm"`；送出的文字一律先經過 `retrieval.masking.mask()`
+- **LLM 追問**：已接上，見下面的「LLM」；送出的文字一律先經過 `retrieval.masking.mask()`
 - **段落功能標註**：`civil.insights.guide_paragraphs()` 換成標註模型，`labeler` 改成模型名稱
 
 測試：`python -m unittest tests.test_backend`（有模型、沒有模型兩種情況都測）。

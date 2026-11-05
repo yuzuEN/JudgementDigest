@@ -15,7 +15,7 @@ import numpy as np
 from backend import mock
 from backend.quality import looks_like_dispute
 from civil.dataset.text import prepare_input
-from civil.insights import (EVIDENCE, QUESTIONNAIRE_EVIDENCE, amount_range, defense_table, evidence_table,
+from civil.insights import (EVIDENCE, QUESTIONNAIRE_EVIDENCE, amount_range, user_evidence, without_questions, defense_table, evidence_table,
                             guide_paragraphs, GUIDE_LABELER)
 from civil.models import service as model_service
 from retrieval import build as retrieval_build
@@ -123,9 +123,10 @@ class CivilService:
     def predict(self, req) -> Dict:
         if self.mock:
             return mock.civil_report(req.text, req.claimed_amount, req.evidence)["prediction"]
-        sim = self.index.scores(prepare_input(req.text))
+        text = without_questions(req.text)
+        sim = self.index.scores(prepare_input(text))
         mid, note = self._resolve_mid(req, sim)
-        p = self.model.predict_one(req.text, {**self.answers(req), "mid": mid})
+        p = self.model.predict_one(text, {**self.answers(req), "mid": mid})
         return {"win_probability": round(p, 4), "model": self._model_info(), "warnings": self.warnings(req, note),
                 "mock": False}
 
@@ -190,7 +191,7 @@ class CivilService:
         if self.mock:
             return mock.civil_report(req.text, req.claimed_amount, req.evidence)
         prediction = self.predict(req)
-        sim = self.index.scores(prepare_input(req.text))
+        sim = self.index.scores(prepare_input(without_questions(req.text)))
         # 統計只用對審、有被告答辯的案件；一造辯論只出現在列表（見 retrieval/civil.py）
         mid, _ = self._resolve_mid(req, sim)
         rows, _ = self.index.top(sim, N_NEIGHBORS, self._allowed(mid, self.in_stats))
@@ -199,7 +200,7 @@ class CivilService:
             "prediction": prediction,
             "amount_range": amount_range(self.grant_ratio[winners], req.claimed_amount),
             "similar": self._listed(sim, mid, N_SHOWN),
-            "evidence": evidence_table([self.case_evidence[r] for r in winners], req.evidence),
+            "evidence": evidence_table([self.case_evidence[r] for r in winners], user_evidence(req.text, req.evidence)),
             "defenses": defense_table([self.case_defenses[r] for r in rows]),
             "n_compared": int(len(rows)),
             "mock": False,

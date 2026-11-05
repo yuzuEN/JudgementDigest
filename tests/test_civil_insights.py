@@ -10,7 +10,8 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from civil.insights import (EVIDENCE, QUESTIONNAIRE_EVIDENCE, amount_range, defense_table,  # noqa: E402
-                            defense_types, evidence_mentions, evidence_table, guide_paragraphs)
+                            defense_types, evidence_mentions, evidence_table, guide_paragraphs, user_evidence,
+                            without_questions)
 
 
 class TestKeywords(unittest.TestCase):
@@ -27,6 +28,43 @@ class TestKeywords(unittest.TestCase):
         """問卷勾選的證據和結果頁的證據要用同一組 key，前端才對得起來。"""
         keys = [k for k, _, _ in EVIDENCE]
         self.assertEqual(QUESTIONNAIRE_EVIDENCE, keys[:6])
+
+
+class TestUserEvidence(unittest.TestCase):
+    Q = "追問：是否有車禍初步分析研判表或監視器畫面？\n回答："
+
+    def test_checkbox_description_and_answer_all_count(self):
+        text = "我有診斷證明書。\n" + self.Q + "我有拿到初步分析研判表"
+        self.assertEqual(user_evidence(text, ["chat"]), ["medical", "chat", "accident"])
+
+    def test_evidence_not_in_the_questionnaire(self):
+        self.assertIn("accident", user_evidence("我已經申請到車禍鑑定報告"))
+        self.assertIn("salary", user_evidence("公司有開薪資證明"))
+
+    def test_short_yes_uses_the_question(self):
+        self.assertEqual(user_evidence(self.Q + "有"), ["video", "accident"])
+
+    def test_question_alone_is_not_evidence(self):
+        self.assertEqual(user_evidence(self.Q + "還不確定"), [])
+
+    def test_negative_answers(self):
+        for answer in ("沒有", "沒有研判表", "目前沒有監視器畫面"):
+            self.assertEqual(user_evidence(self.Q + answer), [], answer)
+
+    def test_negation_in_the_description(self):
+        self.assertEqual(user_evidence("我沒有收據，但是有診斷證明"), ["medical"])
+
+    def test_nothing(self):
+        self.assertEqual(user_evidence(""), [])
+
+
+class TestWithoutQuestions(unittest.TestCase):
+    def test_keeps_description_and_answers_only(self):
+        text = "我被撞傷。\n追問：有車禍鑑定嗎？\n回答：對方不肯和解"
+        self.assertEqual(without_questions(text), "我被撞傷。\n對方不肯和解")
+
+    def test_plain_text_unchanged(self):
+        self.assertEqual(without_questions("我被撞傷。\n很痛"), "我被撞傷。\n很痛")
 
 
 class TestTables(unittest.TestCase):

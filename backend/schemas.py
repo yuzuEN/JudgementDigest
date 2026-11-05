@@ -11,7 +11,7 @@ class Health(BaseModel):
     status: str
     civil: Literal["model", "mock"]
     criminal: Literal["mock"]
-    followup: Literal["rules"]
+    followup: Literal["rules", "llm"]
     model: Optional[str] = None
 
 
@@ -58,6 +58,7 @@ class FollowupRequest(BaseModel):
     case_type: CaseType = "civil"
     mid: Optional[str] = None
     text: str = Field(default="", max_length=20000)
+    allow_llm: bool = Field(default=False, description="使用者看過說明並按下按鈕才是 true；預設不傳給外部服務")
 
 
 class Question(BaseModel):
@@ -69,6 +70,8 @@ class Question(BaseModel):
 class FollowupResponse(BaseModel):
     questions: List[Question]
     source: Literal["rules", "llm"]
+    llm_available: bool = False
+    fallback: Optional[Literal["not_dispute", "error"]] = None   # 要求用 LLM 卻改用固定題庫的原因
 
 
 class CivilInput(BaseModel):
