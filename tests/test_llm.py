@@ -19,6 +19,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from backend import llm  # noqa: E402
 from backend.llm.fake import FakeClient  # noqa: E402
 from backend.llm.gemini import DEFAULT_MODEL, GeminiClient  # noqa: E402
+from backend.llm.limits import UsageLimiter  # noqa: E402
 from backend.llm.tasks import (FOLLOWUP_SCHEMA, MAX_INPUT, MAX_QUESTION, SAFE_WHY,  # noqa: E402
                                followup_questions, outgoing)
 from backend.main import create_app  # noqa: E402
@@ -74,6 +75,53 @@ class TestGemini(unittest.TestCase):
         body = gemini_reply(GOOD).json()
         with self.assertRaises(llm.LLMError):
             gemini(lambda r: httpx.Response(503, json=body)).generate_json("s", "u", {})
+
+
+class TestUsageLimiter(unittest.TestCase):
+    def limiter(self, per_ip=2, per_day=5):
+        self.now = 1_800_000_000.0
+        return UsageLimiter(per_ip, per_day, clock=lambda: self.now)
+
+    def test_per_ip_limit_and_recovery(self):
+        limit = self.limiter()
+        self.assertEqual([limit.allow("a") for _ in range(3)], [True, True, False])
+        self.assertTrue(limit.allow("b"), "別的 IP 不受影響")
+        self.now += 3601
+        self.assertTrue(limit.allow("a"))
+
+    def test_daily_limit_covers_all_ips(self):
+        limit = self.limiter(per_ip=99, per_day=3)
+        self.assertEqual([limit.allow(ip) for ip in "abcd"], [True, True, True, False])
+
+    def test_new_day_resets(self):
+        limit = self.limiter(per_ip=99, per_day=1)
+        self.assertTrue(limit.allow("a"))
+        self.assertFalse(limit.allow("b"))
+        self.now += 86400
+        self.assertTrue(limit.allow("b"))
+
+    def test_rejected_calls_are_not_counted(self):
+        limit = self.limiter(per_ip=1, per_day=2)
+        limit.allow("a")
+        for _ in range(5):
+            limit.allow("a")
+        self.assertTrue(limit.allow("b"), "被擋下的次數不算進每日上限")
+
+
+class TestUsageLog(unittest.TestCase):
+    def test_tokens_logged_without_content(self):
+        def handler(request):
+            r = gemini_reply(GOOD).json()
+            r["usageMetadata"] = {"promptTokenCount": 11, "candidatesTokenCount": 22}
+            return httpx.Response(200, json=r)
+
+        with self.assertLogs("uvicorn.error", level="INFO") as logs:
+            gemini(handler).generate_json("系統", "秘密案情", FOLLOWUP_SCHEMA)
+        text = "\n".join(logs.output)
+        self.assertIn("input=11", text)
+        self.assertIn("output=22", text)
+        self.assertNotIn("秘密案情", text)
+        self.assertNotIn("secret-key", text)
 
 
 class TestCreateClient(unittest.TestCase):
@@ -136,11 +184,11 @@ class TestFollowupTask(unittest.TestCase):
 
 
 class TestEndpoint(unittest.TestCase):
-    def client(self, fake=None, provider="fake"):
+    def client(self, fake=None, provider="fake", **limits):
         tmp = tempfile.TemporaryDirectory()
         self.addCleanup(tmp.cleanup)
         with mock.patch("backend.main.llm.create_client", return_value=fake):
-            return TestClient(create_app(Settings(artifacts_dir=Path(tmp.name), llm_provider=provider)))
+            return TestClient(create_app(Settings(artifacts_dir=Path(tmp.name), llm_provider=provider, **limits)))
 
     def ask(self, client, text=DISPUTE, allow_llm=True):
         return client.post("/api/intake/followup", json={"case_type": "civil", "mid": "民間借貸", "text": text,
@@ -174,6 +222,32 @@ class TestEndpoint(unittest.TestCase):
         self.assertEqual((r["source"], r["fallback"]), ("rules", "not_dispute"))
         self.assertEqual(fake.sent, [])
 
+    def test_limit_stops_spending(self):
+        fake = FakeClient(GOOD)
+        c = self.client(fake, llm_per_ip_hour=2)
+        results = [self.ask(c) for _ in range(3)]
+        self.assertEqual([r["source"] for r in results], ["llm", "llm", "rules"])
+        self.assertEqual(results[-1]["fallback"], "limited")
+        self.assertEqual(len(fake.sent), 2)
+
+    def test_limit_is_per_visitor(self):
+        fake = FakeClient(GOOD)
+        c = self.client(fake, llm_per_ip_hour=1)
+        body = {"case_type": "civil", "text": DISPUTE, "allow_llm": True}
+        sources = [c.post("/api/intake/followup", json=body, headers={"X-Real-IP": ip}).json()["source"]
+                   for ip in ("1.1.1.1", "2.2.2.2", "1.1.1.1")]
+        self.assertEqual(sources, ["llm", "llm", "rules"])
+
+    def test_unrelated_text_does_not_use_the_quota(self):
+        c = self.client(FakeClient(GOOD), llm_per_ip_hour=1)
+        self.ask(c, "今天天氣很好")
+        self.assertEqual(self.ask(c)["source"], "llm")
+
+    def test_requests_without_permission_do_not_use_the_quota(self):
+        c = self.client(FakeClient(GOOD), llm_per_ip_hour=1)
+        self.ask(c, allow_llm=False)
+        self.assertEqual(self.ask(c)["source"], "llm")
+
     def test_no_llm_by_default(self):
         tmp = tempfile.TemporaryDirectory()
         self.addCleanup(tmp.cleanup)
@@ -184,6 +258,16 @@ class TestEndpoint(unittest.TestCase):
 
 
 class TestSettings(unittest.TestCase):
+    def test_nginx_passes_the_visitor_ip(self):
+        conf = (Path(__file__).resolve().parents[1] / "frontend" / "nginx.conf").read_text(encoding="utf-8")
+        self.assertIn("X-Real-IP $remote_addr", conf)
+
+    def test_limits_from_environment(self):
+        env = {"JD_LLM_PER_IP_HOUR": "3", "JD_LLM_PER_DAY": ""}
+        with mock.patch.dict("os.environ", env), mock.patch("backend.settings.load_dotenv"):
+            s = Settings.from_env()
+        self.assertEqual((s.llm_per_ip_hour, s.llm_per_day), (3, 300))
+
     def test_key_not_in_repr(self):
         self.assertNotIn("abc123", repr(Settings(llm_api_key="abc123")))
 

@@ -17,7 +17,7 @@ export default function Confirm() {
   const [masking, setMasking] = useState(false);
   const [aiQuestions, setAiQuestions] = useState<Question[]>([]);
   const [llmAvailable, setLlmAvailable] = useState(false);
-  const [aiState, setAiState] = useState<"idle" | "asking" | "done" | "failed" | "unrelated" | "declined">("idle");
+  const [aiState, setAiState] = useState<"idle" | "asking" | "done" | "failed" | "unrelated" | "limited" | "declined">("idle");
   const [error, setError] = useState("");
   const [nameInput, setNameInput] = useState("");
   const text = useMemo(() => fullText(intake), [intake]);
@@ -61,7 +61,7 @@ export default function Confirm() {
     setAiState("asking");
     api.mask(intake.text, intake.names)
       .then((r) => api.followup(intake.caseType, intake.mid || null, r.masked_text, true))
-      .then((r) => { if (r.source === "llm") setAiQuestions(r.questions); setAiState(r.source === "llm" ? "done" : r.fallback === "not_dispute" ? "unrelated" : "failed"); })
+      .then((r) => { if (r.source === "llm") setAiQuestions(r.questions); setAiState(r.source === "llm" ? "done" : r.fallback === "not_dispute" ? "unrelated" : r.fallback === "limited" ? "limited" : "failed"); })
       .catch(() => setAiState("failed"));
   };
   const answer = (q: Question, value: string) =>
@@ -146,6 +146,7 @@ export default function Confirm() {
             <section className="card" aria-labelledby="q-title">
               <h2 id="q-title">還想問你幾件事</h2>
               {aiState === "failed" && <p className="warn-text" style={{ fontSize: 14 }}>AI 暫時無法使用，先回答下面的一般問題就好。</p>}
+              {aiState === "limited" && <p className="warn-text" style={{ fontSize: 14 }}>AI 提問的次數暫時用完了，先回答下面的一般問題就好。</p>}
               {aiState === "unrelated" && <p className="warn-text" style={{ fontSize: 14 }}>這段描述看起來不像法律糾紛，所以沒有傳給 AI。可以回上一步補充，或先回答下面的一般問題。</p>}
               <p className="hint">{questionHint}</p>
               {shown.map((q) => (

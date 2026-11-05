@@ -9,11 +9,12 @@
 import logging
 from typing import Optional
 
-from fastapi import APIRouter, FastAPI, HTTPException
+from fastapi import APIRouter, FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 
 from backend import followup, llm, mock, schemas
 from backend.civil_service import CivilService
+from backend.llm.limits import UsageLimiter
 from backend.llm.tasks import followup_questions
 from backend.quality import looks_like_dispute
 from backend.settings import Settings
@@ -23,10 +24,16 @@ from retrieval.masking import TAGS, mask
 logger = logging.getLogger(__name__)
 
 
+def client_ip(request: Request) -> str:
+    """nginx 會設定 X-Real-IP。後端只在 Docker 內網，外面的人碰不到，所以可以相信這個標頭。"""
+    return request.headers.get("x-real-ip") or (request.client.host if request.client else "unknown")
+
+
 def create_app(settings: Optional[Settings] = None) -> FastAPI:
     settings = settings or Settings.from_env()
     civil = CivilService(settings.artifacts_dir, force_mock=settings.mode == "mock")
     llm_client = llm.create_client(settings.llm_provider, settings.llm_model, settings.llm_api_key)
+    llm_limit = UsageLimiter(settings.llm_per_ip_hour, settings.llm_per_day)
     app = FastAPI(title="類案判決參考平台 API", version="0.1.0",
                   description="刑事及民事類案判決參考平台。結果是「類似案件如果打到判決」的統計參考，不是法律意見。")
     app.add_middleware(CORSMiddleware, allow_origins=settings.cors_origins, allow_methods=["GET", "POST"],
@@ -51,7 +58,7 @@ def create_app(settings: Optional[Settings] = None) -> FastAPI:
                 "spans": [{"start": s.start, "end": s.end, "kind": s.kind, "label": TAGS[s.kind]} for s in spans]}
 
     @api.post("/intake/followup", response_model=schemas.FollowupResponse)
-    def ask_followup(req: schemas.FollowupRequest):
+    def ask_followup(req: schemas.FollowupRequest, request: Request):
         """
         追問描述裡缺少的事實。預設用固定題庫，文字不離開伺服器。
         只有 allow_llm（使用者加好姓名、同意之後自己按按鈕）才傳給 LLM；失敗或內容不像法律糾紛時退回固定題庫。
@@ -60,6 +67,8 @@ def create_app(settings: Optional[Settings] = None) -> FastAPI:
         fallback = None
         if req.allow_llm and available and not looks_like_dispute(req.text):
             fallback = "not_dispute"
+        elif req.allow_llm and available and not llm_limit.allow(client_ip(request)):
+            fallback = "limited"
         elif req.allow_llm and available:
             try:
                 return {"questions": followup_questions(llm_client, req.case_type, req.mid, req.text), "source": "llm",

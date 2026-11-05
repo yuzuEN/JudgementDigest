@@ -202,6 +202,17 @@ describe("確認與遮名：AI 追問", () => {
     expect(await screen.findByText("對方怎麼說？")).toBeInTheDocument();
   });
 
+  it("超過用量上限時說明原因", async () => {
+    setup((b) => (b.allow_llm ? { ...rulesReply, fallback: "limited" } : rulesReply));
+    const user = userEvent.setup();
+    renderAt("/confirm", <Confirm />, "/confirm", { text: "內容" });
+    const button = await screen.findByRole("button", { name: AI_BUTTON });
+    await waitFor(() => expect(button).toBeEnabled());
+    await user.click(button);
+    expect(await screen.findByText(/次數暫時用完了/)).toBeInTheDocument();
+    expect(screen.getByText("什麼時候發生的？")).toBeInTheDocument();
+  });
+
   it("內容不像法律糾紛時說明原因，不說 AI 壞了", async () => {
     setup((b) => (b.allow_llm ? { ...rulesReply, fallback: "not_dispute" } : rulesReply));
     const user = userEvent.setup();
