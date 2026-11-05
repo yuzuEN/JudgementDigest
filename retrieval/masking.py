@@ -96,8 +96,29 @@ _THIRD_PARTY_RE = re.compile(
     r"([" + _SURNAMES + r"](?:(?![" + _NAME_STOP + r"])[一-鿿]){1,2})")
 
 
+_NAME = r"[" + _SURNAMES + r"](?:(?![" + _NAME_STOP + r"])[一-鿿]){1,2}"
+_NOT_NAME = (r"(?!何人|何者|何以|何時|何處|高雄|高等|高院|方式|方法|方面|任何|任意|連同|連帶|金額|金融|程度|石油|江蘇|馬祖|連江|新北|白天|"
+             r"田地|古蹟|陳報|陳述|陳明|施作|施加|施工|施行|董事|曾經|曾匯|曾於|曾向|曾與|簡易|簡稱)")
+# 「原名林朝文」「繼承人即蔡淑智」「前所有權人為蔡志陽」：沒有寫訴外人，但前面的字足以判斷是人名
+_NAMED_AS_RE = re.compile(
+    r"(?:原名[：:]?|(?:訴外人|第三人|繼承人|債務人|保證人|負責人|代表人|所有權人|之父|之母|其子|其女|祖父|祖母)(?:即|為)|"
+    r"第三人|繼承人|其子|其女|祖父|祖母)" + _NOT_NAME + r"(" + _NAME + r")")
+# 「訴外人王大明、謝新潭、陳榮坤合資」：列舉時只有第一個名字有稱謂
+_NAME_LIST_RE = re.compile(r"、" + _NOT_NAME + r"(" + _NAME + r")(?=[、，。）)及與和等共合均]|$)")
+
+
 def third_party_names(text: str) -> List[str]:
-    return sorted(set(_THIRD_PARTY_RE.findall(text or "")))
+    text = text or ""
+    names = set(_THIRD_PARTY_RE.findall(text)) | set(_NAMED_AS_RE.findall(text))
+    for found in list(_THIRD_PARTY_RE.finditer(text)) + list(_NAMED_AS_RE.finditer(text)):
+        end = found.end()
+        while True:
+            item = _NAME_LIST_RE.match(text, end)
+            if not item:
+                break
+            names.add(item.group(1))
+            end = item.end()
+    return sorted(names)
 
 
 def mask_parties(text: str, plaintiffs: Optional[str], defendants: Optional[str],

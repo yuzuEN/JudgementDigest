@@ -114,6 +114,7 @@ describe("民事結果", () => {
     expect(await screen.findByText("62%")).toBeInTheDocument();
     expect(screen.getByText("18 萬～42 萬")).toBeInTheDocument();
     expect(screen.getByText(/比對了 30 件/)).toBeInTheDocument();
+    expect(screen.getByText(/口語描述算出來的機率常常偏低/)).toBeInTheDocument();
     expect(screen.getByText("臺灣臺北地方法院 113 年度訴字第 1 號")).toBeInTheDocument();
     expect(screen.getByText("31 萬／48 萬")).toBeInTheDocument();
     expect(screen.getByText("✓ 你有")).toBeInTheDocument();

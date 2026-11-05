@@ -1,18 +1,19 @@
 """
 民事：勝訴機率、相似判決、金額範圍、證據對照、常見抗辯、判決導讀。
 
-模型（artifacts/civil_winloss_v1）與檢索資料（artifacts/retrieval_civil_v1）在啟動時讀進記憶體；
+模型（artifacts/civil_winloss_v1）與檢索資料（artifacts/retrieval_civil_v3）在啟動時讀進記憶體；
 任一個不存在時整個民事改回傳示例資料（mock = true），伺服器照樣能啟動，前端照樣能走完流程。
 """
 import json
 import sqlite3
 from contextlib import closing
 from pathlib import Path
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, Tuple
 
 import numpy as np
 
 from backend import mock
+from backend.quality import looks_like_dispute
 from civil.dataset.text import prepare_input
 from civil.insights import (EVIDENCE, QUESTIONNAIRE_EVIDENCE, amount_range, defense_table, evidence_table,
                             guide_paragraphs, GUIDE_LABELER)
@@ -26,6 +27,7 @@ N_SHOWN = 10              # 頁面上列出的相似判決
 N_CANDIDATES = 60         # 列表從這麼多件裡挑（要去重、限制一造辯論的件數）
 MAX_DEFAULT_SHOWN = 3     # 列表裡一造辯論的上限
 DUPLICATE_PREFIX = 40     # 摘要開頭這麼多字相同，視為同一種制式案件
+MID_VOTE = 0.4            # 沒選糾紛類型時，相似判決的案由投票超過這個比例才採用：口語測試 23 件對 21 件，全部都用只對 47%
 MIN_SAME_MID = 10         # 同案由的判決少於這個數時，改在全部案件中找
 
 
@@ -83,19 +85,48 @@ class CivilService:
         return {"mid": req.mid, "court": req.court, "plaintiff_has_lawyer": req.plaintiff_has_lawyer,
                 "defendant_is_corp": corp}
 
-    def warnings(self, req) -> List[str]:
+    def _infer_mid(self, sim: np.ndarray) -> Tuple[Optional[str], List[str]]:
+        """使用者沒選糾紛類型時，用最相似的對審判決投票。回傳（有把握的案由, 可能的案由）。"""
+        rows, sims = self.index.top(sim, N_NEIGHBORS, ~self.default)
+        votes: Dict[str, float] = {}
+        for row, s in zip(rows, sims):
+            votes[self.mids[row]] = votes.get(self.mids[row], 0.0) + float(s)
+        ranked = sorted(votes, key=lambda m: -votes[m])
+        ranked = [m for m in ranked if m and m != "其他"]
+        total = sum(votes.values())
+        if not ranked or total <= 0:
+            return None, []
+        return (ranked[0] if votes[ranked[0]] / total >= MID_VOTE else None), ranked[:3]
+
+    def _resolve_mid(self, req, sim: np.ndarray) -> Tuple[Optional[str], Optional[str]]:
+        """回傳（要用的案由, 給使用者的提醒）。"""
+        if req.mid:
+            return req.mid, None
+        if not looks_like_dispute(req.text):
+            return None, "沒有選擇糾紛類型，相似判決會在全部案件中找。"
+        mid, likely = self._infer_mid(sim)
+        if mid:
+            return mid, f"沒有選擇糾紛類型，系統判斷比較接近「{mid}」。如果不對，請回上一步選擇。"
+        hint = f"比較接近的有：{'、'.join(likely)}。" if likely else ""
+        return None, f"沒有選擇糾紛類型，相似判決會在全部案件中找。{hint}回上一步選擇，結果會比較準。"
+
+    def warnings(self, req, mid_note: Optional[str] = None) -> List[str]:
         out = []
+        if not looks_like_dispute(req.text):
+            out.append("這段描述看起來不像法律糾紛，下面的結果可能沒有參考價值。請寫下發生了什麼事、你想要對方做什麼。")
         if len(prepare_input(req.text)) < SHORT_TEXT:
             out.append(f"描述少於 {SHORT_TEXT} 字，結果可能比較不準；補充經過、損害與對方的說法會更可靠。")
-        if not req.mid:
-            out.append("沒有選擇糾紛類型，相似判決會在全部案件中找。")
+        if mid_note:
+            out.append(mid_note)
         return out
 
     def predict(self, req) -> Dict:
         if self.mock:
             return mock.civil_report(req.text, req.claimed_amount, req.evidence)["prediction"]
-        p = self.model.predict_one(req.text, self.answers(req))
-        return {"win_probability": round(p, 4), "model": self._model_info(), "warnings": self.warnings(req),
+        sim = self.index.scores(prepare_input(req.text))
+        mid, note = self._resolve_mid(req, sim)
+        p = self.model.predict_one(req.text, {**self.answers(req), "mid": mid})
+        return {"win_probability": round(p, 4), "model": self._model_info(), "warnings": self.warnings(req, note),
                 "mock": False}
 
     # ── 相似判決 ──
@@ -161,12 +192,13 @@ class CivilService:
         prediction = self.predict(req)
         sim = self.index.scores(prepare_input(req.text))
         # 統計只用對審、有被告答辯的案件；一造辯論只出現在列表（見 retrieval/civil.py）
-        rows, _ = self.index.top(sim, N_NEIGHBORS, self._allowed(req.mid, self.in_stats))
+        mid, _ = self._resolve_mid(req, sim)
+        rows, _ = self.index.top(sim, N_NEIGHBORS, self._allowed(mid, self.in_stats))
         winners = [r for r in rows if self.y[r] == 1]
         return {
             "prediction": prediction,
             "amount_range": amount_range(self.grant_ratio[winners], req.claimed_amount),
-            "similar": self._listed(sim, req.mid, N_SHOWN),
+            "similar": self._listed(sim, mid, N_SHOWN),
             "evidence": evidence_table([self.case_evidence[r] for r in winners], req.evidence),
             "defenses": defense_table([self.case_defenses[r] for r in rows]),
             "n_compared": int(len(rows)),

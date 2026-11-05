@@ -93,6 +93,7 @@ function Probability({ report }: { report: CivilReport }) {
       </div>
       <div className="bar" role="img" aria-label={`勝訴機率 ${percent(p)}`}><span style={{ width: percent(p) }} /></div>
       <p className="hint" style={{ fontSize: 15 }}>在 100 件和你類似、打到判決的案件中，大約 {n} 件原告至少拿到一部分。</p>
+      <p className="hint" style={{ fontSize: 14 }}>模型是用判決書的文字訓練的。初步測試中，一般口語描述算出來的機率常常偏低，也比較分不出輸贏，請當成粗略的參考。</p>
       {report.prediction.warnings.map((w) => <p key={w} className="warn-text" style={{ margin: 0, fontSize: 14 }}>{w}</p>)}
       <p className="hint" style={{ fontSize: 13 }}>
         模型：{report.prediction.model.description}

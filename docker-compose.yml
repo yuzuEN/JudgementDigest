@@ -10,6 +10,12 @@ services:
       - ./artifacts:/app/artifacts:ro
     environment:
       JD_CORS_ORIGINS: http://localhost:${JD_PORT:-8080}
+    # 後端要載入模型與檢索資料，好了才開放前端，否則剛啟動時 API 會回 502
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/api/health', timeout=3)"]
+      interval: 3s
+      timeout: 5s
+      retries: 40
   frontend:
     build:
       context: .
@@ -17,4 +23,5 @@ services:
     ports:
       - "${JD_PORT:-8080}:80"
     depends_on:
-      - backend
+      backend:
+        condition: service_healthy

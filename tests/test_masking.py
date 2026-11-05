@@ -71,6 +71,24 @@ class TestParties(unittest.TestCase):
         text = "原告與訴外人簡建祥結婚，證人洪瑞斌到庭，其配偶馮品瑄亦在場，證人林文表示不知情"
         self.assertEqual(third_party_names(text), ["林文", "洪瑞斌", "簡建祥", "馮品瑄"])
 
+    def test_names_without_the_word_third_party(self):
+        cases = {"證人【關係人】（原名李佩華，65年生）": "李佩華", "原告（原名：陳麗川）獲發股數": "陳麗川",
+                 "其餘繼承人即蔡淑智到場": "蔡淑智", "前所有權人為蔡志陽所有": "蔡志陽", "第三人徐浦洲另行起訴": "徐浦洲"}
+        for text, name in cases.items():
+            self.assertIn(name, third_party_names(text), text)
+
+    def test_names_in_a_list(self):
+        self.assertEqual(third_party_names("由訴外人王大明、謝新潭、陳榮坤合資興建"), ["王大明", "謝新潭", "陳榮坤"])
+
+    def test_list_stops_at_ordinary_words(self):
+        self.assertEqual(third_party_names("訴外人王大明、被告到場"), ["王大明"])
+
+    def test_common_words_after_a_list_or_title_are_not_names(self):
+        for text in ("所有權人為何人", "繼承人即高雄市民", "訴外人王大明、連帶保證", "訴外人王大明、董事長", "原告曾匯款",
+                     "第三人陳述意見", "保證人為連帶債務人", "訴外人王大明、施作工程"):
+            self.assertNotIn(True, [n in ("何人", "高雄市", "連帶保", "董事長", "曾匯款", "陳述", "連帶債", "施作工", "施作")
+                                    for n in third_party_names(text)], text)
+
     def test_role_words_are_not_names(self):
         for text in ("訴外人即原告", "以證人身分到庭", "法定代理人之配偶", "配偶贈與為由", "證人方面表示", "訴外人公司"):
             self.assertEqual(third_party_names(text), [], text)
