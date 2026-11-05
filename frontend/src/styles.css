@@ -291,7 +291,7 @@ details.faq summary { cursor: pointer; font-weight: 500; }
 .steps li > a { color: var(--link); text-decoration: underline; text-underline-offset: 3px; }
 .steps li > a:hover { color: var(--link-hover); }
 .label-row { display: inline-flex; align-items: center; gap: 6px; }
-.info { display: inline-flex; align-items: center; justify-content: center; width: 20px; height: 20px; border: 1px solid var(--link); border-radius: 50%; font-size: 13px; font-weight: 700; font-style: italic; text-decoration: none; }
+.info-link { display: inline-flex; align-items: center; justify-content: center; width: 20px; height: 20px; border: 1px solid var(--link); border-radius: 50%; font-size: 13px; font-weight: 700; font-style: italic; text-decoration: none; }
 .amount-detail { margin-top: 4px; font-size: 15px; }
 .amount-detail summary { cursor: pointer; color: var(--link); min-height: 28px; }
 .amount-detail ul { list-style: none; margin: 8px 0; padding: 0; display: grid; gap: 8px; }

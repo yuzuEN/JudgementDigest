@@ -89,7 +89,7 @@ export default function Intake() {
               <div className="form-grid">
                 <div className="field">
                   <span className="label-row"><label htmlFor="mid">糾紛類型</label>
-                    <a className="info" href={`/guide#${intake.mid ? encodeURIComponent(intake.mid) : "dispute-types"}`} target="_blank"
+                    <a className="info-link" href={`/guide#${intake.mid ? encodeURIComponent(intake.mid) : "dispute-types"}`} target="_blank"
                       rel="noreferrer" aria-label="糾紛類型說明（開新分頁）" title="糾紛類型說明">i</a>
                   </span>
                   <select id="mid" value={intake.mid} onChange={(e) => update({ mid: e.target.value })}>
