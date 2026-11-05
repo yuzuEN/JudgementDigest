@@ -57,14 +57,18 @@ def create_app(settings: Optional[Settings] = None) -> FastAPI:
         只有 allow_llm（使用者加好姓名、同意之後自己按按鈕）才傳給 LLM；失敗或內容不像法律糾紛時退回固定題庫。
         """
         available = llm_client is not None
-        if req.allow_llm and available and looks_like_dispute(req.text):
+        fallback = None
+        if req.allow_llm and available and not looks_like_dispute(req.text):
+            fallback = "not_dispute"
+        elif req.allow_llm and available:
             try:
                 return {"questions": followup_questions(llm_client, req.case_type, req.mid, req.text), "source": "llm",
                         "llm_available": True}
             except llm.LLMError as e:
                 logger.warning("LLM 追問失敗，改用固定題庫：%s", e)
+                fallback = "error"
         return {"questions": followup.questions(req.case_type, req.mid, req.text), "source": "rules",
-                "llm_available": available}
+                "llm_available": available, "fallback": fallback}
 
     @api.post("/civil/predict", response_model=schemas.CivilPrediction)
     def civil_predict(req: schemas.CivilInput):

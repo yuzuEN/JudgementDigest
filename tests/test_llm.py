@@ -19,12 +19,13 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from backend import llm  # noqa: E402
 from backend.llm.fake import FakeClient  # noqa: E402
 from backend.llm.gemini import DEFAULT_MODEL, GeminiClient  # noqa: E402
-from backend.llm.tasks import FOLLOWUP_SCHEMA, MAX_QUESTION, followup_questions, outgoing  # noqa: E402
+from backend.llm.tasks import (FOLLOWUP_SCHEMA, MAX_INPUT, MAX_QUESTION, SAFE_WHY,  # noqa: E402
+                               followup_questions, outgoing)
 from backend.main import create_app  # noqa: E402
 from backend.settings import Settings  # noqa: E402
 
 DISPUTE = "朋友跟我借了三十萬沒有還，他的電話是0912345678，住在臺北市大安區和平東路二段106號。"
-GOOD = {"questions": [{"text": "有沒有寫借據？", "why": "法院要看有沒有借貸的證明。"}]}
+GOOD = {"questions": [{"text": "有沒有寫借據？", "why": "可以確認借貸的經過。"}]}
 
 
 def gemini(handler):
@@ -99,9 +100,27 @@ class TestFollowupTask(unittest.TestCase):
         self.assertIn("三十萬", client.sent[0])
         self.assertEqual(outgoing("電話0912345678"), "電話【電話】")
 
+    def test_input_is_limited(self):
+        client = FakeClient(GOOD)
+        followup_questions(client, "civil", None, "借錢" * MAX_INPUT)
+        self.assertLess(len(client.sent[0]), MAX_INPUT + 100)
+
+    def test_legal_claims_are_removed_from_the_explanation(self):
+        claims = ["法院通常會核算零件折舊", "依民法第 184 條要負責", "法官會看這個", "這會影響責任比例",
+                  "依法可以請求", "一般會判賠比較多"]
+        for why in claims:
+            reply = {"questions": [{"text": "有維修單據嗎？", "why": why}]}
+            out = followup_questions(FakeClient(reply), "civil", None, DISPUTE)
+            self.assertEqual(out[0]["why"], SAFE_WHY, why)
+
+    def test_plain_explanation_is_kept(self):
+        reply = {"questions": [{"text": "有維修單據嗎？", "why": "可以確認實際花了多少錢。"}]}
+        out = followup_questions(FakeClient(reply), "civil", None, DISPUTE)
+        self.assertEqual(out[0]["why"], "可以確認實際花了多少錢。")
+
     def test_shape_for_the_frontend(self):
         out = followup_questions(FakeClient(GOOD), "civil", None, DISPUTE)
-        self.assertEqual(out, [{"id": "llm1", "text": "有沒有寫借據？", "why": "法院要看有沒有借貸的證明。"}])
+        self.assertEqual(out, [{"id": "llm1", "text": "有沒有寫借據？", "why": "可以確認借貸的經過。"}])
 
     def test_limit_and_bad_items_dropped(self):
         items = [{"text": "太長" * MAX_QUESTION, "why": "x"}, {"text": "", "why": "x"}, "不是物件"]
@@ -146,13 +165,13 @@ class TestEndpoint(unittest.TestCase):
     def test_falls_back_to_rules_when_llm_fails(self):
         for error in (llm.LLMError("HTTP 402"), llm.LLMError("逾時")):
             r = self.ask(self.client(FakeClient(error=error)))
-            self.assertEqual(r["source"], "rules")
+            self.assertEqual((r["source"], r["fallback"]), ("rules", "error"))
             self.assertGreater(len(r["questions"]), 0)
 
     def test_unrelated_text_does_not_spend_money(self):
         fake = FakeClient(GOOD)
         r = self.ask(self.client(fake), "今天天氣很好，我想去海邊走走。")
-        self.assertEqual(r["source"], "rules")
+        self.assertEqual((r["source"], r["fallback"]), ("rules", "not_dispute"))
         self.assertEqual(fake.sent, [])
 
     def test_no_llm_by_default(self):

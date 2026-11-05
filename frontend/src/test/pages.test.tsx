@@ -157,6 +157,23 @@ describe("確認與遮名：AI 追問", () => {
     expect(sent.every((b) => !b.allow_llm)).toBe(true);
   });
 
+  it("內容不像法律糾紛時說明原因，不說 AI 壞了", async () => {
+    setup((b) => (b.allow_llm ? { ...rulesReply, fallback: "not_dispute" } : rulesReply));
+    const user = userEvent.setup();
+    renderAt("/confirm", <Confirm />, "/confirm", { text: "今天天氣很好" });
+    const button = await screen.findByRole("button", { name: AI_BUTTON });
+    await waitFor(() => expect(button).toBeEnabled());
+    await user.click(button);
+    expect(await screen.findByText(/看起來不像法律糾紛/)).toBeInTheDocument();
+    expect(screen.queryByText(/AI 暫時無法使用/)).not.toBeInTheDocument();
+  });
+
+  it("同意文字說明會傳給 Gemini", async () => {
+    setup(() => rulesReply);
+    renderAt("/confirm", <Confirm />, "/confirm", { text: "我骨折住院" });
+    expect(await screen.findByText(/這些內容也會傳給 Google Gemini/)).toBeInTheDocument();
+  });
+
   it("AI 失敗時說明，並保留固定題庫", async () => {
     setup(() => rulesReply);
     const user = userEvent.setup();

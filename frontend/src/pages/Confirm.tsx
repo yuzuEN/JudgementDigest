@@ -16,7 +16,7 @@ export default function Confirm() {
   const [questions, setQuestions] = useState<Question[]>([]);
   const [masking, setMasking] = useState(false);
   const [llmAvailable, setLlmAvailable] = useState(false);
-  const [aiState, setAiState] = useState<"idle" | "asking" | "done" | "failed" | "declined">("idle");
+  const [aiState, setAiState] = useState<"idle" | "asking" | "done" | "failed" | "unrelated" | "declined">("idle");
   const [error, setError] = useState("");
   const [nameInput, setNameInput] = useState("");
   const text = useMemo(() => fullText(intake), [intake]);
@@ -60,7 +60,7 @@ export default function Confirm() {
     setAiState("asking");
     api.mask(intake.text, intake.names)
       .then((r) => api.followup(intake.caseType, intake.mid || null, r.masked_text, true))
-      .then((r) => { setQuestions(r.questions); setAiState(r.source === "llm" ? "done" : "failed"); })
+      .then((r) => { setQuestions(r.questions); setAiState(r.source === "llm" ? "done" : r.fallback === "not_dispute" ? "unrelated" : "failed"); })
       .catch(() => setAiState("failed"));
   };
   const answer = (q: Question, value: string) =>
@@ -120,7 +120,7 @@ export default function Confirm() {
             {sensitive && (
               <label className="consent">
                 <input type="checkbox" checked={intake.sensitiveConsent} onChange={(e) => update({ sensitiveConsent: e.target.checked })} />
-                <span><strong>我同意</strong>本平台處理我提供的敏感個人資料（偵測到：{kinds.join("、")}），只用於產生這次的參考結果。</span>
+                <span><strong>我同意</strong>本平台處理我提供的敏感個人資料（偵測到：{kinds.join("、")}），只用於產生這次的參考結果。{llmAvailable && "如果你選擇請 AI 提問，這些內容也會傳給 Google Gemini。"}</span>
               </label>
             )}
             {sensitive && !intake.sensitiveConsent && <div><Link to="/start" className="btn secondary small">不同意，回上一步刪掉這些描述</Link></div>}
@@ -142,6 +142,7 @@ export default function Confirm() {
             <section className="card" aria-labelledby="q-title">
               <h2 id="q-title">還想問你幾件事</h2>
               {aiState === "failed" && <p className="warn-text" style={{ fontSize: 14 }}>AI 暫時無法使用，先回答下面的一般問題就好。</p>}
+              {aiState === "unrelated" && <p className="warn-text" style={{ fontSize: 14 }}>這段描述看起來不像法律糾紛，所以沒有傳給 AI。可以回上一步補充，或先回答下面的一般問題。</p>}
               <p className="hint">{questionHint}</p>
               {questions.map((q) => (
                 <div key={q.id} className="qa">

@@ -45,6 +45,7 @@ export interface FollowupResponse {
   questions: Question[];
   source: "rules" | "llm";
   llm_available?: boolean;
+  fallback?: "not_dispute" | "error" | null;
 }
 
 export interface CivilInput {

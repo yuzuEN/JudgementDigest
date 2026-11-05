@@ -71,6 +71,7 @@ class FollowupResponse(BaseModel):
     questions: List[Question]
     source: Literal["rules", "llm"]
     llm_available: bool = False
+    fallback: Optional[Literal["not_dispute", "error"]] = None   # 要求用 LLM 卻改用固定題庫的原因
 
 
 class CivilInput(BaseModel):
