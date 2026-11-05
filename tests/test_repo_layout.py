@@ -104,7 +104,9 @@ class TestTextFiles(unittest.TestCase):
 class TestGitignore(unittest.TestCase):
     def test_code_and_docs_not_ignored(self):
         paths = [str(p.relative_to(ROOT)) for pattern in
-                 ("data_pipeline/*.py", "scripts/*", "tests/*.py", "docs/**/*", "*/README.md")
+                 ("data_pipeline/*.py", "scripts/*", "tests/*.py", "docs/**/*", "*/README.md",
+                  "config.py", "civil/**/*.py", "retrieval/*.py", "backend/*", "frontend/src/**/*",
+                  "frontend/*.json", "frontend/*.ts", "frontend/Dockerfile", "docker-compose.yml")
                  for p in ROOT.glob(pattern) if p.is_file()]
         # --no-index：不管檔案有沒有被追蹤，只看規則本身會不會把它忽略
         r = subprocess.run(["git", "check-ignore", "--no-index", "--stdin"], cwd=ROOT,

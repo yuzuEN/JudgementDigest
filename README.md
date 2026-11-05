@@ -8,17 +8,18 @@
 
 ## 功能
 
-| | 輸入 | 輸出 | 狀態 |
+| | 輸入 | 輸出 | 第一版（目前） |
 |---|---|---|---|
-| **相似判決檢索**（刑事、民事共用） | 案情描述 | 最相似的真實判決（字號、結果、刑期／判准金額） | 🟡 試做中 |
-| **刑事** | 犯罪事實 | 罪名、法條、刑期區間 | 🟡 開發中 |
-| **民事** | 原告主張＋案件特徵 | 勝訴機率（有校準）、獲償金額範圍 | 🟡 勝敗可用；金額只到範圍 |
-| **判決導讀** | 相似判決 | 標出爭點、證據、法院判斷等段落 | ⬜ 依段落功能標註 |
-| **證據比對** | 相似判決＋使用者有的證據 | 相似判決提到哪些證據（提到 ≠ 採信） | ⬜ |
-| **輸入補全** | 案情描述 | 固定問卷＋LLM 追問缺漏的事實 | ⬜ |
+| **民事勝訴機率** | 原告主張＋使用者填得出來的案件特徵 | 勝訴機率 | 🟢 只用原告主張的 TF-IDF＋案件特徵 |
+| **民事金額範圍** | 請求金額＋相似的勝訴判決 | 判准金額的 80% 範圍 | 🟢 相似判決的獲償比例 |
+| **相似判決檢索**（刑事、民事共用） | 案情描述 | 最相似的真實判決（字號、結果、刑期／判准金額） | 🟢 民事；刑事為示例資料 |
+| **證據對照、常見抗辯** | 相似判決＋使用者有的證據 | 相似判決提到哪些證據（提到 ≠ 採信）、被告常見的抗辯 | 🟢 關鍵字規則 |
+| **輸入補全** | 案情描述 | 固定問卷＋追問缺漏的事實，送出前遮名預覽 | 🟡 固定題庫；LLM 追問待加入 |
+| **判決導讀** | 相似判決 | 標出爭點、證據、法院判斷等段落 | 🟡 規則初步標示；待段落功能標註 |
+| **刑事** | 犯罪事實 | 罪名、法條、刑期區間 | ⬜ 示例資料，刑事組開發中 |
 | **法官論理傾向分析** | 段落功能標註 | 法官事實認定與論理的傾向（民眾版不呈現） | ⬜ 規劃中 |
 
-🟢 完成　🟡 進行中　⬜ 尚未開始
+🟢 已接上真正的模型或資料　🟡 先用規則版　⬜ 示例資料或尚未開始。示例資料在網頁上都會標示。
 
 ## 系統架構
 
@@ -60,7 +61,9 @@ flowchart LR
 
 **民事**（文字資料集 v5：46,683 件對審、通常程序的一審判決，5 折交叉驗證）
 
-- 勝敗：兩造主張都有時 AUC 0.827；只有原告一方 0.769；校準誤差 0.007
+- 研究用的模型：兩造主張都有時 AUC 0.827（TF-IDF＋Longformer＋結構化）
+- **平台第一版**：只用原告主張的 TF-IDF＋案件特徵，AUC 0.771、校準誤差 0.021；問卷特徵沒有提高 AUC，只改善校準；什麼都不填時 AUC 0.764、校準誤差 0.045（`python -m civil.models.service evaluate`）
+- 以上都是用法官整理過的原告主張測的；民眾自己寫的描述會比較不準，還沒有實測
 - 金額：只能給範圍，約 64% 的預測落在實際金額的 2 倍以內
 - 輸入寫得越短越不準（150 字時 AUC 降到 0.692），所以前端要先把事實問完整
 
@@ -70,34 +73,58 @@ flowchart LR
 
 ```
 JudgementDigest/
+├── config.py          資料庫、資料集、模型檔的路徑（可用環境變數改）
 ├── data_pipeline/     資料蒐集與處理：爬蟲、開放資料、HTML 解析、民事與刑事結構化欄位
-├── civil/             民事：dataset/（建資料集的程式）、models/（勝訴機率、金額）
+├── civil/             民事：dataset/（建資料集的程式）、models/（勝訴機率、金額）、insights.py（證據、抗辯、金額範圍）
 ├── criminal/          刑事：dataset/（事實取得與遮蔽的程式）、models/（罪名、法條、刑期）
-├── retrieval/         相似判決檢索：engine.py（共用）、civil.py、criminal.py
+├── retrieval/         相似判決檢索：engine.py（共用）、civil.py、build.py、masking.py（遮名）
 ├── annotation/        段落功能標註：LLM 輔助標註、驗證（判決導讀、法官論理傾向分析的基礎）
-├── backend/           API 伺服器（FastAPI）：遮名、LLM 追問、呼叫模型與檢索
-├── frontend/          網頁：問卷、結果頁
+├── backend/           API 伺服器（FastAPI）
+├── frontend/          網頁（React＋Vite）
 ├── scripts/           輔助工具（瀏覽資料庫）
-├── docs/              爬蟲用法、欄位說明、刑事結構化規則、repo 結構
+├── docs/              爬蟲用法、欄位說明、資料版本、刑事結構化規則、repo 結構
+├── docker-compose.yml
 └── tests/
 ```
 
 資料庫、HTML 原檔、資料集 CSV、模型權重都不放在 repo 裡（太大，且含當事人資訊），repo 只放程式。
-
-各資料夾的內容、檔案分類與負責人，見 [docs/repo結構.md](docs/repo結構.md)。
+資料怎麼產生、放在哪裡見 [docs/資料版本.md](docs/資料版本.md)；各資料夾的內容與負責人見 [docs/repo結構.md](docs/repo結構.md)。
 
 ## 快速開始
+
+### 用 Docker 啟動整個平台
+
+```bash
+docker compose up --build
+```
+
+開 http://localhost:8080 。沒有模型檔（`artifacts/`）時，民事會顯示示例資料，流程照樣走得完。
+
+### 本機開發
+
+需要 Python 3.9 以上、Node.js 20 以上。所有指令都在 repo 根目錄執行。
 
 ```bash
 python -m venv .venv
 .venv\Scripts\activate          # Windows
 # source .venv/bin/activate      # macOS / Linux
-pip install -r requirements.txt
+pip install -r requirements.txt -r backend/requirements.txt
 
 python -m unittest discover -s tests -t .     # 離線測試
+
+uvicorn backend.main:app --reload             # 後端，API 文件在 http://127.0.0.1:8000/docs
+cd frontend && npm install && npm run dev     # 前端（另開一個終端機），http://localhost:5173
 ```
 
-所有程式都在 repo 根目錄執行（資料庫、HTML、日誌都用相對路徑），例如：
+要用真正的模型，先準備資料（見 [docs/資料版本.md](docs/資料版本.md)），再建立模型檔：
+
+```bash
+python -m civil.models.service evaluate       # 5 折評估
+python -m civil.models.service train          # → artifacts/civil_winloss_v1/
+python -m retrieval.build                     # → artifacts/retrieval_civil_v1/
+```
+
+爬取與資料處理：
 
 ```bash
 python data_pipeline/crawl_monthly.py --court 臺灣臺北地方法院 --case-type 民事 --judgment-type 判決 --year 2025

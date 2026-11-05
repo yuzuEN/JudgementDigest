@@ -20,29 +20,33 @@ JudgementDigest/
 ├── data_pipeline/         ── 資料蒐集與處理（民刑共用，見下方說明）
 │
 ├── civil/                 ── 民事
-│   ├── dataset/           建立文字資料集的程式（原告主張、被告答辯、標籤）
-│   └── models/            勝訴機率、獲償金額模型的訓練與評估
+│   ├── dataset/           建立文字資料集的程式（原告主張、被告答辯、標籤）；text.py 是建資料集和後端共用的文字清理
+│   ├── models/            勝訴機率、獲償金額模型的訓練與評估；service.py 是平台用的模型
+│   └── insights.py        證據對照、常見抗辯、金額範圍、判決導讀的段落標示（規則）
 │
 ├── criminal/              ── 刑事
 │   ├── dataset/           犯罪事實取得與遮蔽、產生 CAIL 格式資料集的程式
 │   └── models/            罪名、法條、刑期模型的訓練與評估
 │
 ├── retrieval/             ── 相似判決檢索（民刑共用）
-│   ├── engine.py          建索引、存檔、查前 k 件、顯示時遮名
+│   ├── engine.py          建索引、存檔、查前 k 件
 │   ├── civil.py           民事設定：用原告主張建索引、依案由篩選、顯示勝敗與金額
-│   ├── criminal.py        刑事設定：用遮蔽後的事實建索引、依罪名篩選、顯示罪名與刑期
-│   └── evaluate.py        兩邊各自的評估方式
+│   ├── build.py           建立上線用的檢索資料（索引、遮名後的案件清單）
+│   ├── masking.py         遮名：判決的當事人姓名、使用者輸入的個資
+│   ├── evaluate.py        民事檢索的評估
+│   └── criminal.py        刑事設定（刑事組，尚未加入）
 │
 ├── annotation/            ── 段落功能標註（判決導讀、法官論理傾向分析的基礎）
 │
 ├── backend/               ── API 伺服器（Python、FastAPI）
-│   ├── main.py
-│   ├── routers/           civil.py、criminal.py、retrieval.py
-│   ├── schemas.py         輸入輸出格式
-│   ├── masking.py         送出前遮名
-│   └── llm.py             LLM 追問（呼叫付費 API）
+│   ├── main.py            路由（/api）
+│   ├── schemas.py         輸入輸出格式（前端的 src/api/types.ts 和它一一對應）
+│   ├── civil_service.py   民事：讀模型與檢索資料，組成結果頁的內容
+│   ├── followup.py        追問的固定題庫（之後改成 LLM）
+│   └── mock.py            示例資料（刑事、沒有模型檔時的民事）
 │
-├── frontend/              ── 網頁（問卷、結果頁）
+├── frontend/              ── 網頁（React＋Vite）：首頁、描述案情、確認與遮名、結果、判決導讀
+├── docker-compose.yml     一行啟動前後端（docker compose up --build）
 ├── scripts/               ── 輔助工具（Datasette 瀏覽資料庫）
 ├── docs/                  ── 文件
 │   ├── crawler.md         爬蟲與資料處理的完整用法
@@ -54,7 +58,7 @@ JudgementDigest/
 └── tests/                 ── 測試
 ```
 
-`criminal/`、`annotation/`、`backend/`、`frontend/` 目前只有一份 README，程式之後依上面的分法放進去。`civil/`、`retrieval/` 已經有程式（`retrieval/criminal.py` 待刑事組加入）。每個資料夾的 README 寫明內容、怎麼執行、負責人。
+`criminal/`、`annotation/` 目前只有一份 README，程式之後依上面的分法放進去。其餘資料夾都已經有程式（`retrieval/criminal.py` 待刑事組加入）。每個資料夾的 README 寫明內容、怎麼執行、負責人。
 
 ## `data_pipeline/` 為什麼不再分子資料夾
 
@@ -88,13 +92,17 @@ python -m unittest discover -s tests -t .
 
 `tests/__init__.py` 會把 `data_pipeline/` 加進 `sys.path`，測試照原本的模組名稱 import。
 
-## API（規劃）
+## API
 
-| 路徑 | 做什麼 | 負責 |
-|---|---|---|
-| `POST /civil/predict` | 民事勝訴機率、獲償金額範圍 | 民事 |
-| `POST /criminal/predict` | 罪名、法條、刑期區間 | 刑事 |
-| `POST /retrieval/search` | 相似判決；`type` 為 `civil`、`criminal` 或 `both` | 檢索 |
+完整說明見 [backend/README.md](../backend/README.md)；啟動後端後可以在 http://127.0.0.1:8000/docs 直接試。
+
+| 路徑 | 做什麼 | 負責 | 目前 |
+|---|---|---|---|
+| `POST /api/civil/report` | 民事結果頁：勝訴機率、金額範圍、相似判決、證據對照、常見抗辯 | 民事 | 模型 |
+| `POST /api/criminal/predict` | 罪名、法條、刑期分布、相似判決 | 刑事 | 示例資料 |
+| `POST /api/retrieval/search` | 相似判決；`type` 為 `civil`、`criminal` 或 `both` | 檢索 | 民事真的、刑事示例 |
+| `POST /api/intake/mask`、`/api/intake/followup` | 遮名、追問 | 平台 | 規則、固定題庫 |
+| `GET /api/judgments/{source}/{case_id}/guide` | 判決導讀 | 段落標註 | 規則（rule-v0） |
 
 使用者的案件是民事、刑事還是兩者都有（例如車禍：刑事過失傷害、民事損害賠償），在問卷或後端判斷，不是檢索的工作。兩者都有時，結果頁分成刑事、民事兩區。
 

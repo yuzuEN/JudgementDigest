@@ -1,0 +1,10 @@
+# 根目錄有好幾 GB 的資料庫與 html_cache，建置時只送需要的資料夾給 Docker
+*
+!config.py
+!civil/
+!retrieval/
+!backend/
+!frontend/
+frontend/node_modules/
+frontend/dist/
+**/__pycache__/
