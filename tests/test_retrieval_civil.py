@@ -15,6 +15,7 @@ from unittest import mock
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 import config  # noqa: E402
+from civil.dataset.text import strip_prayer_v5  # noqa: E402
 from retrieval.civil import expanded_row, load_expanded  # noqa: E402
 
 config.use_data_pipeline()
@@ -59,8 +60,8 @@ class TestExpandedRow(unittest.TestCase):
             self.assertEqual((case["default_judgment"], case["in_stats"]), (1, 0))
 
     def test_without_real_defense_not_in_statistics(self):
-        absent = "被告經合法通知，未於言詞辯論期日到場，亦未提出任何書狀作何聲明或陳述，本院無從審酌其答辯內容。"
-        self.assertGreaterEqual(len(absent), 30, "要比字數門檻長，才測得到「未到場」的判斷")
+        absent = "被告經合法通知，未於言詞辯論期日到場，且於本件審理期間均未與法院或原告有任何聯繫，本院無法知悉其意見。"
+        self.assertGreaterEqual(len(strip_prayer_v5(absent)), 30, "要比字數門檻長，才測得到「未到場」的判斷")
         for defense in ("", absent, "被告答辯。"):
             case, _ = expanded_row(source(), derived(defendant_defense_text=defense))
             self.assertEqual((case["default_judgment"], case["in_stats"]), (0, 0), defense)
