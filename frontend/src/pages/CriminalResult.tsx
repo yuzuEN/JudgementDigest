@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import { Link, Navigate } from "react-router-dom";
 import { api } from "../api/client";
 import type { CriminalReport } from "../api/types";
-import { ErrorBox, LAF_URL, Loading, ResultNotes } from "../components/Common";
+import { ErrorBox, InfoLink, LAF_URL, Loading, ResultNotes } from "../components/Common";
 import { ResultFrame } from "../components/ResultFrame";
 import { percent } from "../format";
 import { useIntake } from "../state";
@@ -63,7 +63,7 @@ export default function CriminalResult() {
             <h2 id="crim-sim-title">相似的真實判決</h2>
             <div className="table-wrap">
               <table className="cases">
-                <thead><tr><th scope="col">字號</th><th scope="col">罪名</th><th scope="col">宣告刑</th><th scope="col">相似度</th><th scope="col"><span className="sr-only">動作</span></th></tr></thead>
+                <thead><tr><th scope="col">字號</th><th scope="col">罪名</th><th scope="col">宣告刑</th><th scope="col">相似度 <InfoLink to="相似度" label="相似度說明" /></th><th scope="col"><span className="sr-only">動作</span></th></tr></thead>
                 <tbody>
                   {report.similar.map((c) => (
                     <tr key={c.case_id}>

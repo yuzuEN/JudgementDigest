@@ -16,7 +16,7 @@ function TermList({ terms }: { terms: Term[] }) {
   return (
     <dl className="terms">
       {terms.map((t) => (
-        <div key={t.term}><dt>{t.term}</dt><dd>{t.meaning}</dd></div>
+        <div key={t.term} id={t.term}><dt>{t.term}</dt><dd>{t.meaning}</dd></div>
       ))}
     </dl>
   );

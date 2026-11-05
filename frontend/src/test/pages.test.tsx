@@ -72,6 +72,21 @@ describe("頁首的步驟", () => {
   });
 });
 
+describe("相似度說明", () => {
+  it("表格旁有 i 和文字說明，不會讓人以為是百分比", async () => {
+    mockApi({ "POST /civil/report": () => CIVIL_REPORT });
+    renderAt("/result/civil", <CivilResult />, "/result/civil", { text: "內容", maskedText: "內容" });
+    const info = await screen.findByRole("link", { name: /相似度說明/ });
+    expect(info.getAttribute("href")).toBe(`/guide#${encodeURIComponent("相似度")}`);
+    expect(screen.getByText(/只用來排列結果，不是百分比/)).toBeInTheDocument();
+  });
+
+  it("說明頁有對應的位置", () => {
+    renderApp("/guide");
+    expect(document.getElementById("相似度")).not.toBeNull();
+  });
+});
+
 describe("金額明細", () => {
   it("展開後看到各範圍的件數", async () => {
     const buckets = [{ low: 0, high: 0.2, count: 3 }, { low: 0.2, high: 0.4, count: 7 }];

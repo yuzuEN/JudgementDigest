@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import { Link, Navigate } from "react-router-dom";
 import { api } from "../api/client";
 import type { AmountRange, CivilReport, SimilarCase } from "../api/types";
-import { ErrorBox, LAF_URL, Loading, ResultNotes } from "../components/Common";
+import { ErrorBox, InfoLink, LAF_URL, Loading, ResultNotes, SIMILARITY_NOTE } from "../components/Common";
 import { ResultFrame } from "../components/ResultFrame";
 import { money, outcomeLabel, outcomeTone, percent } from "../format";
 import { civilInput, useIntake } from "../state";
@@ -176,7 +176,7 @@ function SimilarCases({ cases, onlyWin, setOnlyWin }: { cases: SimilarCase[]; on
       </div>
       <div className="table-wrap">
         <table className="cases">
-          <thead><tr><th scope="col">字號</th><th scope="col">結果</th><th scope="col">判准／請求</th><th scope="col">相似度</th><th scope="col"><span className="sr-only">動作</span></th></tr></thead>
+          <thead><tr><th scope="col">字號</th><th scope="col">結果</th><th scope="col">判准／請求</th><th scope="col">相似度 <InfoLink to="相似度" label="相似度說明" /></th><th scope="col"><span className="sr-only">動作</span></th></tr></thead>
           <tbody>
             {shown.map((c) => (
               <tr key={c.case_id}>
@@ -191,6 +191,7 @@ function SimilarCases({ cases, onlyWin, setOnlyWin }: { cases: SimilarCase[]; on
         </table>
       </div>
       {shown.length === 0 && <p className="hint">沒有符合的判決。</p>}
+      {shown.length > 0 && <p className="hint">{SIMILARITY_NOTE}</p>}
       {shown.some((c) => c.default_judgment) && <p className="hint">「被告未到庭」的判決沒有經過雙方攻防，原告幾乎都會贏，不代表你的案件也會這樣。上面的金額範圍、證據與抗辯統計不包含這些判決。</p>}
     </section>
   );
