@@ -24,9 +24,10 @@
 ## 系統架構
 
 ```mermaid
+%%{init: {"htmlLabels": false, "flowchart": {"htmlLabels": false}}}%%
 flowchart LR
     U([使用者]) --> FE["① 輸入補全<br/>固定問卷＋LLM 追問<br/>遮名後才送出"]
-    FE --> IN["結構化輸入<br/>案由、事實、請求金額、證據"]
+    FE --> IN["結構化輸入<br/>案由、事實<br/>請求金額、證據"]
 
     subgraph BE["② 預測與檢索"]
         CRI["刑事模型<br/>罪名／法條／刑期"]
@@ -37,7 +38,7 @@ flowchart LR
     end
 
     subgraph DATA["③ 資料（離線）"]
-        CR["爬蟲<br/>全國地院判決"] --> ST["段落切分＋結構化<br/>事實、判決結果、金額、刑期"]
+        CR["爬蟲<br/>全國地院判決"] --> ST["段落切分＋結構化<br/>事實、判決結果<br/>金額、刑期"]
         ST --> DS[("結構化資料集")]
         TAG["段落功能標註<br/>LLM 輔助＋法律系驗證"]
     end
@@ -45,7 +46,7 @@ flowchart LR
     IN --> CRI & CIV & RET
     DS --> CRI & CIV & RET
     TAG --> ANN
-    CRI & CIV & ANN --> OUT["④ 結果頁<br/>相似判決＋推估結果＋限制說明"]
+    CRI & CIV & ANN --> OUT["④ 結果頁<br/>相似判決＋推估結果<br/>限制說明"]
     OUT --> U
 ```
 
