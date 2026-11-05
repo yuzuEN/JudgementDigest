@@ -79,6 +79,13 @@ class TestGuide(unittest.TestCase):
         self.assertEqual([p["function"] for p in paras], ["claim", "defense", "issue", "evidence", "court"])
         self.assertEqual(paras[2]["label"], "爭點")
 
+    def test_short_headings_are_not_paragraphs(self):
+        paras = guide_paragraphs("原告主張：被告未依約付款。二、其他主張內容在這裡。四、", "",
+                                 "五、依民法規定應負賠償責任。六、經查：七、原告之請求有理由，應予准許。")
+        texts = [p["text"] for p in paras]
+        self.assertNotIn("四、", texts)
+        self.assertEqual(texts[-1], "六、經查：七、原告之請求有理由，應予准許。")
+
     def test_long_paragraph_split_at_period(self):
         court = ("法院審酌" + "原告之請求" * 30 + "。") * 4
         paras = guide_paragraphs("", "", court)

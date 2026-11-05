@@ -97,9 +97,21 @@ _ISSUE_RE = re.compile(r"爭點|爭執事項|不爭執|兩造所不爭")
 _EVIDENCE_PARA_RE = re.compile(r"為證|在卷可(?:稽|按|參)|有.{0,20}可(?:稽|參|憑)|證述|鑑定|附卷|提出.{0,20}(?:證明|照片|收據|紀錄)")
 
 
+def _merge_short_heads(parts: List[str], short: int = 8) -> List[str]:
+    """只有編號的短段（「六、經查：」）併到下一段；段尾孤立的編號（下一段的標題被切到這裡）刪掉。"""
+    merged, carry = [], ""
+    for p in parts:
+        if len(p.strip()) <= short:
+            carry += p
+        else:
+            merged.append(carry + p)
+            carry = ""
+    return merged
+
+
 def _paragraphs(text: str, max_len: int = 400) -> List[str]:
     """依段落編號切開；沒有編號的長段落，在句號處切成不超過 max_len 字的段。"""
-    parts = [p for p in _HEAD_SPLIT.split(text or "") if p.strip()]
+    parts = _merge_short_heads([p for p in _HEAD_SPLIT.split(text or "") if p.strip()])
     out = []
     for p in parts:
         while len(p) > max_len:
