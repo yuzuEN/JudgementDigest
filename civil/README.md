@@ -26,8 +26,8 @@
 | `train_bert_amount.py` | 金額任務的 BERT | `.venv-bert`（GPU） |
 | `service.py` | **平台用的勝敗模型**：只用原告主張的 TF-IDF＋使用者填得出來的特徵（案由、法院、律師、對方是否為法人）。`evaluate` 做 5 折評估，`train` 存到 `artifacts/civil_winloss_v1/` | `.venv` |
 
-目前結果（文字資料集 v5，46,683 件，5 折）：兩造的 TF-IDF＋BERT＋Longformer AUC 0.829、
-TF-IDF＋Longformer＋結構化 0.827；只用原告主張的 TF-IDF 0.769。詳見實驗輸出的 `pr_ensemble_v5.md`。
+目前結果（文字資料集 v5，46,683 件，5 折，機率 50% 為切線）：兩造的 TF-IDF＋Longformer＋結構化，勝訴 precision 0.787、recall 0.796，
+敗訴 precision 0.686、recall 0.674；只用原告主張的 TF-IDF，勝訴 0.728、0.818，敗訴 0.661、0.538。詳見實驗輸出的 `pr_ensemble_v5.md`。
 
 ## insights.py：給使用者的參考
 

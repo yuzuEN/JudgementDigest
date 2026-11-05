@@ -62,7 +62,7 @@ export const OPTIONS: Options = {
 export const CIVIL_REPORT: CivilReport = {
   prediction: {
     win_probability: 0.62,
-    model: { name: "civil_winloss_v1", description: "TF-IDF（只用原告主張）＋案由中類、法院、律師、對方是否為法人", auc: 0.78, ece: 0.01 },
+    model: { name: "civil_winloss_v1", description: "TF-IDF（只用原告主張）＋案由中類、法院、律師、對方是否為法人", win_precision: 0.73, win_recall: 0.81, lose_precision: 0.66, lose_recall: 0.55, ece: 0.01 },
     warnings: [],
     mock: false,
   },

@@ -103,7 +103,7 @@ python -m unittest discover -s tests -t .
 | `POST /api/civil/report` | 民事結果頁：勝訴機率、金額範圍、相似判決、證據對照、常見抗辯 | 民事 | 模型 |
 | `POST /api/criminal/predict` | 罪名、法條、刑期分布、相似判決 | 刑事 | 示例資料 |
 | `POST /api/retrieval/search` | 相似判決；`type` 為 `civil`、`criminal` 或 `both` | 檢索 | 民事真的、刑事示例 |
-| `POST /api/intake/mask`、`/api/intake/followup` | 遮名、追問 | 平台 | 規則、固定題庫 |
+| `POST /api/intake/mask`、`/api/intake/followup` | 遮名、追問 | 平台 | 規則；固定題庫，使用者同意後可用 LLM |
 | `GET /api/judgments/{source}/{case_id}/guide` | 判決導讀 | 段落標註 | 規則（rule-v0） |
 
 使用者的案件是民事、刑事還是兩者都有（例如車禍：刑事過失傷害、民事損害賠償），在問卷或後端判斷，不是檢索的工作。兩者都有時，結果頁分成刑事、民事兩區。

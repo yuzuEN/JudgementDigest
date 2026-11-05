@@ -4,7 +4,7 @@
     python -m civil.models.service evaluate     # 5 折評估，輸出 service_model_v5.md
     python -m civil.models.service train        # 用全部資料訓練，存到 artifacts/civil_winloss_v1/
 
-為什麼不用兩造的模型（AUC 0.827）：平台上的使用者只能提供自己這一方的說法，沒有被告答辯；
+為什麼不用兩造的模型（勝訴 F1 0.791、敗訴 F1 0.680）：平台上的使用者只能提供自己這一方的說法，沒有被告答辯；
 「對方會不會請律師」「會不會反訴」也要打了官司才知道。所以特徵只用使用者填得出來的：
   mid                     案由中類（問卷的「糾紛類型」）
   court                   法院（使用者常不知道，可填「不知道」）
@@ -24,7 +24,7 @@ import joblib
 import numpy as np
 import pandas as pd
 from scipy.sparse import hstack
-from sklearn.metrics import brier_score_loss, roc_auc_score
+from sklearn.metrics import brier_score_loss, precision_recall_fscore_support, roc_auc_score
 from sklearn.preprocessing import OneHotEncoder
 
 import config
@@ -35,6 +35,7 @@ MODEL_NAME = "civil_winloss_v1"
 FEATURES = ["mid", "court", "plaintiff_has_lawyer", "defendant_is_corp"]
 UNKNOWN = "不知道"
 COURT_UNKNOWN_SHARE = 0.3
+THRESHOLD = 0.5          # 機率達到這個值算判勝訴；事先固定，不看測試結果調整
 SEED = 42
 
 
@@ -110,6 +111,18 @@ def calibration(y, p, bins: int = 10) -> Dict:
     return {"ece": float(ece), "brier": float(brier_score_loss(y, p)), "table": table}
 
 
+def classification(y, p, threshold: float = THRESHOLD) -> Dict:
+    """
+    勝訴、敗訴兩類各自的 precision、recall、F1。勝訴約占六成，全猜勝訴的勝訴 recall 就是 100%，
+    所以不能只看勝訴這一類。
+    """
+    y, pred = np.asarray(y), (np.asarray(p) >= threshold).astype(int)
+    precision, recall, f1, _ = precision_recall_fscore_support(y, pred, labels=[1, 0], zero_division=0)
+    return {"threshold": threshold, "accuracy": float((y == pred).mean()),
+            "win_precision": float(precision[0]), "win_recall": float(recall[0]), "win_f1": float(f1[0]),
+            "lose_precision": float(precision[1]), "lose_recall": float(recall[1]), "lose_f1": float(f1[1])}
+
+
 def evaluate(d: pd.DataFrame) -> Dict:
     """5 折（資料集的 fold 欄）。測試時另外量「法院不知道」「什麼特徵都沒填」兩種情況。"""
     y = d.y.values
@@ -130,7 +143,7 @@ def evaluate(d: pd.DataFrame) -> Dict:
                 blank = test.assign(**{c: UNKNOWN for c in FEATURES})
                 oof["原告主張＋特徵（都不知道）"][te] = m.predict_proba(test.text, blank)
         print(f"  fold {k} 完成", flush=True)
-    return {name: {"auc": float(roc_auc_score(y, p)), **calibration(y, p)} for name, p in oof.items()}
+    return {name: {**classification(y, p), "auc": float(roc_auc_score(y, p)), **calibration(y, p)} for name, p in oof.items()}
 
 
 def options(d: pd.DataFrame, min_cases: int = 30) -> Dict:
@@ -142,6 +155,10 @@ def options(d: pd.DataFrame, min_cases: int = 30) -> Dict:
     groups.sort(key=lambda g: -sum(m["n"] for m in g["mids"]))
     courts = d.court_s.value_counts()
     return {"mid_groups": groups, "courts": [c for c in courts.index if c != UNKNOWN]}
+
+
+SUMMARY_METRICS = ("win_precision", "win_recall", "win_f1", "lose_precision", "lose_recall", "lose_f1",
+                   "accuracy", "ece", "brier")
 
 
 def artifact_dir(base: Optional[Path] = None) -> Path:
@@ -170,9 +187,13 @@ def load(path: Optional[Path] = None):
 
 def report(results: Dict, version: str, n: int) -> str:
     lines = [f"# 平台用勝敗模型（第一版）：只用原告主張＋使用者填得出來的特徵（{version}，{n:,} 件，5 折）\n",
-             "| 模型 | AUC | ECE（校準誤差） | Brier |", "|---|---:|---:|---:|"]
+             f"機率 {THRESHOLD} 以上算判勝訴。\n",
+             "| 模型 | 勝訴 precision | 勝訴 recall | 勝訴 F1 | 敗訴 precision | 敗訴 recall | 敗訴 F1 | 正確率 | ECE（校準誤差） |",
+             "|---|---:|---:|---:|---:|---:|---:|---:|---:|"]
     for name, r in results.items():
-        lines.append(f"| {name} | {r['auc']:.3f} | {r['ece']:.3f} | {r['brier']:.3f} |")
+        lines.append(f"| {name} | {r['win_precision']:.3f} | {r['win_recall']:.3f} | {r['win_f1']:.3f} | "
+                     f"{r['lose_precision']:.3f} | {r['lose_recall']:.3f} | {r['lose_f1']:.3f} | "
+                     f"{r['accuracy']:.3f} | {r['ece']:.3f} |")
     lines.append("\n特徵：案由中類、法院、自己有沒有請律師、對方是否為法人。訓練時 30% 的法院換成「不知道」。")
     lines.append("「法院不知道」「都不知道」：同一個模型，測試時把特徵改成使用者沒填的情況。\n")
     lines.append("## 校準（原告主張＋特徵）\n\n| 預測機率 | 件數 | 平均預測 | 實際勝訴比例 |\n|---|---:|---:|---:|")
@@ -201,7 +222,7 @@ def main():
     else:
         metrics_file = config.OUTPUT_DIR / f"service_model_{a.version}.json"
         metrics = json.loads(metrics_file.read_text(encoding="utf-8")) if metrics_file.exists() else {}
-        summary = {k: {m: v[m] for m in ("auc", "ece", "brier")} for k, v in metrics.items()}
+        summary = {k: {m: v[m] for m in SUMMARY_METRICS} for k, v in metrics.items()}
         out = train(d, a.version, Path(a.out) if a.out else artifact_dir(), summary)
         print(f"已存到 {out}")
     print(f"完成，{(time.time() - t0) / 60:.1f} 分鐘")

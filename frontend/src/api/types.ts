@@ -50,7 +50,10 @@ export interface CivilInput {
 export interface ModelInfo {
   name: string;
   description: string;
-  auc?: number | null;
+  win_precision?: number | null;
+  win_recall?: number | null;
+  lose_precision?: number | null;
+  lose_recall?: number | null;
   ece?: number | null;
 }
 

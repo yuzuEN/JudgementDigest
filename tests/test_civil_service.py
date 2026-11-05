@@ -90,11 +90,24 @@ class TestModel(unittest.TestCase):
         self.assertAlmostEqual(c["ece"], 0.05)
         self.assertEqual(sum(row["n"] for row in c["table"]), 4)
 
+    def test_classification_scores_both_outcomes(self):
+        r = S.classification([1, 1, 0, 0], [0.9, 0.2, 0.8, 0.1])
+        self.assertEqual((r["win_precision"], r["win_recall"]), (0.5, 0.5))
+        self.assertEqual((r["lose_precision"], r["lose_recall"]), (0.5, 0.5))
+        self.assertEqual(r["accuracy"], 0.5)
+
+    def test_classification_guessing_win_gets_no_credit_for_losses(self):
+        r = S.classification([1, 0], [0.9, 0.9])
+        self.assertEqual(r["win_recall"], 1.0)
+        self.assertEqual(r["lose_recall"], 0.0)
+
     def test_evaluate_reports_all_variants(self):
         r = S.evaluate(synthetic())
         self.assertEqual(set(r), {"只用原告主張", "原告主張＋特徵", "只用特徵",
                                   "原告主張＋特徵（法院不知道）", "原告主張＋特徵（都不知道）"})
         self.assertGreater(r["只用原告主張"]["auc"], 0.9)
+        self.assertGreater(r["只用原告主張"]["win_f1"], 0.8)
+        self.assertGreater(r["只用原告主張"]["lose_f1"], 0.8)
 
     def test_train_save_load_roundtrip(self):
         d = synthetic()
