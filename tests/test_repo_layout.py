@@ -62,12 +62,25 @@ class TestPaths(unittest.TestCase):
             self.assertTrue((PIPELINE / name).is_file(), name)
 
 
+def repo_files():
+    """
+    repo 的檔案（已追蹤，加上還沒 add 但沒被忽略的）。不能用 glob 掃根目錄：開發者本機有 html_cache（31 萬個檔）、
+    .venv、只留在本機的進度資料夾，掃一次要好幾分鐘，也會把不屬於 repo 的檔案算進來。
+    """
+    r = subprocess.run(["git", "ls-files", "-z", "-c", "-o", "--exclude-standard"], cwd=ROOT,
+                       capture_output=True, check=True)
+    paths = [ROOT / name for name in r.stdout.decode("utf-8").split(chr(0)) if name]
+    return [p for p in paths if p.is_file()]
+
+
 def _markdown_files():
-    yield ROOT / "README.md"
-    yield from (ROOT / "docs").rglob("*.md")
-    yield from ROOT.glob("*/README.md")
+    return [p for p in repo_files() if p.suffix == ".md"]
 
 
+HAS_GIT = shutil.which("git") and (ROOT / ".git").exists()
+
+
+@unittest.skipUnless(HAS_GIT, "需要 git 與 repo")
 class TestMarkdownLinks(unittest.TestCase):
     LINK = re.compile(r"\]\(([^)\s]+)\)")
 
@@ -86,25 +99,25 @@ class TestMarkdownLinks(unittest.TestCase):
         self.assertEqual(broken, [], "連結指到不存在的檔案")
 
 
+@unittest.skipUnless(HAS_GIT, "需要 git 與 repo")
 class TestTextFiles(unittest.TestCase):
     def test_no_control_characters(self):
         """用程式產生文件時，跳脫字元寫錯會變成看不見的控制字元（曾把 README 的 \\activate 變成 BEL）。"""
         bad = []
-        for pattern in ("*.md", "**/*.md", "**/*.py", "frontend/src/**/*.ts", "frontend/src/**/*.tsx"):
-            for p in ROOT.glob(pattern):
-                if "node_modules" in p.parts or not p.is_file():
-                    continue
+        for p in repo_files():
+            if p.suffix in (".md", ".py", ".ts", ".tsx"):
                 text = p.read_text(encoding="utf-8", errors="replace")
                 if re.search(r"[\x00-\x08\x0b\x0c\x0e-\x1f]", text):
                     bad.append(str(p.relative_to(ROOT)))
         self.assertEqual(sorted(set(bad)), [], "這些檔案有看不見的控制字元")
 
 
-@unittest.skipUnless(shutil.which("git") and (ROOT / ".git").exists(), "需要 git 與 repo")
+@unittest.skipUnless(HAS_GIT, "需要 git 與 repo")
 class TestGitignore(unittest.TestCase):
     def test_code_and_docs_not_ignored(self):
         paths = [str(p.relative_to(ROOT)) for pattern in
-                 ("data_pipeline/*.py", "scripts/*", "tests/*.py", "docs/**/*", "*/README.md",
+                 ("data_pipeline/*.py", "scripts/*", "tests/*.py", "docs/**/*",
+                  *(f"{d}/README.md" for d in ("civil", "criminal", "retrieval", "annotation", "backend", "frontend")),
                   "config.py", "civil/**/*.py", "retrieval/*.py", "backend/*", "frontend/src/**/*",
                   "frontend/*.json", "frontend/*.ts", "frontend/Dockerfile", "docker-compose.yml")
                  for p in ROOT.glob(pattern) if p.is_file()]
