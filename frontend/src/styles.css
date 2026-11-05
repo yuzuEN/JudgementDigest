@@ -19,6 +19,8 @@
   --bad: #a3460f;
   --good: #1e6b3a;
   --mask-bg: #ffe7c7;
+  --jump-bg: #ffe45c;
+  --jump-ink: #3d3200;
   --link: #1d5fb3;
   --link-hover: #164a8c;
   --on-accent: #ffffff;
@@ -72,6 +74,8 @@
     --bad: #f0a67e;
     --good: #84d6a0;
     --mask-bg: #5c4116;
+    --jump-bg: #e0c22e;
+    --jump-ink: #1f1a00;
     --link: #8ab8f5;
     --link-hover: #b4d2fa;
     --info-line: #2f4a6e;
@@ -301,4 +305,5 @@ details.faq summary { cursor: pointer; font-weight: 500; }
 .terms > div { scroll-margin-top: 16px; }
 .terms dt { font-weight: 600; }
 .terms dd { margin: 0; }
+.jump-target { width: fit-content; background: var(--jump-bg); color: var(--jump-ink); border-radius: 4px; padding: 0 6px; margin-left: -6px; }
 .terms dd .hint { display: block; font-size: 14px; }

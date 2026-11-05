@@ -27,7 +27,18 @@ export default function Guide() {
 
   useEffect(() => {
     if (!hash) return;
-    document.getElementById(decodeURIComponent(hash.slice(1)))?.scrollIntoView?.();
+    const target = document.getElementById(decodeURIComponent(hash.slice(1)));
+    target?.scrollIntoView?.();
+    // 標出要看的標題，像反白一樣，點別的地方就消失
+    const title = target?.querySelector("h2, dt");
+    if (!title) return;
+    title.classList.add("jump-target");
+    const clear = () => title.classList.remove("jump-target");
+    document.addEventListener("click", clear, { once: true });
+    return () => {
+      document.removeEventListener("click", clear);
+      clear();
+    };
   }, [hash]);
 
   return (

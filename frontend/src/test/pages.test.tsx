@@ -1,4 +1,4 @@
-import { screen, waitFor, within } from "@testing-library/react";
+import { fireEvent, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 import CivilResult from "../pages/CivilResult";
@@ -84,6 +84,24 @@ describe("相似度說明", () => {
   it("說明頁有對應的位置", () => {
     renderApp("/guide");
     expect(document.getElementById("相似度")).not.toBeNull();
+  });
+
+  it("從 i 跳過去時標題會標黃，點別的地方就消失", () => {
+    renderApp(`/guide#${encodeURIComponent("相似度")}`);
+    const title = screen.getByText("相似度", { selector: "dt" });
+    expect(title).toHaveClass("jump-target");
+    fireEvent.click(document.body);
+    expect(title).not.toHaveClass("jump-target");
+  });
+
+  it("跳到整個區段時標的是區段標題", () => {
+    renderApp("/guide#dispute-types");
+    expect(screen.getByRole("heading", { name: "糾紛類型說明" })).toHaveClass("jump-target");
+  });
+
+  it("直接打開說明頁時不標任何東西", () => {
+    renderApp("/guide");
+    expect(document.querySelector(".jump-target")).toBeNull();
   });
 });
 
