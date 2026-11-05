@@ -40,7 +40,7 @@ API 文件（可以直接在網頁上試）：http://127.0.0.1:8000/docs
 讀 `artifacts/`（`config.py` 的 `ARTIFACTS_DIR`，可用環境變數 `JD_ARTIFACTS_DIR` 改）：
 
 - `civil_winloss_v1/`：`python -m civil.models.service train` 產生
-- `retrieval_civil_v2/`：`python -m retrieval.build` 產生
+- `retrieval_civil_v3/`：`python -m retrieval.build` 產生
 
 任一個不存在時，民事改回傳示例資料，伺服器照樣能啟動。`JD_BACKEND_MODE=mock` 可以強制使用示例資料。
 
@@ -52,6 +52,14 @@ API 文件（可以直接在網頁上試）：http://127.0.0.1:8000/docs
 - 相似判決列表：全部案件都可以出現；去掉內容幾乎相同的制式判決，一造辯論最多 3 件並標示 `default_judgment`
 
 資源（Docker）：後端記憶體約 1.1 GB，查詢約 0.65 秒。
+
+## 描述的品質檢查
+
+只提醒，不擋送出：
+
+- 沒有任何糾紛用語或金額（`quality.py`）：提醒內容看起來不像法律糾紛。模型和檢索什麼內容都會給結果
+- 沒選糾紛類型：用最相似的 30 件對審判決投票，比例超過 0.4 才採用並告知使用者，否則列出可能的類型。
+  72 件口語測試中全部採用只對 47%，比例超過 0.4 的 23 件對 21 件
 
 ## 接上其他組的功能
 

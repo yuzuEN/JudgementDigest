@@ -1,7 +1,7 @@
 """
 建立上線用的民事檢索資料：索引、案件清單（已遮名）、每件判決提到的證據與被告抗辯類型。
 
-    python -m retrieval.build                  # 輸出到 artifacts/retrieval_civil_v2/
+    python -m retrieval.build                  # 輸出到 artifacts/retrieval_civil_v3/
 
 輸出：
   index.joblib   原告主張的 TF-IDF 索引（列的順序＝cases 表的 row）
@@ -27,7 +27,7 @@ from retrieval.civil import load_expanded
 from retrieval.engine import TfidfIndex
 from retrieval.masking import mask_parties, third_party_names
 
-NAME = "retrieval_civil_v2"
+NAME = "retrieval_civil_v3"
 VOCAB_SAMPLE = 60_000     # 字典與 IDF 只用這麼多筆建（完整語料的字元 n-gram 字典太吃記憶體）
 SUMMARY_LEN = 90
 

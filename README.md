@@ -63,7 +63,7 @@ flowchart LR
 
 - 研究用的模型：兩造主張都有時 AUC 0.827（TF-IDF＋Longformer＋結構化）
 - **平台第一版**：只用原告主張的 TF-IDF＋案件特徵，AUC 0.771、校準誤差 0.021；問卷特徵沒有提高 AUC，只改善校準；什麼都不填時 AUC 0.764、校準誤差 0.045（`python -m civil.models.service evaluate`）
-- 以上都是用法官整理過的原告主張測的；民眾自己寫的描述會比較不準，還沒有實測
+- 以上都是用法官整理過的原告主張測的。72 件模擬的民眾口語描述（模型沒看過的真實案件，改寫時不知道結果；還不是真人測試）：AUC 0.722，但平均機率 0.46，實際約 0.60，贏和輸的平均差距只有 0.08
 - 金額：只能給範圍，約 64% 的預測落在實際金額的 2 倍以內
 - 輸入寫得越短越不準（150 字時 AUC 降到 0.692），所以前端要先把事實問完整
 
@@ -130,7 +130,7 @@ cd frontend && npm install && npm run dev     # 前端（另開一個終端機�
 ```bash
 python -m civil.models.service evaluate       # 5 折評估
 python -m civil.models.service train          # → artifacts/civil_winloss_v1/
-python -m retrieval.build                     # → artifacts/retrieval_civil_v2/（要有 judgments.db，約 35 分鐘）
+python -m retrieval.build                     # → artifacts/retrieval_civil_v3/（要有 judgments.db，約 35 分鐘）
 ```
 
 爬取與資料處理：
@@ -148,7 +148,8 @@ python scripts/browse_db.py
 ## 限制
 
 - 結果只代表「打到判決」的案件；約 26–29% 的通常程序民事案件以和解、撤回、調解結束，沒有判決書
-- 模型讀的是法官整理過的事實，民眾自己寫的描述會比較不準
+- 模型讀的是法官整理過的事實，口語描述的機率會偏低、分不太出輸贏；訓練時加入短版文字沒有改善（見 `retrieval/README.md`）
+- 遮名是規則版，判決裡的第三人姓名仍可能漏掉，正式公開前要再處理
 - 法院「為什麼採信」很難自動判斷；證據比對只說「相似判決提到哪些證據」，不代表法院會採信
 - 法官事實認定論理傾向分析仍在規劃中；法官層級的結果會附樣本數與限制說明，民眾版只呈現法院與案件類型層級
 - 平台不保存使用者輸入的資料

@@ -197,6 +197,52 @@ class TestCommonEndpoints(_MockCase):
             self.assertIn(p, paths)
 
 
+class TestMidInference(unittest.TestCase):
+    def service(self, mids, sims):
+        svc = CivilService.__new__(CivilService)
+        svc.mids = np.array(mids)
+        svc.default = np.zeros(len(mids), dtype=bool)
+        svc.index = mock.Mock()
+        svc.index.top.return_value = (np.arange(len(mids)), np.array(sims, dtype=float))
+        return svc
+
+    def test_clear_vote_is_used(self):
+        svc = self.service(["甲", "甲", "乙"], [0.5, 0.4, 0.1])
+        self.assertEqual(svc._infer_mid(None), ("甲", ["甲", "乙"]))
+
+    def test_split_vote_only_gives_candidates(self):
+        svc = self.service(["甲", "乙", "丙", "丁"], [0.3, 0.3, 0.2, 0.2])
+        mid, likely = svc._infer_mid(None)
+        self.assertIsNone(mid)
+        self.assertEqual(len(likely), 3)
+
+    def test_other_is_never_the_answer(self):
+        svc = self.service(["其他", "其他", "甲"], [0.5, 0.4, 0.1])
+        self.assertEqual(svc._infer_mid(None)[0], None)
+
+    def test_chosen_mid_is_not_overridden(self):
+        svc = self.service(["甲", "甲"], [0.5, 0.4])
+        self.assertEqual(svc._resolve_mid(mock.Mock(mid="乙", text=TRAFFIC), None), ("乙", None))
+
+    def test_notice_says_what_was_assumed(self):
+        svc = self.service(["甲", "甲"], [0.5, 0.4])
+        mid, note = svc._resolve_mid(mock.Mock(mid=None, text=TRAFFIC), None)
+        self.assertEqual(mid, "甲")
+        self.assertIn("「甲」", note)
+
+    def test_candidates_listed_when_unsure(self):
+        svc = self.service(["甲", "乙", "丙", "丁"], [0.3, 0.3, 0.2, 0.2])
+        mid, note = svc._resolve_mid(mock.Mock(mid=None, text=TRAFFIC), None)
+        self.assertIsNone(mid)
+        self.assertIn("比較接近的有", note)
+
+    def test_unrelated_text_is_not_classified(self):
+        svc = self.service(["甲", "甲"], [0.5, 0.4])
+        mid, note = svc._resolve_mid(mock.Mock(mid=None, text="今天天氣很好"), None)
+        self.assertIsNone(mid)
+        self.assertNotIn("甲", note)
+
+
 class TestTwoTiers(unittest.TestCase):
     """最像的是一造辯論的案件時：列表可以出現但有上限，統計完全不算它們。"""
 
@@ -251,6 +297,17 @@ class TestTwoTiers(unittest.TestCase):
                 "text": TRAFFIC, "type": "civil", "mid": "侵權：交通事故", "k": 5}).json()["civil"]
         self.assertEqual(sum(c["default_judgment"] for c in cases), MAX_DEFAULT_SHOWN)
         self.assertEqual(len(cases), 5)
+
+    def test_unrelated_text_gets_a_warning(self):
+        r = self.client.post("/api/civil/report", json={"text": "今天天氣很好，我想去海邊走走。" * 12}).json()
+        self.assertTrue(any("不像法律糾紛" in w for w in r["prediction"]["warnings"]))
+        self.assertFalse(any("不像法律糾紛" in w for w in self.report["prediction"]["warnings"]))
+
+    def test_inferred_mid_reaches_the_model(self):
+        with mock.patch("civil.models.service.ServiceModel.predict_one", return_value=0.5) as predict:
+            r = self.client.post("/api/civil/predict", json={"text": TRAFFIC}).json()
+        self.assertEqual(predict.call_args[0][1]["mid"], "侵權：交通事故")
+        self.assertTrue(any("侵權：交通事故" in w for w in r["warnings"]))
 
     def test_search_uses_the_same_list(self):
         r = self.client.post("/api/retrieval/search", json={"text": TRAFFIC, "type": "civil", "mid": "侵權：交通事故"}).json()
