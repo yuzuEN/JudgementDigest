@@ -24,7 +24,7 @@
 ## 系統架構
 
 ```mermaid
-%%{init: {"htmlLabels": false, "flowchart": {"htmlLabels": false}}}%%
+%%{init: {"htmlLabels": false, "flowchart": {"htmlLabels": false, "wrappingWidth": 400}}}%%
 flowchart LR
     U([使用者]) --> FE["① 輸入補全<br/>固定問卷＋LLM 追問<br/>遮名後才送出"]
     FE --> IN["結構化輸入<br/>案由、事實<br/>請求金額、證據"]
