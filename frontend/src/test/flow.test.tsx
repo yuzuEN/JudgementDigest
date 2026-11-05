@@ -8,7 +8,6 @@ describe("完整流程", () => {
     const { calls } = mockApi({
       "GET /meta/options": () => OPTIONS,
       "POST /intake/followup": () => ({ questions: [], source: "rules" }),
-      "POST /intake/mask": (b) => ({ masked_text: b.text.replace("0912345678", "【電話】"), spans: [] }),
       "POST /civil/report": () => CIVIL_REPORT,
       "POST /criminal/predict": () => CRIMINAL_REPORT,
       "GET /judgments/civil/11/guide": () => GUIDE,

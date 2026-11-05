@@ -57,15 +57,13 @@ describe("描述案情", () => {
 
 describe("確認與遮名：敏感個人資料", () => {
   it("日常用語不需要同意，同意時會列出偵測到的類別", async () => {
-    mockApi({ "POST /intake/mask": (b: { text: string }) => ({ masked_text: b.text, spans: [] }),
-      "POST /intake/followup": () => ({ questions: [], source: "rules" }) });
+    mockApi({ "POST /intake/followup": () => ({ questions: [], source: "rules" }) });
     renderAt("/confirm", <Confirm />, "/confirm", { text: "我受傷了，對方有前科，後來去住院" });
     expect(await screen.findByText(/偵測到：病歷、醫療、犯罪前科/)).toBeInTheDocument();
   });
 
   it("不同意時可以回上一步，同意後這個選項消失", async () => {
-    mockApi({ "POST /intake/mask": (b: { text: string }) => ({ masked_text: b.text, spans: [] }),
-      "POST /intake/followup": () => ({ questions: [], source: "rules" }) });
+    mockApi({ "POST /intake/followup": () => ({ questions: [], source: "rules" }) });
     const user = userEvent.setup();
     renderAt("/confirm", <Confirm />, "/confirm", { text: "我開刀後休養三個月" });
     const decline = await screen.findByRole("link", { name: "不同意，回上一步刪掉這些描述" });
@@ -76,8 +74,7 @@ describe("確認與遮名：敏感個人資料", () => {
   });
 
   it("沒有敏感個資就不用選", async () => {
-    mockApi({ "POST /intake/mask": (b: { text: string }) => ({ masked_text: b.text, spans: [] }),
-      "POST /intake/followup": () => ({ questions: [], source: "rules" }) });
+    mockApi({ "POST /intake/followup": () => ({ questions: [], source: "rules" }) });
     renderAt("/confirm", <Confirm />, "/confirm", { text: "朋友借錢沒還" });
     await screen.findByText("朋友借錢沒還");
     expect(screen.queryByRole("link", { name: /不同意/ })).not.toBeInTheDocument();
@@ -90,7 +87,6 @@ describe("確認與遮名：AI 追問", () => {
   const setup = (reply: (b: Body) => unknown) => {
     const sent: Body[] = [];
     mockApi({
-      "POST /intake/mask": (b: { text: string; names: string[] }) => ({ masked_text: b.names.reduce((t, n) => t.split(n).join("【姓名】"), b.text.replace("0912345678", "【電話】")), spans: [] }),
       "POST /intake/followup": (b: Body) => { sent.push(b); return reply(b); },
     });
     return sent;
@@ -104,7 +100,7 @@ describe("確認與遮名：AI 追問", () => {
     await screen.findByRole("button", { name: AI_BUTTON });
     expect(screen.queryByText("什麼時候發生的？")).not.toBeInTheDocument();
     expect(sent).toHaveLength(1);
-    expect(sent[0]).toMatchObject({ allow_llm: false, text: "王小明的電話是【電話】" });
+    expect(sent[0]).toMatchObject({ allow_llm: false, text: "" });
   });
 
   it("沒有設定 LLM 時不顯示按鈕", async () => {
@@ -245,21 +241,40 @@ describe("確認與遮名：AI 追問", () => {
 describe("確認與遮名", () => {
   const maskApi = () => mockApi({
     "POST /intake/followup": () => ({ questions: [{ id: "signal", text: "當時是什麼燈？", why: "會影響過失比例。" }], source: "rules" }),
-    "POST /intake/mask": (b) => ({
-      masked_text: b.names.reduce((t: string, n: string) => t.split(n).join("【姓名】"), b.text).replace(/09\d{8}/, "【電話】"),
-      spans: [],
-    }),
+  });
+
+  it("描述已經回答的問題不用問，最多 4 題", async () => {
+    const pool = ["a", "b", "c", "d", "e", "f"].map((id) => ({ id, text: `問題${id}`, why: "因為", skip_if: id === "a" ? "綠燈" : null }));
+    mockApi({ "POST /intake/followup": () => ({ questions: pool, source: "rules" }) });
+    renderAt("/confirm", <Confirm />, "/confirm", { text: "當時是綠燈" });
+    expect(await screen.findByText("問題b")).toBeInTheDocument();
+    expect(screen.queryByText("問題a")).not.toBeInTheDocument();
+    expect(screen.getByText("問題e")).toBeInTheDocument();
+    expect(screen.queryByText("問題f")).not.toBeInTheDocument();
+  });
+
+  it("原文和姓名不會出現在任何網路請求裡", async () => {
+    const { calls } = maskApi();
+    const user = userEvent.setup();
+    renderAt("/confirm", <Confirm />, "/confirm", { text: "王小明撞到我，他的電話0912345678" });
+    await user.type(await screen.findByLabelText(/要遮掉的名字/), "王小明");
+    await user.click(screen.getByRole("button", { name: "加入" }));
+    await screen.findAllByText("【姓名】");
+    const sent = JSON.stringify(calls);
+    expect(sent).not.toContain("0912345678");
+    expect(sent).not.toContain("王小明");
+    expect(sent).not.toContain("撞到我");
+    expect(calls.map((c) => c.key)).not.toContain("POST /intake/mask");
   });
 
   it("預覽遮名後的內容，可以加名字", async () => {
-    const { calls } = maskApi();
+    maskApi();
     const user = userEvent.setup();
     renderAt("/confirm", <Confirm />, "/confirm", { text: "王小明撞到我，他的電話0912345678" });
     expect(await screen.findByText("【電話】")).toBeInTheDocument();
     await user.type(screen.getByLabelText(/要遮掉的名字/), "王小明");
     await user.click(screen.getByRole("button", { name: "加入" }));
     await waitFor(() => expect(screen.getAllByText("【姓名】").length).toBeGreaterThan(0));
-    expect(calls.filter((c) => c.key === "POST /intake/mask").at(-1)?.body).toMatchObject({ names: ["王小明"] });
     expect(screen.getByRole("button", { name: "不遮「王小明」" })).toBeInTheDocument();
   });
 
@@ -283,12 +298,11 @@ describe("確認與遮名", () => {
   });
 
   it("追問的回答會加進送出的內容", async () => {
-    const { calls } = maskApi();
+    maskApi();
     const user = userEvent.setup();
     renderAt("/confirm", <Confirm />, "/confirm", { text: "朋友借錢沒還" });
     await user.type(await screen.findByLabelText("當時是什麼燈？"), "綠燈");
-    await waitFor(() => expect(calls.filter((c) => c.key === "POST /intake/mask").at(-1)?.body)
-      .toMatchObject({ text: "朋友借錢沒還\n追問：當時是什麼燈？\n回答：綠燈" }));
+    expect(await screen.findByText(/回答：綠燈/)).toBeInTheDocument();
   });
 });
 

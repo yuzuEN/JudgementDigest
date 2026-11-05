@@ -6,13 +6,13 @@ describe("api client", () => {
   it("GET 與 POST", async () => {
     const { calls } = mockApi({
       "GET /health": () => ({ status: "ok" }),
-      "POST /intake/mask": (b) => ({ masked_text: b.text, spans: [] }),
+      "POST /intake/followup": () => ({ questions: [], source: "rules" }),
     });
     await api.health();
-    await api.mask("你好", ["王小明"]);
+    await api.followup("civil", null, "你好");
     expect(calls).toEqual([
       { key: "GET /health", body: undefined },
-      { key: "POST /intake/mask", body: { text: "你好", names: ["王小明"] } },
+      { key: "POST /intake/followup", body: { case_type: "civil", mid: null, text: "你好", allow_llm: false } },
     ]);
   });
 

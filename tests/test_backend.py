@@ -168,6 +168,12 @@ class TestCommonEndpoints(_MockCase):
         self.assertNotIn("signal", [q["id"] for q in r["questions"]])
         self.assertNotIn("insurance", [q["id"] for q in r["questions"]])
 
+    def test_followup_without_text_gives_the_whole_pool(self):
+        """打開確認頁時瀏覽器不送描述，要自己用 skip_if 篩。"""
+        r = self.client.post("/api/intake/followup", json={"case_type": "civil", "mid": "侵權：交通事故", "text": ""}).json()
+        self.assertGreater(len(r["questions"]), 4)
+        self.assertTrue(any(q["skip_if"] for q in r["questions"]))
+
     def test_followup_criminal(self):
         r = self.client.post("/api/intake/followup", json={"case_type": "criminal", "text": ""}).json()
         self.assertEqual(r["questions"][0]["id"], "act")

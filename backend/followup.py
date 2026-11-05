@@ -41,6 +41,10 @@ CRIMINAL = [
 
 
 def questions(case_type: str, mid: Optional[str], text: str, limit: int = 4) -> List[Dict]:
+    """
+    text 空白時回傳整份題庫，附上 skip_if，由瀏覽器自己篩掉描述已經回答的問題：
+    打開確認頁時使用者還沒加好姓名，這時描述不能傳到伺服器。
+    """
     pool = []
     if case_type in ("criminal", "unsure"):
         pool += CRIMINAL
@@ -56,5 +60,5 @@ def questions(case_type: str, mid: Optional[str], text: str, limit: int = 4) -> 
         if qid in seen or (answered and re.search(answered, text)):
             continue
         seen.add(qid)
-        picked.append({"id": qid, "text": q, "why": why})
-    return picked[:limit]
+        picked.append({"id": qid, "text": q, "why": why, "skip_if": answered or None})
+    return picked[:limit] if text else picked

@@ -1,7 +1,9 @@
 """
 遮名：顯示判決時遮掉當事人姓名，送出使用者輸入前遮掉身分證字號、電話、電子郵件、地址與指定的姓名。
 
-規則式、不呼叫外部服務。自動辨識不認識的人名（CKIP 等）之後再加；目前姓名由兩個來源提供：
+規則式、不呼叫外部服務。使用者輸入的遮名在瀏覽器完成（frontend/src/mask.ts），規則要和這裡一致，
+兩邊用同一份測試案例 frontend/src/test/masking_cases.json；這裡的 mask() 用於判決與送給 LLM 前的第二道防線。
+自動辨識不認識的人名（CKIP 等）之後再加；目前姓名由兩個來源提供：
 判決的當事人欄位（建檢索索引時），以及使用者在預覽時自己補上的名字。
 """
 import re
@@ -24,6 +26,10 @@ PATTERNS = [
 ]
 
 
+# 中文輸入法常打出全形數字與英文。比對前轉成半形，長度不變，所以位置可以直接對回原文
+_HALF_WIDTH = {code: code - 0xFEE0 for code in range(0xFF01, 0xFF5F)}
+
+
 class Span(NamedTuple):
     start: int
     end: int
@@ -40,11 +46,14 @@ def _name_pattern(names: Iterable[str]) -> Optional["re.Pattern"]:
 def find_spans(text: str, names: Iterable[str] = ()) -> List[Span]:
     """找出要遮的片段；重疊時保留先找到、範圍較長的那一個。"""
     found = []
+    half = text.translate(_HALF_WIDTH)
+    for kind, rx in PATTERNS:
+        for m in rx.finditer(half):
+            found.append(Span(m.start(), m.end(), kind, text[m.start():m.end()]))
     pattern = _name_pattern(names)
-    rules = PATTERNS + ([("name", pattern)] if pattern else [])
-    for kind, rx in rules:
-        for m in rx.finditer(text):
-            found.append(Span(m.start(), m.end(), kind, m.group()))
+    if pattern:
+        for m in pattern.finditer(text):
+            found.append(Span(m.start(), m.end(), "name", m.group()))
     found.sort(key=lambda s: (s.start, -(s.end - s.start)))
     spans, last = [], -1
     for s in found:

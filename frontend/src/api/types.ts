@@ -23,21 +23,10 @@ export interface Options {
   mock: boolean;
 }
 
-export interface MaskedSpan {
-  start: number;
-  end: number;
-  kind: string;
-  label: string;
-}
-
-export interface MaskResponse {
-  masked_text: string;
-  spans: MaskedSpan[];
-}
-
 export interface Question {
   id: string;
   text: string;
+  skip_if?: string | null;
   why: string;
 }
 
