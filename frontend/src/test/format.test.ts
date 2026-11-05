@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { money, needsHealthConsent, outcomeLabel, outcomeTone, parseAmount, percent, splitMasked } from "../format";
+import { money, outcomeLabel, outcomeTone, parseAmount, percent, sensitiveKinds, splitMasked } from "../format";
 
 describe("money", () => {
   it("萬以上用萬", () => {
@@ -34,9 +34,15 @@ describe("其他", () => {
     expect(outcomeTone("有罪")).toBe("neutral");
     expect(outcomeLabel("一部勝訴一部敗訴")).toBe("一部勝訴");
   });
-  it("健康資料需要同意", () => {
-    expect(needsHealthConsent("右手骨折住院")).toBe(true);
-    expect(needsHealthConsent("借了五十萬沒有還")).toBe(false);
+  it("敏感個資依法定類別偵測", () => {
+    expect(sensitiveKinds("右手骨折住院")).toEqual(["病歷、醫療"]);
+    expect(sensitiveKinds("做過健康檢查，也有前科"))
+      .toEqual(["健康檢查", "犯罪前科"]);
+    expect(sensitiveKinds("基因檢測顯示性取向")).toEqual(["基因", "性生活"]);
+  });
+  it("日常用語不算敏感個資", () => {
+    const texts = ["借了五十萬沒有還", "我受傷了", "對方涉嫌傷害", "有點失眠"];
+    for (const text of texts) expect(sensitiveKinds(text)).toEqual([]);
   });
   it("splitMasked", () => {
     expect(splitMasked("我是【姓名】，電話【電話】。")).toEqual([

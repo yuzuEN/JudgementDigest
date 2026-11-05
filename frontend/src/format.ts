@@ -27,11 +27,21 @@ export function outcomeLabel(outcome: string): string {
   return outcome === "一部勝訴一部敗訴" ? "一部勝訴" : outcome;
 }
 
-/** 描述裡有健康、醫療相關的內容時，送出前要另外取得同意（個資法第 6 條的特種個資）。 */
-export const HEALTH_RE = /受傷|傷害|傷口|骨折|住院|手術|開刀|鋼釘|縫合|縫了|診斷|病歷|醫院|診所|就醫|看診|驗傷|復健|休養|看護|疾病|生病|懷孕|中風|癌症|精神科|憂鬱|失眠|身心障礙/;
+/**
+ * 個人資料保護法第 6 條的特種個資。法律沒有「健康資料」這個分類，
+ * 醫療資料指醫事人員診察、治療、處方、施術產生的資料（施行細則第 4 條），所以「受傷」「傷害」這類日常用語不算。
+ * 這是關鍵字比對，一定有漏網的說法；界定方式公開前要請律師確認。
+ */
+export const SENSITIVE_KINDS: { label: string; pattern: RegExp }[] = [
+  { label: "病歷、醫療", pattern: /病歷|診斷|住院|手術|開刀|鋼釘|縫合|縫了|醫院|診所|就醫|看診|門診|急診|驗傷|復健|用藥|處方|骨折|癌症|中風|憂鬱症|精神科|身心障礙/ },
+  { label: "健康檢查", pattern: /健康檢查|體檢/ },
+  { label: "基因", pattern: /基因|遺傳疾病/ },
+  { label: "性生活", pattern: /性取向|性傾向|性行為|性關係|同性戀|雙性戀/ },
+  { label: "犯罪前科", pattern: /前科|緩起訴|有罪確定|判刑確定|服刑|假釋|入監|坐牢/ },
+];
 
-export function needsHealthConsent(text: string): boolean {
-  return HEALTH_RE.test(text);
+export function sensitiveKinds(text: string): string[] {
+  return SENSITIVE_KINDS.filter((k) => k.pattern.test(text)).map((k) => k.label);
 }
 
 /** 把遮名後的文字切成一般文字與【標記】，給預覽畫面上色。 */

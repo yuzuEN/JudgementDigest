@@ -15,7 +15,7 @@ export interface Intake {
   followupAnswers: Record<string, { question: string; answer: string }>;
   names: string[];
   maskedText: string;
-  healthConsent: boolean;
+  sensitiveConsent: boolean;
 }
 
 export const EMPTY_INTAKE: Intake = {
@@ -30,7 +30,7 @@ export const EMPTY_INTAKE: Intake = {
   followupAnswers: {},
   names: [],
   maskedText: "",
-  healthConsent: false,
+  sensitiveConsent: false,
 };
 
 /** 描述加上追問的回答，作為遮名與送出的全文。 */

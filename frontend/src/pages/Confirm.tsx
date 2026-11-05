@@ -4,7 +4,7 @@ import { api } from "../api/client";
 import type { Question } from "../api/types";
 import { ErrorBox, Loading } from "../components/Common";
 import { Layout } from "../components/Layout";
-import { money, needsHealthConsent, parseAmount, splitMasked } from "../format";
+import { money, parseAmount, sensitiveKinds, splitMasked } from "../format";
 import { fullText, useIntake } from "../state";
 
 const DEFENDANT_LABEL = { person: "個人", company: "公司、行號", government: "政府機關、學校、醫院" } as const;
@@ -48,8 +48,9 @@ export default function Confirm() {
 
   if (!intake.text.trim()) return <Navigate to="/start" replace />;
 
-  const health = needsHealthConsent(text);
-  const ready = !masking && !error && intake.maskedText !== "" && (!health || intake.healthConsent);
+  const kinds = sensitiveKinds(text);
+  const sensitive = kinds.length > 0;
+  const ready = !masking && !error && intake.maskedText !== "" && (!sensitive || intake.sensitiveConsent);
   const addName = () => {
     const n = nameInput.trim();
     if (n.length >= 2 && !intake.names.includes(n)) update({ names: [...intake.names, n] });
@@ -114,21 +115,21 @@ export default function Confirm() {
               <li>蒐集者：JudgementDigest 專題團隊；目的：產生類案判決參考結果。</li>
               <li>送出的是上面遮名後的內容；本平台不保存你的描述，結果只顯示在你的瀏覽器裡。</li>
               {llmAvailable && <li>只有在你按下「請 AI 幫我看還缺什麼」時，遮名後的內容才會傳給 Google Gemini 付費 API，不用於改善 Google 的產品。</li>}
-              <li>你可以不提供健康相關資料：不同意的話，回上一步刪掉這些描述就能繼續，只是參考結果可能比較不準。</li>
+              <li>病歷、醫療、健康檢查、基因、性生活、犯罪前科是法律特別保護的資料。你可以不提供：不同意的話，回上一步刪掉這些描述就能繼續，只是參考結果可能比較不準。</li>
             </ul>
-            {health && (
+            {sensitive && (
               <label className="consent">
-                <input type="checkbox" checked={intake.healthConsent} onChange={(e) => update({ healthConsent: e.target.checked })} />
-                <span><strong>我同意</strong>本平台處理我提供的健康、醫療相關資料（例如受傷、住院的描述），只用於產生這次的參考結果。</span>
+                <input type="checkbox" checked={intake.sensitiveConsent} onChange={(e) => update({ sensitiveConsent: e.target.checked })} />
+                <span><strong>我同意</strong>本平台處理我提供的敏感個人資料（偵測到：{kinds.join("、")}），只用於產生這次的參考結果。</span>
               </label>
             )}
-            {health && !intake.healthConsent && <div><Link to="/start" className="btn secondary small">不同意，回上一步刪掉這些描述</Link></div>}
+            {sensitive && !intake.sensitiveConsent && <div><Link to="/start" className="btn secondary small">不同意，回上一步刪掉這些描述</Link></div>}
           </section>
 
           {choosing && (
             <section className="card" aria-labelledby="ai-title">
               <h2 id="ai-title">要補充更多細節嗎？（可略過）</h2>
-              <p className="hint">按下按鈕後，上面遮名後的內容（包含健康資料）會傳給 Google Gemini，由 AI 依你的案情提問。請先確認姓名都已遮掉。不按就不會傳。</p>
+              <p className="hint">按下按鈕後，上面遮名後的內容（包含你同意處理的資料）會傳給 Google Gemini，由 AI 依你的案情提問。請先確認姓名都已遮掉。不按就不會傳。</p>
               {aiState === "asking" ? <Loading>正在請 AI 看還需要補充哪些細節……</Loading> :
                 <div className="actions">
                   <button type="button" className="btn secondary" disabled={!ready} onClick={askLlm}>請 AI 幫我看還缺什麼</button>
@@ -157,7 +158,7 @@ export default function Confirm() {
 
           <div className="actions">
             <button type="button" className="btn" disabled={!ready} onClick={() => navigate(resultPath)}>看參考結果</button>
-            {health && !intake.healthConsent && <span className="warn-text">內容包含健康資料，請先在上面選擇同意或不同意。</span>}
+            {sensitive && !intake.sensitiveConsent && <span className="warn-text">內容包含敏感個人資料，請先在上面選擇同意或不同意。</span>}
           </div>
         </div>
 

@@ -55,7 +55,14 @@ describe("描述案情", () => {
   });
 });
 
-describe("確認與遮名：健康資料", () => {
+describe("確認與遮名：敏感個人資料", () => {
+  it("日常用語不需要同意，同意時會列出偵測到的類別", async () => {
+    mockApi({ "POST /intake/mask": (b: { text: string }) => ({ masked_text: b.text, spans: [] }),
+      "POST /intake/followup": () => ({ questions: [], source: "rules" }) });
+    renderAt("/confirm", <Confirm />, "/confirm", { text: "我受傷了，對方有前科，後來去住院" });
+    expect(await screen.findByText(/偵測到：病歷、醫療、犯罪前科/)).toBeInTheDocument();
+  });
+
   it("不同意時可以回上一步，同意後這個選項消失", async () => {
     mockApi({ "POST /intake/mask": (b: { text: string }) => ({ masked_text: b.text, spans: [] }),
       "POST /intake/followup": () => ({ questions: [], source: "rules" }) });
@@ -68,7 +75,7 @@ describe("確認與遮名：健康資料", () => {
     expect(screen.queryByRole("link", { name: "不同意，回上一步刪掉這些描述" })).not.toBeInTheDocument();
   });
 
-  it("沒有健康資料就不用選", async () => {
+  it("沒有敏感個資就不用選", async () => {
     mockApi({ "POST /intake/mask": (b: { text: string }) => ({ masked_text: b.text, spans: [] }),
       "POST /intake/followup": () => ({ questions: [], source: "rules" }) });
     renderAt("/confirm", <Confirm />, "/confirm", { text: "朋友借錢沒還" });
@@ -110,7 +117,7 @@ describe("確認與遮名：AI 追問", () => {
     expect(screen.queryByText(/Google Gemini/)).not.toBeInTheDocument();
   });
 
-  it("健康資料沒有同意前不能傳給 LLM", async () => {
+  it("敏感個資沒有同意前不能傳給 LLM", async () => {
     setup(() => rulesReply);
     const user = userEvent.setup();
     renderAt("/confirm", <Confirm />, "/confirm", { text: "我骨折住院" });
@@ -183,19 +190,19 @@ describe("確認與遮名", () => {
     expect(screen.getByRole("button", { name: "不遮「王小明」" })).toBeInTheDocument();
   });
 
-  it("有健康資料時要先同意", async () => {
+  it("有敏感個資時要先同意", async () => {
     maskApi();
     const user = userEvent.setup();
     renderAt("/confirm", <Confirm />, "/confirm", { text: TRAFFIC });
     const go = screen.getByRole("button", { name: "看參考結果" });
     await screen.findByText(/去年三月/);
     expect(go).toBeDisabled();
-    expect(screen.getByText(/內容包含健康資料/)).toBeInTheDocument();
+    expect(screen.getByText(/內容包含敏感個人資料/)).toBeInTheDocument();
     await user.click(screen.getByRole("checkbox", { name: /我同意/ }));
     await waitFor(() => expect(go).toBeEnabled());
   });
 
-  it("沒有健康資料就不必勾", async () => {
+  it("沒有敏感個資就不必勾", async () => {
     maskApi();
     renderAt("/confirm", <Confirm />, "/confirm", { text: "朋友借了五十萬一直沒還" });
     await waitFor(() => expect(screen.getByRole("button", { name: "看參考結果" })).toBeEnabled());
