@@ -8,6 +8,8 @@
 | `engine.py` | 共用核心：字元 1–3 gram TF-IDF、餘弦相似度；建索引、查前 k 件、存檔讀回 |
 | `civil.py` | 民事設定：用原告主張建索引（使用者只能提供自己這一方的說法），可限定同一案由中類，附勝敗與金額 |
 | `evaluate.py` | 民事檢索的評估：`python -m retrieval.evaluate` |
+| `build.py` | 建立上線用的檢索資料：`python -m retrieval.build` → `artifacts/retrieval_civil_v1/`（索引、遮名後的案件清單、每件判決提到的證據與抗辯類型） |
+| `masking.py` | 遮名：顯示判決時把當事人姓名換成【原告】【被告】；使用者輸入送出前遮掉身分證字號、電話、電子郵件、地址與指定的名字 |
 | `criminal.py` | 刑事設定（刑事組，尚未加入） |
 
 評估（文字資料集 v5，隨機 3,000 件當查詢，前 10 件）：鄰居勝訴比例的 AUC 0.732（全部案件）、
