@@ -19,6 +19,29 @@
   --bad: #a3460f;
   --good: #1e6b3a;
   --mask-bg: #ffe7c7;
+  --link: #1d5fb3;
+  --link-hover: #164a8c;
+  --on-accent: #ffffff;
+  --info-line: #b7ccea;
+  --info-ink: #1b3a63;
+  --inset: #fafbfd;
+  --track: #e3e8ef;
+  --win-bg: #e3f1e8;
+  --lose-bg: #fcebe3;
+  --lose-ink: #8a3412;
+  --p-claim: #eef2f7;
+  --p-claim-chip: #dce2ea;
+  --p-defense: #f3eff8;
+  --p-defense-chip: #e2d9ef;
+  --p-defense-ink: #3f2a63;
+  --p-issue: #fff1d6;
+  --p-issue-chip: #f6d79a;
+  --p-issue-ink: #5c3a00;
+  --p-evidence: #e3f0ff;
+  --p-evidence-chip: #bfd8f7;
+  --p-court: #e6f4ea;
+  --p-court-chip: #bfe3cb;
+  --p-court-ink: #1e5a33;
   --radius: 12px;
   font-family: "Noto Sans TC", system-ui, sans-serif;
   color: var(--ink);
@@ -26,10 +49,58 @@
   line-height: 1.6;
 }
 
+/* 夜間模式。放在 screen 裡，列印和 PDF 一律是淺色 */
+@media screen {
+  :root[data-theme="dark"] {
+    color-scheme: dark;
+    --ground: #0e1116;
+    --surface: #171c23;
+    --ink: #e8ecf1;
+    --muted: #aab4c1;
+    --line: #2c3440;
+    --line-strong: #434e5c;
+    --chip: #252c36;
+    --accent: #2c6bc0;
+    --accent-ink: #a9cbf7;
+    --accent-soft: #1b2a3e;
+    --accent-hover: #3a7bd2;
+    --warm: #e0954f;
+    --warn-bg: #33230f;
+    --warn-line: #6b4a20;
+    --warn-ink: #f3d6b4;
+    --warn-title: #f7c98e;
+    --bad: #f0a67e;
+    --good: #84d6a0;
+    --mask-bg: #5c4116;
+    --link: #8ab8f5;
+    --link-hover: #b4d2fa;
+    --info-line: #2f4a6e;
+    --info-ink: #cfe0f7;
+    --inset: #12161c;
+    --track: #2c3440;
+    --win-bg: #17352a;
+    --lose-bg: #3d2017;
+    --lose-ink: #f4b296;
+    --p-claim: #232a33;
+    --p-claim-chip: #36404c;
+    --p-defense: #2a2436;
+    --p-defense-chip: #40355a;
+    --p-defense-ink: #dccdf5;
+    --p-issue: #33280f;
+    --p-issue-chip: #5a4615;
+    --p-issue-ink: #f6dfa8;
+    --p-evidence: #182a40;
+    --p-evidence-chip: #264468;
+    --p-court: #182e22;
+    --p-court-chip: #285038;
+    --p-court-ink: #bce8cb;
+  }
+}
+
 * { box-sizing: border-box; }
 body { margin: 0; background: var(--ground); font-size: 16px; }
-a { color: var(--accent); }
-a:hover { color: var(--accent-hover); }
+a { color: var(--link); }
+a:hover { color: var(--link-hover); }
 h1, h2, h3 { line-height: 1.3; }
 button, input, select, textarea { font: inherit; color: inherit; }
 :focus-visible { outline: 3px solid #8fb4e6; outline-offset: 2px; }
@@ -42,7 +113,7 @@ button, input, select, textarea { font: inherit; color: inherit; }
 .brand { display: flex; align-items: center; gap: 10px; color: var(--ink); text-decoration: none; font-weight: 700; font-size: 18px; }
 .steps { display: flex; flex-wrap: wrap; gap: 8px; font-size: 14px; list-style: none; margin: 0; padding: 0; }
 .steps li { padding: 4px 12px; border-radius: 999px; background: var(--chip); color: var(--muted); }
-.steps li[aria-current="step"] { background: var(--accent); color: #fff; font-weight: 500; }
+.steps li[aria-current="step"] { background: var(--accent); color: var(--on-accent); font-weight: 500; }
 .page { max-width: 1160px; margin: 0 auto; padding: 32px 24px 64px; }
 .two-col { display: flex; flex-wrap: wrap; gap: 32px; align-items: flex-start; }
 .two-col > .main { flex: 999 1 600px; min-width: 0; display: flex; flex-direction: column; gap: 24px; }
@@ -61,7 +132,7 @@ button, input, select, textarea { font: inherit; color: inherit; }
 .card h2 { margin: 0; font-size: 18px; }
 .card.warn { background: var(--warn-bg); border-color: var(--warn-line); color: var(--warn-ink); }
 .card.warn h2 { color: var(--warn-title); }
-.card.info { background: var(--accent-soft); border-color: #b7ccea; color: #1b3a63; }
+.card.info { background: var(--accent-soft); border-color: var(--info-line); color: var(--info-ink); }
 .page-title { margin: 0 0 8px; font-size: 30px; }
 .lead { margin: 0; color: var(--muted); }
 .hint { margin: 0; font-size: 14px; color: var(--muted); }
@@ -72,10 +143,10 @@ button, input, select, textarea { font: inherit; color: inherit; }
 ul.plain { margin: 0; padding-left: 20px; display: flex; flex-direction: column; gap: 6px; }
 
 /* ── 按鈕 ── */
-.btn { display: inline-flex; align-items: center; justify-content: center; gap: 8px; min-height: 48px; padding: 0 28px; border-radius: 10px; border: 1px solid var(--accent); background: var(--accent); color: #fff; font-weight: 700; text-decoration: none; cursor: pointer; }
-.btn:hover { background: var(--accent-hover); color: #fff; }
+.btn { display: inline-flex; align-items: center; justify-content: center; gap: 8px; min-height: 48px; padding: 0 28px; border-radius: 10px; border: 1px solid var(--accent); background: var(--accent); color: var(--on-accent); font-weight: 700; text-decoration: none; cursor: pointer; }
+.btn:hover { background: var(--accent-hover); color: var(--on-accent); }
 .btn[disabled], .btn[aria-disabled="true"] { background: var(--line); border-color: var(--line); color: var(--muted); cursor: not-allowed; }
-.btn.secondary { background: var(--surface); color: var(--accent); font-weight: 500; }
+.btn.secondary { background: var(--surface); color: var(--link); font-weight: 500; }
 .btn.secondary:hover { background: var(--accent-soft); }
 .btn.small { min-height: 44px; padding: 0 16px; }
 .actions { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; }
@@ -101,7 +172,7 @@ legend { font-weight: 500; padding: 0; margin-bottom: 6px; }
 .bubble { max-width: 85%; border-radius: 12px; padding: 12px 16px; }
 .bubble.q { align-self: flex-start; background: var(--chip); border-bottom-left-radius: 4px; }
 .qa { display: flex; flex-direction: column; gap: 8px; }
-.masked-preview { border: 1px solid var(--line); border-radius: 8px; padding: 16px; background: #fafbfc; line-height: 1.9; white-space: pre-wrap; }
+.masked-preview { border: 1px solid var(--line); border-radius: 8px; padding: 16px; background: var(--inset); line-height: 1.9; white-space: pre-wrap; }
 mark.masked { background: var(--mask-bg); color: var(--warn-title); border-radius: 4px; padding: 0 4px; }
 .name-chips { display: flex; flex-wrap: wrap; gap: 8px; }
 .name-chip { display: inline-flex; align-items: center; gap: 6px; background: var(--chip); border-radius: 999px; padding: 2px 4px 2px 12px; font-size: 14px; }
@@ -110,16 +181,16 @@ mark.masked { background: var(--mask-bg); color: var(--warn-title); border-radiu
 /* ── 結果 ── */
 .tabs { display: flex; gap: 8px; margin-bottom: 12px; }
 .tab { padding: 6px 16px; border-radius: 8px; border: 1px solid var(--line-strong); background: var(--surface); color: var(--ink); text-decoration: none; }
-.tab[aria-current="page"] { background: var(--accent); border-color: var(--accent); color: #fff; font-weight: 700; }
+.tab[aria-current="page"] { background: var(--accent); border-color: var(--accent); color: var(--on-accent); font-weight: 700; }
 .big-number { font-size: 52px; line-height: 1; font-weight: 700; color: var(--accent-ink); }
 .mid-number { font-size: 40px; line-height: 1; font-weight: 700; color: var(--accent-ink); }
-.bar { height: 12px; border-radius: 999px; background: #e3e8ef; overflow: hidden; }
+.bar { height: 12px; border-radius: 999px; background: var(--track); overflow: hidden; }
 .bar > span { display: block; height: 100%; background: var(--accent); }
 .bar.thin { height: 8px; }
 .bar.warm > span { background: var(--warm); }
 .bar.soft > span { background: #5b87c5; }
 .range { position: relative; height: 44px; }
-.range .track { position: absolute; left: 0; right: 0; top: 16px; height: 12px; border-radius: 999px; background: #e3e8ef; }
+.range .track { position: absolute; left: 0; right: 0; top: 16px; height: 12px; border-radius: 999px; background: var(--track); }
 .range .fill { position: absolute; top: 16px; height: 12px; border-radius: 999px; background: var(--warm); }
 .range .tick { position: absolute; top: 30px; font-size: 12px; color: var(--muted); }
 .table-wrap { overflow-x: auto; position: relative; }   /* relative：裡面的 .sr-only 才不會跑到捲動區外撐寬整頁 */
@@ -128,9 +199,9 @@ table.cases th { text-align: left; white-space: nowrap; color: var(--muted); fon
 table.cases td { padding: 12px 8px; border-bottom: 1px solid var(--chip); vertical-align: top; }
 table.cases td[data-label] { white-space: nowrap; }
 .tag { display: inline-block; padding: 2px 10px; border-radius: 999px; font-size: 13px; font-weight: 500; white-space: nowrap; }
-.tag.win { background: #e3f1e8; color: var(--good); }
+.tag.win { background: var(--win-bg); color: var(--good); }
 .tag.partial { background: var(--accent-soft); color: var(--accent-ink); }
-.tag.lose { background: #fcebe3; color: #8a3412; }
+.tag.lose { background: var(--lose-bg); color: var(--lose-ink); }
 .tag.neutral { background: var(--chip); color: var(--muted); }
 .ev-row { display: flex; flex-direction: column; gap: 4px; }
 .ev-row .top { display: flex; justify-content: space-between; gap: 8px; font-size: 15px; }
@@ -148,11 +219,11 @@ table.cases td[data-label] { white-space: nowrap; }
 .para { border-radius: 8px; padding: 14px 16px; background: var(--surface); }
 .para .chip { display: inline-block; font-size: 12px; font-weight: 700; border-radius: 4px; padding: 1px 8px; margin-bottom: 6px; background: var(--chip); color: var(--muted); }
 .para p { margin: 0; line-height: 1.9; }
-.para.on.claim { background: #eef2f7; } .para.on.claim .chip { background: #dce2ea; color: var(--ink); }
-.para.on.defense { background: #f3eff8; } .para.on.defense .chip { background: #e2d9ef; color: #3f2a63; }
-.para.on.issue { background: #fff1d6; } .para.on.issue .chip { background: #f6d79a; color: #5c3a00; }
-.para.on.evidence { background: #e3f0ff; } .para.on.evidence .chip { background: #bfd8f7; color: var(--accent-ink); }
-.para.on.court { background: #e6f4ea; } .para.on.court .chip { background: #bfe3cb; color: #1e5a33; }
+.para.on.claim { background: var(--p-claim); } .para.on.claim .chip { background: var(--p-claim-chip); color: var(--ink); }
+.para.on.defense { background: var(--p-defense); } .para.on.defense .chip { background: var(--p-defense-chip); color: var(--p-defense-ink); }
+.para.on.issue { background: var(--p-issue); } .para.on.issue .chip { background: var(--p-issue-chip); color: var(--p-issue-ink); }
+.para.on.evidence { background: var(--p-evidence); } .para.on.evidence .chip { background: var(--p-evidence-chip); color: var(--accent-ink); }
+.para.on.court { background: var(--p-court); } .para.on.court .chip { background: var(--p-court-chip); color: var(--p-court-ink); }
 .swatch { display: inline-block; width: 14px; height: 14px; border-radius: 3px; border: 1px solid var(--line-strong); }
 
 /* ── 首頁 ── */
@@ -164,7 +235,7 @@ table.cases td[data-label] { white-space: nowrap; }
 .hero .sample { flex: 1 1 340px; min-width: 0; background: var(--ground); border: 1px solid var(--line); border-radius: 16px; padding: 24px; display: flex; flex-direction: column; gap: 14px; }
 .how { list-style: none; padding: 0; margin: 0; }
 .how li { display: flex; gap: 14px; align-items: flex-start; }
-.how .num { flex: none; width: 36px; height: 36px; border-radius: 999px; background: var(--accent); color: #fff; display: flex; align-items: center; justify-content: center; font-weight: 700; }
+.how .num { flex: none; width: 36px; height: 36px; border-radius: 999px; background: var(--accent); color: var(--on-accent); display: flex; align-items: center; justify-content: center; font-weight: 700; }
 details.faq { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 16px 20px; }
 details.faq summary { cursor: pointer; font-weight: 500; }
 .site-footer { background: var(--surface); border-top: 1px solid var(--line); font-size: 14px; color: var(--muted); }
@@ -202,3 +273,11 @@ details.faq summary { cursor: pointer; font-weight: 500; }
 .spinner { flex: none; width: 16px; height: 16px; border: 2px solid var(--chip); border-top-color: var(--accent-ink); border-radius: 50%; animation: spin 0.8s linear infinite; }
 @keyframes spin { to { transform: rotate(360deg); } }
 @media (prefers-reduced-motion: reduce) { .spinner { animation-duration: 3s; } }
+
+.theme-toggle { flex: none; display: inline-flex; align-items: center; justify-content: center; width: 44px; height: 44px; margin-left: 8px; border: 1px solid var(--line-strong); border-radius: 999px; background: var(--surface); color: var(--ink); cursor: pointer; }
+.theme-toggle:hover { background: var(--chip); }
+@media print { .theme-toggle { display: none; } }
+@media (max-width: 640px) {
+  .site-header .container { position: relative; padding-right: 64px; }
+  .theme-toggle { position: absolute; top: 12px; right: 16px; margin: 0; }
+}

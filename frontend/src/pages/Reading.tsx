@@ -7,11 +7,11 @@ import { Layout } from "../components/Layout";
 import { money, outcomeLabel } from "../format";
 
 const FUNCTIONS: { id: GuideFunction; label: string; swatch: string }[] = [
-  { id: "issue", label: "爭點", swatch: "#fff1d6" },
-  { id: "claim", label: "原告主張", swatch: "#eef2f7" },
-  { id: "defense", label: "被告答辯", swatch: "#f3eff8" },
-  { id: "evidence", label: "證據", swatch: "#e3f0ff" },
-  { id: "court", label: "法院判斷", swatch: "#e6f4ea" },
+  { id: "issue", label: "爭點", swatch: "var(--p-issue)" },
+  { id: "claim", label: "原告主張", swatch: "var(--p-claim)" },
+  { id: "defense", label: "被告答辯", swatch: "var(--p-defense)" },
+  { id: "evidence", label: "證據", swatch: "var(--p-evidence)" },
+  { id: "court", label: "法院判斷", swatch: "var(--p-court)" },
 ];
 
 export default function Reading() {
