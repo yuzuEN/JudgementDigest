@@ -171,7 +171,7 @@ describe("確認與遮名", () => {
     renderAt("/confirm", <Confirm />, "/confirm", { text: "朋友借錢沒還" });
     await user.type(await screen.findByLabelText("當時是什麼燈？"), "綠燈");
     await waitFor(() => expect(calls.filter((c) => c.key === "POST /intake/mask").at(-1)?.body)
-      .toMatchObject({ text: "朋友借錢沒還\n當時是什麼燈？綠燈" }));
+      .toMatchObject({ text: "朋友借錢沒還\n追問：當時是什麼燈？\n回答：綠燈" }));
   });
 });
 

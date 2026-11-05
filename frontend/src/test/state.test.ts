@@ -10,7 +10,7 @@ describe("fullText", () => {
         skip: { question: "沒回答的問題？", answer: "  " },
       },
     };
-    expect(fullText(intake)).toBe("被車撞\n當時是什麼燈？綠燈");
+    expect(fullText(intake)).toBe("被車撞\n追問：當時是什麼燈？\n回答：綠燈");
   });
 });
 
