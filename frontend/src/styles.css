@@ -122,7 +122,7 @@ mark.masked { background: var(--mask-bg); color: var(--warn-title); border-radiu
 .range .track { position: absolute; left: 0; right: 0; top: 16px; height: 12px; border-radius: 999px; background: #e3e8ef; }
 .range .fill { position: absolute; top: 16px; height: 12px; border-radius: 999px; background: var(--warm); }
 .range .tick { position: absolute; top: 30px; font-size: 12px; color: var(--muted); }
-.table-wrap { overflow-x: auto; }
+.table-wrap { overflow-x: auto; position: relative; }   /* relative：裡面的 .sr-only 才不會跑到捲動區外撐寬整頁 */
 table.cases { width: 100%; min-width: 680px; border-collapse: collapse; font-size: 15px; }
 table.cases th { text-align: left; color: var(--muted); font-weight: 500; padding: 10px 8px; border-bottom: 1px solid var(--line); }
 table.cases td { padding: 12px 8px; border-bottom: 1px solid var(--chip); vertical-align: top; }

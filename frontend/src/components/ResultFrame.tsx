@@ -18,6 +18,7 @@ export function ResultFrame({ active, title, lead, mock, maskedText, children }:
         <div className="print-only">
           <h1 style={{ margin: "0 0 4px", fontSize: 22 }}>類案判決參考報告（{active === "civil" ? "民事" : "刑事"}）</h1>
           <p className="hint">產生時間：{new Date().toLocaleString("zh-TW")}・刑事及民事類案判決參考平台・結果僅供參考，不是法律意見</p>
+          {mock && <p><strong>本報告是示例資料：數字與判決都不是真的，請勿作為判斷依據。</strong></p>}
           <h2 style={{ fontSize: 16 }}>案情描述（已遮名）</h2>
           <p style={{ whiteSpace: "pre-wrap", fontSize: 14 }}>{maskedText}</p>
         </div>

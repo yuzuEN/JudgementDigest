@@ -137,9 +137,10 @@ describe("民事結果", () => {
     const print = vi.spyOn(window, "print").mockImplementation(() => {});
     const user = userEvent.setup();
     renderAt("/result/civil", <CivilResult />, "/result/civil", intake);
-    expect(await screen.findByText(/示例資料/)).toBeInTheDocument();
+    expect(await screen.findByText("示例資料：數字與判決都不是真的")).toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: "下載 PDF" }));
     expect(print).toHaveBeenCalledOnce();
+    expect(screen.getByText(/本報告是示例資料/).closest(".print-only")).not.toBeNull();   // PDF 上也要標示
   });
 
   it("金額範圍：沒填請求金額、件數不足", async () => {
