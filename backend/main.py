@@ -6,20 +6,27 @@
 所有路徑都在 /api 底下。刑事模型、LLM 追問、段落功能標註還沒完成的部分先回傳示例資料或規則式的結果，
 回應裡的 mock、source、labeler 會說明是哪一種，前端據此標示「示例資料」。
 """
+import logging
 from typing import Optional
 
 from fastapi import APIRouter, FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 
-from backend import followup, mock, schemas
+from backend import followup, llm, mock, schemas
 from backend.civil_service import CivilService
+from backend.llm.tasks import followup_questions
+from backend.quality import looks_like_dispute
 from backend.settings import Settings
 from retrieval.masking import TAGS, mask
+
+
+logger = logging.getLogger(__name__)
 
 
 def create_app(settings: Optional[Settings] = None) -> FastAPI:
     settings = settings or Settings.from_env()
     civil = CivilService(settings.artifacts_dir, force_mock=settings.mode == "mock")
+    llm_client = llm.create_client(settings.llm_provider, settings.llm_model, settings.llm_api_key)
     app = FastAPI(title="類案判決參考平台 API", version="0.1.0",
                   description="刑事及民事類案判決參考平台。結果是「類似案件如果打到判決」的統計參考，不是法律意見。")
     app.add_middleware(CORSMiddleware, allow_origins=settings.cors_origins, allow_methods=["GET", "POST"],
@@ -29,7 +36,7 @@ def create_app(settings: Optional[Settings] = None) -> FastAPI:
     @api.get("/health", response_model=schemas.Health)
     def health():
         return {"status": "ok", "civil": "mock" if civil.mock else "model", "criminal": "mock",
-                "followup": "rules", "model": None if civil.mock else civil.meta["name"]}
+                "followup": "llm" if llm_client else "rules", "model": None if civil.mock else civil.meta["name"]}
 
     @api.get("/meta/options", response_model=schemas.Options)
     def options():
@@ -45,7 +52,12 @@ def create_app(settings: Optional[Settings] = None) -> FastAPI:
 
     @api.post("/intake/followup", response_model=schemas.FollowupResponse)
     def ask_followup(req: schemas.FollowupRequest):
-        """追問描述裡缺少的事實。第一版是固定題庫（source = rules），之後換成 LLM。"""
+        """追問描述裡缺少的事實。有設定 LLM 就用 LLM，失敗或內容不像法律糾紛時用固定題庫。"""
+        if llm_client and looks_like_dispute(req.text):
+            try:
+                return {"questions": followup_questions(llm_client, req.case_type, req.mid, req.text), "source": "llm"}
+            except llm.LLMError as e:
+                logger.warning("LLM 追問失敗，改用固定題庫：%s", e)
         return {"questions": followup.questions(req.case_type, req.mid, req.text), "source": "rules"}
 
     @api.post("/civil/predict", response_model=schemas.CivilPrediction)

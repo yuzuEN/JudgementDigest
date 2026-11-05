@@ -55,6 +55,18 @@ describe("描述案情", () => {
   });
 });
 
+describe("確認與遮名：追問", () => {
+  it("送去追問的是遮名後的文字", async () => {
+    const seen: string[] = [];
+    mockApi({
+      "POST /intake/mask": () => ({ masked_text: "我的電話是【電話】", spans: [] }),
+      "POST /intake/followup": (body: { text: string }) => { seen.push(body.text); return { questions: [], source: "rules" }; },
+    });
+    renderAt("/confirm", <Confirm />, "/confirm", { text: "我的電話是0912345678" });
+    await waitFor(() => expect(seen).toEqual(["我的電話是【電話】"]));
+  });
+});
+
 describe("確認與遮名", () => {
   const maskApi = () => mockApi({
     "POST /intake/followup": () => ({ questions: [{ id: "signal", text: "當時是什麼燈？", why: "會影響過失比例。" }], source: "rules" }),

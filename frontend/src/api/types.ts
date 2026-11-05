@@ -7,7 +7,7 @@ export interface Health {
   status: string;
   civil: "model" | "mock";
   criminal: "mock";
-  followup: "rules";
+  followup: "rules" | "llm";
   model: string | null;
 }
 

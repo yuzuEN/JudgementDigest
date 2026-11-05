@@ -11,7 +11,7 @@ class Health(BaseModel):
     status: str
     civil: Literal["model", "mock"]
     criminal: Literal["mock"]
-    followup: Literal["rules"]
+    followup: Literal["rules", "llm"]
     model: Optional[str] = None
 
 

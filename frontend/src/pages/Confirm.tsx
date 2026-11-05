@@ -21,10 +21,14 @@ export default function Confirm() {
 
   useEffect(() => {
     if (!intake.text.trim()) return;
-    api.followup(intake.caseType, intake.mid || null, intake.text)
-      .then((r) => setQuestions(r.questions))
-      .catch(() => setQuestions([]));   // 追問失敗不影響後面的流程
-  }, [intake.caseType, intake.mid, intake.text]);
+    let stale = false;
+    // 追問可能傳給外部的 LLM，一定要先遮名
+    api.mask(intake.text, intake.names)
+      .then((r) => api.followup(intake.caseType, intake.mid || null, r.masked_text))
+      .then((r) => { if (!stale) setQuestions(r.questions); })
+      .catch(() => { if (!stale) setQuestions([]); });   // 追問失敗不影響後面的流程
+    return () => { stale = true; };
+  }, [intake.caseType, intake.mid, intake.text, intake.names]);
 
   useEffect(() => {
     if (!text) return;
