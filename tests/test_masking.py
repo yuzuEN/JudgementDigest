@@ -10,7 +10,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from retrieval.masking import find_spans, mask, mask_parties, party_names  # noqa: E402
+from retrieval.masking import find_spans, mask, mask_parties, party_names, third_party_names  # noqa: E402
 
 
 class TestPatterns(unittest.TestCase):
@@ -66,6 +66,19 @@ class TestParties(unittest.TestCase):
         text = "原告王小明主張被告陳大華駕車不慎，原告訴訟代理人林律師到庭。"
         out = mask_parties(text, "王小明", "陳大華", ["林律師"])
         self.assertEqual(out, "原告【原告】主張被告【被告】駕車不慎，原告訴訟代理人【代理人】到庭。")
+
+    def test_third_party_names(self):
+        text = "原告與訴外人簡建祥結婚，證人洪瑞斌到庭，其配偶馮品瑄亦在場，證人林文表示不知情"
+        self.assertEqual(third_party_names(text), ["林文", "洪瑞斌", "簡建祥", "馮品瑄"])
+
+    def test_role_words_are_not_names(self):
+        for text in ("訴外人即原告", "以證人身分到庭", "法定代理人之配偶", "配偶贈與為由", "證人方面表示", "訴外人公司"):
+            self.assertEqual(third_party_names(text), [], text)
+
+    def test_third_party_masked_everywhere(self):
+        """同一個人在別的段落沒有寫稱謂時也要遮掉。"""
+        names = third_party_names("訴外人簡建祥借款")
+        self.assertEqual(mask_parties("由簡建祥簽名", "", "", [], names), "由【關係人】簽名")
 
     def test_mask_parties_also_masks_patterns(self):
         out = mask_parties("被告住臺中市西區民權路99號", "", "", [])

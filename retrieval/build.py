@@ -23,7 +23,7 @@ import config
 from civil.insights import defense_types, evidence_mentions
 from retrieval.civil import fetch_columns, load_corpus
 from retrieval.engine import TfidfIndex
-from retrieval.masking import mask_parties
+from retrieval.masking import mask_parties, third_party_names
 
 NAME = "retrieval_civil_v1"
 SECTION_COLUMNS = ["plaintiff_claim_text", "defendant_defense_text", "court_reasoning_text",
@@ -42,11 +42,14 @@ def write_artifacts(corpus: pd.DataFrame, sections: pd.DataFrame, out: Path, ver
     """
     corpus = corpus.reset_index(drop=True)
     s = corpus[["id"]].merge(sections, on="id", how="left", validate="1:1").fillna("")
-    masked = {col: [mask_parties(t, p, d, (pa, da)) for t, p, d, pa, da in
-                    zip(s[col], s.plaintiff, s.defendant, s.plaintiff_agent, s.defendant_agent)]
+    # 第三人的名字用整件判決找：同一個人在別的段落可能沒有寫「訴外人」
+    others = [third_party_names("\n".join(parts)) for parts in
+              zip(corpus.plaintiff_claim_text, s.plaintiff_claim_text, s.defendant_defense_text, s.court_reasoning_text)]
+    masked = {col: [mask_parties(t, p, d, (pa, da), o) for t, p, d, pa, da, o in
+                    zip(s[col], s.plaintiff, s.defendant, s.plaintiff_agent, s.defendant_agent, others)]
               for col in ("plaintiff_claim_text", "defendant_defense_text", "court_reasoning_text")}
-    summary = [mask_parties(t, p, d, (pa, da))[:SUMMARY_LEN] for t, p, d, pa, da in
-               zip(corpus.plaintiff_claim_text, s.plaintiff, s.defendant, s.plaintiff_agent, s.defendant_agent)]
+    summary = [mask_parties(t, p, d, (pa, da), o)[:SUMMARY_LEN] for t, p, d, pa, da, o in
+               zip(corpus.plaintiff_claim_text, s.plaintiff, s.defendant, s.plaintiff_agent, s.defendant_agent, others)]
     evidence = [json.dumps(evidence_mentions(c + "\n" + p)) for c, p in
                 zip(s.court_reasoning_text, s.plaintiff_claim_text)]
     defenses = [json.dumps(defense_types(t)) for t in s.defendant_defense_text]

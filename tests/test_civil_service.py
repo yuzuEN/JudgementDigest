@@ -137,9 +137,9 @@ class TestRetrievalArtifacts(unittest.TestCase):
                                "y": d.y, "plaintiff_claim_text": "原告王小明主張" + d.text,
                                "claimed_amount": 100000, "awarded_amount": np.where(d.y == 1, 50000, 0),
                                "grant_ratio": np.where(d.y == 1, 0.5, 0.0)})
-        sections = pd.DataFrame({"id": d.id, "plaintiff_claim_text": "原告王小明主張被告陳大華撞傷原告，提出診斷證明為證",
+        sections = pd.DataFrame({"id": d.id, "plaintiff_claim_text": "原告王小明主張被告陳大華撞傷原告，由簡建祥送醫，提出診斷證明為證",
                                  "defendant_defense_text": "被告陳大華則以：原告亦與有過失等語",
-                                 "court_reasoning_text": "一、本件爭點為被告有無過失。二、原告提出診斷證明為證。",
+                                 "court_reasoning_text": "一、本件爭點為被告有無過失。二、原告提出診斷證明為證，證人簡建祥亦到庭。",
                                  "plaintiff": "王小明", "defendant": "陳大華", "plaintiff_agent": "", "defendant_agent": ""})
         with tempfile.TemporaryDirectory() as tmp:
             out = write_artifacts(corpus, sections, Path(tmp) / "r", "test")
@@ -157,6 +157,7 @@ class TestRetrievalArtifacts(unittest.TestCase):
         self.assertNotIn("王小明", row[2])
         self.assertTrue(row[2].startswith("原告【原告】主張"))
         self.assertNotIn("陳大華", sec[0] + sec[1])
+        self.assertNotIn("簡建祥", sec[0], "別的段落寫了稱謂，這段也要遮")
         self.assertEqual(meta["n_cases"], 30)
 
 
