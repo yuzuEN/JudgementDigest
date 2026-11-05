@@ -157,6 +157,51 @@ describe("確認與遮名：AI 追問", () => {
     expect(sent.every((b) => !b.allow_llm)).toBe(true);
   });
 
+  it("選了不用 AI 之後可以反悔", async () => {
+    const sent = setup((b) => (b.allow_llm ? aiReply : rulesReply));
+    const user = userEvent.setup();
+    renderAt("/confirm", <Confirm />, "/confirm", { text: "內容" });
+    await user.click(await screen.findByRole("button", { name: "不用 AI，回答一般問題" }));
+    await user.click(screen.getByRole("button", { name: "改請 AI 提問" }));
+    const button = screen.getByRole("button", { name: AI_BUTTON });
+    await waitFor(() => expect(button).toBeEnabled());
+    expect(sent.filter((b) => b.allow_llm)).toHaveLength(0);
+    await user.click(button);
+    expect(await screen.findByText("對方怎麼說？")).toBeInTheDocument();
+  });
+
+  it("AI 和一般問題可以來回切換，不會重複傳，回答也保留", async () => {
+    const sent = setup((b) => (b.allow_llm ? aiReply : rulesReply));
+    const user = userEvent.setup();
+    renderAt("/confirm", <Confirm />, "/confirm", { text: "內容" });
+    const button = await screen.findByRole("button", { name: AI_BUTTON });
+    await waitFor(() => expect(button).toBeEnabled());
+    await user.click(button);
+    await user.type(await screen.findByLabelText("對方怎麼說？"), "他不承認");
+    await user.click(screen.getByRole("button", { name: "改回答一般問題" }));
+    expect(screen.getByText("什麼時候發生的？")).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "改請 AI 提問" }));
+    expect(screen.getByLabelText("對方怎麼說？")).toHaveValue("他不承認");
+    expect(sent.filter((b) => b.allow_llm)).toHaveLength(1);
+  });
+
+  it("AI 失敗後可以重試", async () => {
+    let fail = true;
+    setup((b) => {
+      if (!b.allow_llm) return rulesReply;
+      if (fail) { fail = false; return { ...rulesReply, fallback: "error" }; }
+      return aiReply;
+    });
+    const user = userEvent.setup();
+    renderAt("/confirm", <Confirm />, "/confirm", { text: "內容" });
+    const first = await screen.findByRole("button", { name: AI_BUTTON });
+    await waitFor(() => expect(first).toBeEnabled());
+    await user.click(first);
+    await user.click(await screen.findByRole("button", { name: "再試一次 AI" }));
+    await user.click(await screen.findByRole("button", { name: AI_BUTTON }));
+    expect(await screen.findByText("對方怎麼說？")).toBeInTheDocument();
+  });
+
   it("內容不像法律糾紛時說明原因，不說 AI 壞了", async () => {
     setup((b) => (b.allow_llm ? { ...rulesReply, fallback: "not_dispute" } : rulesReply));
     const user = userEvent.setup();

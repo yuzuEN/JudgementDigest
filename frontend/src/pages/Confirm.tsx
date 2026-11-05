@@ -15,6 +15,7 @@ export default function Confirm() {
   const navigate = useNavigate();
   const [questions, setQuestions] = useState<Question[]>([]);
   const [masking, setMasking] = useState(false);
+  const [aiQuestions, setAiQuestions] = useState<Question[]>([]);
   const [llmAvailable, setLlmAvailable] = useState(false);
   const [aiState, setAiState] = useState<"idle" | "asking" | "done" | "failed" | "unrelated" | "declined">("idle");
   const [error, setError] = useState("");
@@ -60,12 +61,15 @@ export default function Confirm() {
     setAiState("asking");
     api.mask(intake.text, intake.names)
       .then((r) => api.followup(intake.caseType, intake.mid || null, r.masked_text, true))
-      .then((r) => { setQuestions(r.questions); setAiState(r.source === "llm" ? "done" : r.fallback === "not_dispute" ? "unrelated" : "failed"); })
+      .then((r) => { if (r.source === "llm") setAiQuestions(r.questions); setAiState(r.source === "llm" ? "done" : r.fallback === "not_dispute" ? "unrelated" : "failed"); })
       .catch(() => setAiState("failed"));
   };
   const answer = (q: Question, value: string) =>
     update({ followupAnswers: { ...intake.followupAnswers, [q.id]: { question: q.text, answer: value } } });
   const choosing = llmAvailable && (aiState === "idle" || aiState === "asking");
+  const shown = aiState === "done" ? aiQuestions : questions;
+  // 已經問過 AI 就直接切回去，不用再傳一次
+  const useAi = () => setAiState(aiQuestions.length > 0 ? "done" : "idle");
   const questionHint = aiState === "done"
     ? "這些問題由 AI 依你的案情產生，只用來補充事實，不是法律意見。可以跳過；回答會加在你的描述後面。"
     : "這類案件常缺的細節，是固定的問題，不會傳給 AI。可以跳過；回答會加在你的描述後面。";
@@ -138,13 +142,13 @@ export default function Confirm() {
             </section>
           )}
 
-          {!choosing && questions.length > 0 && (
+          {!choosing && shown.length > 0 && (
             <section className="card" aria-labelledby="q-title">
               <h2 id="q-title">還想問你幾件事</h2>
               {aiState === "failed" && <p className="warn-text" style={{ fontSize: 14 }}>AI 暫時無法使用，先回答下面的一般問題就好。</p>}
               {aiState === "unrelated" && <p className="warn-text" style={{ fontSize: 14 }}>這段描述看起來不像法律糾紛，所以沒有傳給 AI。可以回上一步補充，或先回答下面的一般問題。</p>}
               <p className="hint">{questionHint}</p>
-              {questions.map((q) => (
+              {shown.map((q) => (
                 <div key={q.id} className="qa">
                   <div className="bubble q">
                     <label htmlFor={`q-${q.id}`}>{q.text}</label>
@@ -154,6 +158,14 @@ export default function Confirm() {
                     value={intake.followupAnswers[q.id]?.answer ?? ""} onChange={(e) => answer(q, e.target.value)} />
                 </div>
               ))}
+              {llmAvailable && aiState === "done" &&
+                <button type="button" className="btn secondary small" onClick={() => setAiState("declined")}>改回答一般問題</button>}
+              {llmAvailable && aiState === "declined" &&
+                <button type="button" className="btn secondary small" onClick={useAi}>改請 AI 提問</button>}
+              {llmAvailable && aiState === "failed" &&
+                <button type="button" className="btn secondary small" onClick={useAi}>再試一次 AI</button>}
+              {llmAvailable && (aiState === "done" || aiState === "declined") &&
+                <p className="hint" style={{ fontSize: 13 }}>切換問題時，已經回答的內容會保留，可以在上面的預覽看到。</p>}
             </section>
           )}
 
