@@ -98,7 +98,16 @@ JudgementDigest/
 docker compose up --build
 ```
 
-開 http://localhost:8080 。沒有模型檔（`artifacts/`）時，民事會顯示示例資料，流程照樣走得完。
+開 http://localhost:8080 。8080 被占用時改用別的 port：`JD_PORT=8180 docker compose up --build`。
+
+模型與檢索資料（`artifacts/`）不在 repo 裡，由組內另外分享：
+
+| 情況 | 民事顯示 | 適合 |
+|---|---|---|
+| 只下載 repo | 示例資料（頁面會標示），流程照樣走得完 | 開發前端、後端、跑測試 |
+| 把分享的 `artifacts/` 放在 repo 根目錄 | 真實的模型與判決 | 測試真實結果、部署 |
+
+不用改設定，後端啟動時會自己判斷。
 
 ### 本機開發
 
@@ -121,7 +130,7 @@ cd frontend && npm install && npm run dev     # 前端（另開一個終端機�
 ```bash
 python -m civil.models.service evaluate       # 5 折評估
 python -m civil.models.service train          # → artifacts/civil_winloss_v1/
-python -m retrieval.build                     # → artifacts/retrieval_civil_v1/
+python -m retrieval.build                     # → artifacts/retrieval_civil_v2/（要有 judgments.db，約 35 分鐘）
 ```
 
 爬取與資料處理：
