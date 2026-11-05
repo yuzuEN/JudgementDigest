@@ -69,6 +69,11 @@ class TestGemini(unittest.TestCase):
                 gemini(handler).generate_json("s", "u", {})
             self.assertNotIn("secret-key", str(e.exception))
 
+    def test_error_status_is_never_treated_as_an_answer(self):
+        body = gemini_reply(GOOD).json()
+        with self.assertRaises(llm.LLMError):
+            gemini(lambda r: httpx.Response(503, json=body)).generate_json("s", "u", {})
+
 
 class TestCreateClient(unittest.TestCase):
     def test_not_configured(self):
