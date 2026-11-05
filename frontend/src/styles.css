@@ -253,6 +253,7 @@ details.faq summary { cursor: pointer; font-weight: 500; }
   table.cases td a { display: inline-flex; align-items: center; min-height: 44px; }
   .brand { min-height: 44px; }
   .site-header nav a { display: inline-flex; align-items: center; min-height: 44px; }
+  .site-header .steps a { display: block; min-height: 0; }
   .tab { display: inline-flex; align-items: center; min-height: 44px; }
 }
 
@@ -281,6 +282,7 @@ details.faq summary { cursor: pointer; font-weight: 500; }
   .site-header .container { position: relative; padding-right: 64px; }
   .theme-toggle { position: absolute; top: 12px; right: 16px; margin: 0; }
   .header-right { margin-left: 0; justify-content: flex-start; }
+  .header-link { position: absolute; top: 20px; right: 64px; }
 }
 
 .header-right { display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 8px; margin-left: auto; }

@@ -171,7 +171,7 @@ export default function Intake() {
             <h2 style={{ fontSize: 16 }}>這不是法律意見</h2>
             <p style={{ margin: 0, fontSize: 15 }}>結果是「類似案件如果打到判決，通常怎麼判」的統計參考，不代表你的案件一定會這樣判。和解、撤回的案件沒有判決書，不在資料裡。重要決定請諮詢律師或<a href={LAF_URL}>法律扶助基金會</a>。</p>
           </div>
-          <div className="card"><p className="hint">不上傳文件、不保存你的描述。送出前會遮名並讓你預覽；需要用到健康資料時，會另外請你同意。</p></div>
+          <div className="card"><p className="hint">不上傳文件、不保存你的描述。送出前會遮名並讓你預覽；需要用到敏感個人資料時，會另外請你同意。</p></div>
         </aside>
       </main>
     </Layout>
