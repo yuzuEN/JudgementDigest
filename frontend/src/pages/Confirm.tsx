@@ -16,7 +16,7 @@ export default function Confirm() {
   const [questions, setQuestions] = useState<Question[]>([]);
   const [masking, setMasking] = useState(false);
   const [llmAvailable, setLlmAvailable] = useState(false);
-  const [aiState, setAiState] = useState<"idle" | "asking" | "done" | "failed">("idle");
+  const [aiState, setAiState] = useState<"idle" | "asking" | "done" | "failed" | "declined">("idle");
   const [error, setError] = useState("");
   const [nameInput, setNameInput] = useState("");
   const text = useMemo(() => fullText(intake), [intake]);
@@ -64,6 +64,10 @@ export default function Confirm() {
   };
   const answer = (q: Question, value: string) =>
     update({ followupAnswers: { ...intake.followupAnswers, [q.id]: { question: q.text, answer: value } } });
+  const choosing = llmAvailable && (aiState === "idle" || aiState === "asking");
+  const questionHint = aiState === "done"
+    ? "這些問題由 AI 依你的案情產生，只用來補充事實，不是法律意見。可以跳過；回答會加在你的描述後面。"
+    : "這類案件常缺的細節，是固定的問題，不會傳給 AI。可以跳過；回答會加在你的描述後面。";
   const resultPath = intake.caseType === "criminal" ? "/result/criminal" : "/result/civil";
 
   return (
@@ -120,20 +124,23 @@ export default function Confirm() {
             )}
           </section>
 
-          {llmAvailable && aiState !== "done" && (
+          {choosing && (
             <section className="card" aria-labelledby="ai-title">
-              <h2 id="ai-title">想問得更仔細嗎？（可略過）</h2>
+              <h2 id="ai-title">要補充更多細節嗎？（可略過）</h2>
               <p className="hint">按下按鈕後，上面遮名後的內容（包含健康資料）會傳給 Google Gemini，由 AI 依你的案情提問。請先確認姓名都已遮掉。不按就不會傳。</p>
               {aiState === "asking" ? <Loading>正在請 AI 看還需要補充哪些細節……</Loading> :
-                <button type="button" className="btn secondary" disabled={!ready} onClick={askLlm}>請 AI 幫我看還缺什麼</button>}
-              {aiState === "failed" && <p className="warn-text" style={{ fontSize: 14 }}>AI 暫時無法使用，先回答下面的問題就好。</p>}
+                <div className="actions">
+                  <button type="button" className="btn secondary" disabled={!ready} onClick={askLlm}>請 AI 幫我看還缺什麼</button>
+                  <button type="button" className="btn secondary" onClick={() => setAiState("declined")}>不用 AI，回答一般問題</button>
+                </div>}
             </section>
           )}
 
-          {questions.length > 0 && (
+          {!choosing && questions.length > 0 && (
             <section className="card" aria-labelledby="q-title">
               <h2 id="q-title">還想問你幾件事</h2>
-              <p className="hint">可以跳過；回答會加在你的描述後面，一起遮名後送出。</p>
+              {aiState === "failed" && <p className="warn-text" style={{ fontSize: 14 }}>AI 暫時無法使用，先回答下面的一般問題就好。</p>}
+              <p className="hint">{questionHint}</p>
               {questions.map((q) => (
                 <div key={q.id} className="qa">
                   <div className="bubble q">

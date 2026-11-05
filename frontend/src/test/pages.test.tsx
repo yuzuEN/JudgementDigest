@@ -72,7 +72,8 @@ describe("確認與遮名：AI 追問", () => {
   it("打開頁面時不會把內容傳給 LLM", async () => {
     const sent = setup(() => rulesReply);
     renderAt("/confirm", <Confirm />, "/confirm", { text: "王小明的電話是0912345678" });
-    expect(await screen.findByText("什麼時候發生的？")).toBeInTheDocument();
+    await screen.findByRole("button", { name: AI_BUTTON });
+    expect(screen.queryByText("什麼時候發生的？")).not.toBeInTheDocument();
     expect(sent).toHaveLength(1);
     expect(sent[0]).toMatchObject({ allow_llm: false, text: "王小明的電話是【電話】" });
   });
@@ -81,7 +82,9 @@ describe("確認與遮名：AI 追問", () => {
     setup(() => ({ ...rulesReply, llm_available: false }));
     renderAt("/confirm", <Confirm />, "/confirm", { text: "內容" });
     await screen.findByText("什麼時候發生的？");
+    expect(screen.getByText(/這類案件常缺的細節/)).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: AI_BUTTON })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "不用 AI，回答一般問題" })).not.toBeInTheDocument();
     expect(screen.queryByText(/Google Gemini/)).not.toBeInTheDocument();
   });
 
@@ -107,10 +110,22 @@ describe("確認與遮名：AI 追問", () => {
     await waitFor(() => expect(screen.getByRole("button", { name: AI_BUTTON })).toBeEnabled());
     await user.click(screen.getByRole("button", { name: AI_BUTTON }));
     expect(await screen.findByText("對方怎麼說？")).toBeInTheDocument();
+    expect(screen.getByText(/由 AI 依你的案情產生/)).toBeInTheDocument();
     const toLlm = sent.filter((b) => b.allow_llm);
     expect(toLlm).toHaveLength(1);
     expect(toLlm[0].text).toBe("【姓名】的電話是【電話】");
     expect(screen.queryByRole("button", { name: AI_BUTTON })).not.toBeInTheDocument();
+  });
+
+  it("不用 AI 時顯示一般問題，而且不會傳給 LLM", async () => {
+    const sent = setup(() => rulesReply);
+    const user = userEvent.setup();
+    renderAt("/confirm", <Confirm />, "/confirm", { text: "我骨折住院" });
+    await user.click(await screen.findByRole("button", { name: "不用 AI，回答一般問題" }));
+    expect(screen.getByText("什麼時候發生的？")).toBeInTheDocument();
+    expect(screen.getByText(/不會傳給 AI/)).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: AI_BUTTON })).not.toBeInTheDocument();
+    expect(sent.every((b) => !b.allow_llm)).toBe(true);
   });
 
   it("AI 失敗時說明，並保留固定題庫", async () => {
