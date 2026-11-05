@@ -59,7 +59,7 @@ export default function Home() {
           </section>
 
           <section id="data" className="grid-2">
-            <div className="card"><h2>資料來源</h2><p className="hint">司法院公開的全國地方法院判決。以規則切分段落、擷取事實與判決結果，建立結構化資料集；判決書中的當事人姓名在顯示時會遮掉。</p></div>
+            <div className="card"><h2>資料來源</h2><p className="hint">司法院公開的全國地方法院判決。以規則切分段落、擷取事實與判決結果，建立結構化資料集；判決書中的人名在顯示時會自動遮掉，但可能有遺漏。</p></div>
             <div className="card warn"><h2>這不是法律意見</h2><p style={{ margin: 0 }}>結果是統計參考，不預測你的案件一定會怎麼判。和解、撤回的案件沒有判決書，不在資料裡。重要決定請諮詢律師或<a href={LAF_URL}>法律扶助基金會</a>。</p></div>
           </section>
 
