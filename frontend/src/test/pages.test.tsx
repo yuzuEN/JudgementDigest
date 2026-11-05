@@ -56,6 +56,31 @@ describe("描述案情", () => {
 });
 
 describe("確認與遮名：追問", () => {
+  it("等待追問時顯示載入中，出現問題後消失", async () => {
+    let release = () => {};
+    const gate = new Promise<void>((resolve) => { release = resolve; });
+    const real = mockApi({ "POST /intake/mask": () => ({ masked_text: "內容", spans: [] }) }).spy.getMockImplementation()!;
+    vi.spyOn(globalThis, "fetch").mockImplementation(async (input, init) => {
+      if (String(input).endsWith("/intake/followup")) {
+        await gate;
+        return new Response(JSON.stringify({ questions: [{ id: "a", text: "什麼時候發生的？", why: "時效" }], source: "llm" }),
+          { status: 200, headers: { "Content-Type": "application/json" } });
+      }
+      return real(input, init);
+    });
+    renderAt("/confirm", <Confirm />, "/confirm", { text: "內容" });
+    expect(await screen.findByText(/正在看還需要補充哪些細節/)).toBeInTheDocument();
+    release();
+    expect(await screen.findByText("什麼時候發生的？")).toBeInTheDocument();
+    expect(screen.queryByText(/正在看還需要補充哪些細節/)).not.toBeInTheDocument();
+  });
+
+  it("追問失敗時載入提示也要消失", async () => {
+    mockApi({ "POST /intake/mask": () => ({ masked_text: "內容", spans: [] }), "POST /intake/followup": { status: 500 } });
+    renderAt("/confirm", <Confirm />, "/confirm", { text: "內容" });
+    await waitFor(() => expect(screen.queryByText(/正在看還需要補充哪些細節/)).not.toBeInTheDocument());
+  });
+
   it("送去追問的是遮名後的文字", async () => {
     const seen: string[] = [];
     mockApi({

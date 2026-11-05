@@ -15,6 +15,7 @@ export default function Confirm() {
   const navigate = useNavigate();
   const [questions, setQuestions] = useState<Question[]>([]);
   const [masking, setMasking] = useState(false);
+  const [asking, setAsking] = useState(false);
   const [error, setError] = useState("");
   const [nameInput, setNameInput] = useState("");
   const text = useMemo(() => fullText(intake), [intake]);
@@ -22,11 +23,13 @@ export default function Confirm() {
   useEffect(() => {
     if (!intake.text.trim()) return;
     let stale = false;
+    setAsking(true);
     // 追問可能傳給外部的 LLM，一定要先遮名
     api.mask(intake.text, intake.names)
       .then((r) => api.followup(intake.caseType, intake.mid || null, r.masked_text))
       .then((r) => { if (!stale) setQuestions(r.questions); })
-      .catch(() => { if (!stale) setQuestions([]); });   // 追問失敗不影響後面的流程
+      .catch(() => { if (!stale) setQuestions([]); })   // 追問失敗不影響後面的流程
+      .finally(() => { if (!stale) setAsking(false); });
     return () => { stale = true; };
   }, [intake.caseType, intake.mid, intake.text, intake.names]);
 
@@ -64,6 +67,10 @@ export default function Confirm() {
             <h1 className="page-title">確認內容</h1>
             <p className="lead">補上幾個缺少的細節，並確認哪些資料會被送出。</p>
           </div>
+
+          {asking && questions.length === 0 && (
+            <section className="card"><Loading>正在看還需要補充哪些細節，也可以先確認下面的內容……</Loading></section>
+          )}
 
           {questions.length > 0 && (
             <section className="card" aria-labelledby="q-title">
