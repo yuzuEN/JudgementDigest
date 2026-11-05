@@ -5,7 +5,9 @@ civil/models/service.py 與 retrieval/build.py 的離線測試：用合成的小
 """
 
 import json
+import os
 import sqlite3
+import subprocess
 import sys
 import tempfile
 import unittest
@@ -104,6 +106,26 @@ class TestModel(unittest.TestCase):
         self.assertEqual(groups, {"侵權": ["侵權：交通事故"], "契約": ["契約：買賣"]})
         self.assertEqual(set(meta["options"]["courts"]), {"臺北", "臺中", "高雄"})
         self.assertTrue(0 < model.predict_one(WIN[1], {}) < 1)
+
+
+class TestTrainFromCommandLine(unittest.TestCase):
+    def test_model_trained_with_python_m_can_be_loaded(self):
+        """REGRESSION：python -m 訓練時類別曾被記成 __main__.ServiceModel，後端讀模型檔就失敗。"""
+        d = synthetic(60)
+        with tempfile.TemporaryDirectory() as tmp:
+            base = Path(tmp)
+            pd.DataFrame({"id": d.id, "case_type_category": d.case_type_category, "case_type_mid": d.mid, "y": d.y,
+                          "fold": d.fold, "plaintiff_claim_text": d.text}).to_csv(base / "text_dataset_vt.csv", index=False)
+            pd.DataFrame({"id": d.id, "court_s": d.court_s, "plaintiff_has_lawyer": d.plaintiff_has_lawyer.astype(int),
+                          "defendant_is_corp": d.defendant_is_corp.astype(int)}).to_pickle(base / "fields.pkl")
+            env = {**os.environ, "JD_DATASET_DIR": tmp, "JD_FIELDS_PKL": str(base / "fields.pkl"),
+                   "JD_OUTPUT_DIR": tmp, "JD_ARTIFACTS_DIR": tmp, "PYTHONIOENCODING": "utf-8"}
+            r = subprocess.run([sys.executable, "-m", "civil.models.service", "train", "--version", "vt"], env=env,
+                               cwd=Path(__file__).resolve().parents[1], capture_output=True, text=True, encoding="utf-8")
+            self.assertEqual(r.returncode, 0, r.stderr)
+            model, _ = S.load(S.artifact_dir(base))
+        self.assertEqual(type(model).__module__, "civil.models.service")
+        self.assertTrue(0 < model.predict_one(WIN[0], {}) < 1)
 
 
 class TestRetrievalArtifacts(unittest.TestCase):

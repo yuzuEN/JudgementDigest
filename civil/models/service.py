@@ -208,4 +208,7 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    # 用 python -m 執行時這個檔案是 __main__，直接呼叫 main() 的話，模型檔裡的類別會記成
+    # __main__.ServiceModel，後端載入時找不到。改由正式的模組名稱執行。
+    from civil.models import service
+    service.main()
