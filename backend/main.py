@@ -95,6 +95,10 @@ def __getattr__(name):
     global _app
     if name == "app":
         if _app is None:
-            _app = create_app()
+            try:
+                _app = create_app()
+            except AttributeError as e:
+                # uvicorn 把這裡的 AttributeError 當成「模組裡沒有 app」，真正的原因會被蓋掉
+                raise RuntimeError(f"建立 app 失敗：{e}") from e
         return _app
     raise AttributeError(name)

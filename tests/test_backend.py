@@ -13,6 +13,7 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 from fastapi.testclient import TestClient
+from unittest import mock
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
@@ -92,6 +93,15 @@ class TestWithoutModel(_MockCase):
         build_artifacts(Path(tmp.name))
         client = TestClient(create_app(Settings(artifacts_dir=Path(tmp.name), mode="mock")))
         self.assertEqual(client.get("/api/health").json()["civil"], "mock")
+
+
+class TestStartupErrors(unittest.TestCase):
+    def test_real_cause_is_not_hidden_from_uvicorn(self):
+        """uvicorn 遇到 AttributeError 只會說找不到 app，讀模型檔失敗時要看得到真正的原因。"""
+        import backend.main as main
+        with mock.patch.object(main, "create_app", side_effect=AttributeError("讀不出模型檔")),                 mock.patch.object(main, "_app", None):
+            with self.assertRaisesRegex(RuntimeError, "讀不出模型檔"):
+                main.__getattr__("app")
 
 
 class TestCommonEndpoints(_MockCase):
