@@ -95,6 +95,12 @@ class TestAmountRange(unittest.TestCase):
         self.assertLessEqual(r["amount_high"], 500_000)
         self.assertEqual(r["amount_median"], 275_000)
 
+    def test_buckets_count_every_case(self):
+        r = amount_range([0.1, 0.2, 0.3, 0.5, 0.9, 1.0], 100)
+        self.assertEqual([b["count"] for b in r["buckets"]], [2, 1, 1, 0, 2])
+        self.assertEqual((r["buckets"][0]["low"], r["buckets"][-1]["high"]), (0, 1))
+        self.assertEqual(sum(b["count"] for b in r["buckets"]), r["n_cases"])
+
     def test_too_few_cases(self):
         self.assertIsNone(amount_range([0.5, 0.6, 0.7], 100_000))
 

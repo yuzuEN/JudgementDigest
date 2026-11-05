@@ -6,6 +6,14 @@ export function MockBadge({ show, children = "示例資料：數字與判決都�
   return show ? <span className="badge mock">{children}</span> : null;
 }
 
+/** 欄位名稱旁的 i，開新分頁到說明頁，不會中斷目前的流程。 */
+export function InfoLink({ to, label }: { to: string; label: string }) {
+  return <a className="info-link" href={`/guide#${encodeURIComponent(to)}`} target="_blank" rel="noreferrer"
+    aria-label={`${label}（開新分頁）`} title={label}>i</a>;
+}
+
+export const SIMILARITY_NOTE = "相似度是用字接近的程度（0 到 1），只用來排列結果，不是百分比，也不代表案情或結果相同。";
+
 export function Loading({ children = "載入中……" }: { children?: ReactNode }) {
   return <p role="status" className="hint loading"><span className="spinner" aria-hidden="true" />{children}</p>;
 }

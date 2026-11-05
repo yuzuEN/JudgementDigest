@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import { Link, Navigate } from "react-router-dom";
 import { api } from "../api/client";
 import type { AmountRange, CivilReport, SimilarCase } from "../api/types";
-import { ErrorBox, LAF_URL, Loading, ResultNotes } from "../components/Common";
+import { ErrorBox, InfoLink, LAF_URL, Loading, ResultNotes, SIMILARITY_NOTE } from "../components/Common";
 import { ResultFrame } from "../components/ResultFrame";
 import { money, outcomeLabel, outcomeTone, percent } from "../format";
 import { civilInput, useIntake } from "../state";
@@ -103,6 +103,30 @@ function Probability({ report }: { report: CivilReport }) {
   );
 }
 
+function AmountDetail({ range }: { range: AmountRange }) {
+  const buckets = range.buckets ?? [];
+  if (buckets.length === 0) return null;
+  const most = Math.max(...buckets.map((b) => b.count), 1);
+  const label = (low: number, high: number) => (range.claimed
+    ? `${money(range.claimed * low)}～${money(range.claimed * high)}`
+    : `${percent(low)}～${percent(high)}`);
+  return (
+    <details className="amount-detail">
+      <summary>看各金額範圍有幾件</summary>
+      <ul>
+        {buckets.map((b) => (
+          <li key={b.low}>
+            <span>{label(b.low, b.high)}</span>
+            <span className="bar soft" aria-hidden="true"><span style={{ width: `${(b.count / most) * 100}%` }} /></span>
+            <span className="count">{b.count} 件</span>
+          </li>
+        ))}
+      </ul>
+      <p className="hint" style={{ fontSize: 13 }}>相似的勝訴判決判准了請求金額的幾成，換算成你的金額。不是每件都和你的案情一樣。</p>
+    </details>
+  );
+}
+
 function Amount({ range }: { range: AmountRange | null }) {
   if (!range) {
     return (
@@ -119,6 +143,7 @@ function Amount({ range }: { range: AmountRange | null }) {
         <h2 id="a-title">如果勝訴，可能拿到請求金額的</h2>
         <span className="mid-number">{percent(range.ratio_low)}～{percent(range.ratio_high)}</span>
         <p className="hint" style={{ fontSize: 15 }}>{pct}。回上一步填寫想請求的金額，就會換算成金額。</p>
+        <AmountDetail range={range} />
       </section>
     );
   }
@@ -136,6 +161,7 @@ function Amount({ range }: { range: AmountRange | null }) {
         <span className="tick" style={{ right: 0 }}>請求 {money(range.claimed)}</span>
       </div>
       <p className="hint" style={{ fontSize: 15 }}>{pct}（依 {range.n_cases} 件相似的勝訴判決）。金額只能給範圍，不能給單一數字。</p>
+      <AmountDetail range={range} />
     </section>
   );
 }
@@ -150,7 +176,7 @@ function SimilarCases({ cases, onlyWin, setOnlyWin }: { cases: SimilarCase[]; on
       </div>
       <div className="table-wrap">
         <table className="cases">
-          <thead><tr><th scope="col">字號</th><th scope="col">結果</th><th scope="col">判准／請求</th><th scope="col">相似度</th><th scope="col"><span className="sr-only">動作</span></th></tr></thead>
+          <thead><tr><th scope="col">字號</th><th scope="col">結果</th><th scope="col">判准／請求</th><th scope="col">相似度 <InfoLink to="相似度" label="相似度說明" /></th><th scope="col"><span className="sr-only">動作</span></th></tr></thead>
           <tbody>
             {shown.map((c) => (
               <tr key={c.case_id}>
@@ -165,6 +191,7 @@ function SimilarCases({ cases, onlyWin, setOnlyWin }: { cases: SimilarCase[]; on
         </table>
       </div>
       {shown.length === 0 && <p className="hint">沒有符合的判決。</p>}
+      {shown.length > 0 && <p className="hint">{SIMILARITY_NOTE}</p>}
       {shown.some((c) => c.default_judgment) && <p className="hint">「被告未到庭」的判決沒有經過雙方攻防，原告幾乎都會贏，不代表你的案件也會這樣。上面的金額範圍、證據與抗辯統計不包含這些判決。</p>}
     </section>
   );

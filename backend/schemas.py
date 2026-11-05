@@ -99,6 +99,12 @@ class CivilPrediction(BaseModel):
     mock: bool
 
 
+class AmountBucket(BaseModel):
+    low: float
+    high: float
+    count: int
+
+
 class AmountRange(BaseModel):
     n_cases: int
     ratio_low: float
@@ -109,6 +115,7 @@ class AmountRange(BaseModel):
     amount_low: Optional[int] = None
     amount_median: Optional[int] = None
     amount_high: Optional[int] = None
+    buckets: List[AmountBucket] = Field(default_factory=list, description="獲償比例每兩成一組的件數")
 
 
 class SimilarCase(BaseModel):

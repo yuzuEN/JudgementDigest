@@ -71,6 +71,7 @@ export interface AmountRange {
   amount_low?: number | null;
   amount_median?: number | null;
   amount_high?: number | null;
+  buckets?: { low: number; high: number; count: number }[];
 }
 
 export interface SimilarCase {

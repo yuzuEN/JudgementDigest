@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { api } from "../api/client";
 import type { CaseType, DefendantType, Options } from "../api/types";
-import { ErrorBox, LAF_URL } from "../components/Common";
+import { InfoLink, ErrorBox, LAF_URL } from "../components/Common";
 import { Layout } from "../components/Layout";
 import { parseAmount } from "../format";
 import { useIntake } from "../state";
@@ -87,8 +87,11 @@ export default function Intake() {
               </div>
               {error && <ErrorBox message={`選項載入失敗：${error}`} onRetry={load} />}
               <div className="form-grid">
-                <label className="field">糾紛類型
-                  <select value={intake.mid} onChange={(e) => update({ mid: e.target.value })}>
+                <div className="field">
+                  <span className="label-row"><label htmlFor="mid">糾紛類型</label>
+                    <InfoLink to={intake.mid || "dispute-types"} label="糾紛類型說明" />
+                  </span>
+                  <select id="mid" value={intake.mid} onChange={(e) => update({ mid: e.target.value })}>
                     <option value="">不確定</option>
                     {options?.mid_groups.map((g) => (
                       <optgroup key={g.category} label={g.category}>
@@ -96,7 +99,7 @@ export default function Intake() {
                       </optgroup>
                     ))}
                   </select>
-                </label>
+                </div>
                 <label className="field">想請求的金額（新臺幣）
                   <input type="text" inputMode="numeric" placeholder="例如 500000 或 50萬" value={intake.claimedAmount}
                     aria-invalid={amountInvalid} onChange={(e) => update({ claimedAmount: e.target.value })} />
@@ -167,7 +170,7 @@ export default function Intake() {
             <h2 style={{ fontSize: 16 }}>這不是法律意見</h2>
             <p style={{ margin: 0, fontSize: 15 }}>結果是「類似案件如果打到判決，通常怎麼判」的統計參考，不代表你的案件一定會這樣判。和解、撤回的案件沒有判決書，不在資料裡。重要決定請諮詢律師或<a href={LAF_URL}>法律扶助基金會</a>。</p>
           </div>
-          <div className="card"><p className="hint">不上傳文件、不保存你的描述。送出前會遮名並讓你預覽；需要用到健康資料時，會另外請你同意。</p></div>
+          <div className="card"><p className="hint">不上傳文件、不保存你的描述。送出前會遮名並讓你預覽；需要用到敏感個人資料時，會另外請你同意。</p></div>
         </aside>
       </main>
     </Layout>

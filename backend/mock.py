@@ -44,7 +44,7 @@ def civil_report(text: str, claimed: int = None, user_evidence=()) -> Dict:
     defense = {k: (label, desc) for k, label, desc, _ in DEFENSES}
     amount = None
     if claimed:
-        amount = {"n_cases": 30, "ratio_low": 0.36, "ratio_median": 0.6, "ratio_high": 0.84, "coverage": 0.8,
+        amount = {"n_cases": 30, "ratio_low": 0.36, "ratio_median": 0.6, "ratio_high": 0.84, "coverage": 0.8, "buckets": [{"low": round(i * 0.2, 1), "high": round(i * 0.2 + 0.2, 1), "count": c} for i, c in enumerate((2, 6, 11, 8, 3))],
                   "claimed": claimed, "amount_low": round(claimed * 0.36), "amount_median": round(claimed * 0.6),
                   "amount_high": round(claimed * 0.84)}
     return {

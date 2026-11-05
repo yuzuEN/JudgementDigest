@@ -115,6 +115,14 @@ def defense_table(neighbor_defenses: Sequence[Iterable[str]], top: int = 3) -> L
     return sorted(rows, key=lambda r: -r["share"])[:top]
 
 
+def amount_buckets(ratios: np.ndarray, width: float = 0.2) -> List[Dict]:
+    """獲償比例每兩成一組的件數，例如請求金額的 20%～40% 有幾件。"""
+    edges = np.arange(0, 1 + width / 2, width)
+    counts = [int(((ratios > a) & (ratios <= b)).sum()) for a, b in zip(edges[:-1], edges[1:])]
+    return [{"low": round(float(a), 2), "high": round(float(b), 2), "count": c}
+            for a, b, c in zip(edges[:-1], edges[1:], counts)]
+
+
 def amount_range(ratios: Sequence[float], claimed: Optional[float], low: float = 0.1, high: float = 0.9,
                  min_cases: int = 5) -> Optional[Dict]:
     """
@@ -126,7 +134,7 @@ def amount_range(ratios: Sequence[float], claimed: Optional[float], low: float =
         return None
     lo, mid, hi = np.quantile(r, [low, 0.5, high])
     out = {"n_cases": int(len(r)), "ratio_low": float(lo), "ratio_median": float(mid), "ratio_high": float(hi),
-           "coverage": high - low}
+           "coverage": high - low, "buckets": amount_buckets(r)}
     if claimed and claimed > 0:
         out.update(amount_low=round(claimed * lo), amount_median=round(claimed * mid),
                    amount_high=round(claimed * hi), claimed=round(claimed))
