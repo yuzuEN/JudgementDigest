@@ -1,7 +1,29 @@
-import type { ReactNode } from "react";
+import { useEffect, type ReactNode } from "react";
 import { Link } from "react-router-dom";
 import { DownloadIcon, MockBadge } from "./Common";
 import { Layout } from "./Layout";
+
+/** 列印或存成 PDF 時展開所有摺疊內容，印完恢復。按瀏覽器的列印也有效。 */
+function useOpenDetailsForPrint() {
+  useEffect(() => {
+    let opened: HTMLDetailsElement[] = [];
+    const open = () => {
+      const closed = Array.from(document.querySelectorAll<HTMLDetailsElement>("details:not([open])"));
+      closed.forEach((d) => { d.open = true; });
+      opened.push(...closed);   // 事件可能連續觸發兩次，不能蓋掉前一次的清單
+    };
+    const restore = () => {
+      opened.forEach((d) => { d.open = false; });
+      opened = [];
+    };
+    window.addEventListener("beforeprint", open);
+    window.addEventListener("afterprint", restore);
+    return () => {
+      window.removeEventListener("beforeprint", open);
+      window.removeEventListener("afterprint", restore);
+    };
+  }, []);
+}
 
 /** 民事、刑事結果頁共用的外框：分頁、標題、下載 PDF，以及只在列印時出現的報告抬頭。 */
 export function ResultFrame({ active, title, lead, mock, maskedText, children }: {
@@ -12,6 +34,7 @@ export function ResultFrame({ active, title, lead, mock, maskedText, children }:
   maskedText: string;
   children: ReactNode;
 }) {
+  useOpenDetailsForPrint();
   return (
     <Layout step={3}>
       <main className="page stack">

@@ -72,6 +72,35 @@ describe("頁首的步驟", () => {
   });
 });
 
+describe("列印", () => {
+  const withBuckets = {
+    ...CIVIL_REPORT,
+    amount_range: { ...CIVIL_REPORT.amount_range!, buckets: [{ low: 0, high: 0.2, count: 3 }] },
+  };
+
+  it("列印時展開金額明細，印完恢復", async () => {
+    mockApi({ "POST /civil/report": () => withBuckets });
+    renderAt("/result/civil", <CivilResult />, "/result/civil", { text: "內容", maskedText: "內容" });
+    const details = (await screen.findByText("看各金額範圍有幾件")).closest("details") as HTMLDetailsElement;
+    expect(details.open).toBe(false);
+    window.dispatchEvent(new Event("beforeprint"));
+    window.dispatchEvent(new Event("beforeprint"));   // 有些瀏覽器會觸發兩次
+    expect(details.open).toBe(true);
+    window.dispatchEvent(new Event("afterprint"));
+    expect(details.open).toBe(false);
+  });
+
+  it("使用者自己打開的明細，印完不會被關掉", async () => {
+    mockApi({ "POST /civil/report": () => withBuckets });
+    renderAt("/result/civil", <CivilResult />, "/result/civil", { text: "內容", maskedText: "內容" });
+    const details = (await screen.findByText("看各金額範圍有幾件")).closest("details") as HTMLDetailsElement;
+    details.open = true;
+    window.dispatchEvent(new Event("beforeprint"));
+    window.dispatchEvent(new Event("afterprint"));
+    expect(details.open).toBe(true);
+  });
+});
+
 describe("相似度說明", () => {
   it("表格旁有 i 和文字說明，不會讓人以為是百分比", async () => {
     mockApi({ "POST /civil/report": () => CIVIL_REPORT });
@@ -428,7 +457,8 @@ describe("民事結果", () => {
     const table = await screen.findByRole("table");
     expect(within(table).getAllByRole("row")).toHaveLength(3);
     await user.click(screen.getByLabelText("只看原告勝訴的"));
-    expect(within(table).getAllByRole("row")).toHaveLength(2);
+    // 畫面上收起來，但還留在頁面上，列印時才印得出來
+    expect(table.querySelectorAll("tbody tr.screen-hidden")).toHaveLength(1);
   });
 
   it("一造辯論的判決標示被告未到庭，並說明不計入統計", async () => {
@@ -493,7 +523,8 @@ describe("刑事結果", () => {
     expect(await screen.findByRole("heading", { name: "刑期範圍：過失傷害罪" })).toBeInTheDocument();
     expect(screen.getByText(/刑事組開發中/)).toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: /肇事逃逸罪/ }));
-    expect(screen.getByRole("heading", { name: "刑期範圍：肇事逃逸罪" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "刑期範圍：肇事逃逸罪" }).closest("section")).not.toHaveClass("screen-hidden");
+    expect(screen.getByRole("heading", { name: "刑期範圍：過失傷害罪" }).closest("section")).toHaveClass("screen-hidden");
     expect(screen.getByText("98%")).toBeInTheDocument();
   });
 });
