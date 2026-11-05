@@ -15,23 +15,23 @@ export default function Confirm() {
   const navigate = useNavigate();
   const [questions, setQuestions] = useState<Question[]>([]);
   const [masking, setMasking] = useState(false);
-  const [asking, setAsking] = useState(false);
+  const [llmAvailable, setLlmAvailable] = useState(false);
+  const [aiState, setAiState] = useState<"idle" | "asking" | "done" | "failed">("idle");
   const [error, setError] = useState("");
   const [nameInput, setNameInput] = useState("");
   const text = useMemo(() => fullText(intake), [intake]);
 
+  // 打開頁面時只用固定題庫，文字不離開伺服器。傳給 LLM 要等使用者加好姓名、同意之後自己按按鈕（askLlm）
   useEffect(() => {
     if (!intake.text.trim()) return;
     let stale = false;
-    setAsking(true);
-    // 追問可能傳給外部的 LLM，一定要先遮名
     api.mask(intake.text, intake.names)
       .then((r) => api.followup(intake.caseType, intake.mid || null, r.masked_text))
-      .then((r) => { if (!stale) setQuestions(r.questions); })
-      .catch(() => { if (!stale) setQuestions([]); })   // 追問失敗不影響後面的流程
-      .finally(() => { if (!stale) setAsking(false); });
+      .then((r) => { if (!stale) { setQuestions(r.questions); setLlmAvailable(Boolean(r.llm_available)); } })
+      .catch(() => { if (!stale) setQuestions([]); });   // 追問失敗不影響後面的流程
     return () => { stale = true; };
-  }, [intake.caseType, intake.mid, intake.text, intake.names]);
+    // 不放 names：加名字不用重問，也不能蓋掉 AI 問過的問題
+  }, [intake.caseType, intake.mid, intake.text]);
 
   useEffect(() => {
     if (!text) return;
@@ -55,6 +55,13 @@ export default function Confirm() {
     if (n.length >= 2 && !intake.names.includes(n)) update({ names: [...intake.names, n] });
     setNameInput("");
   };
+  const askLlm = () => {
+    setAiState("asking");
+    api.mask(intake.text, intake.names)
+      .then((r) => api.followup(intake.caseType, intake.mid || null, r.masked_text, true))
+      .then((r) => { setQuestions(r.questions); setAiState(r.source === "llm" ? "done" : "failed"); })
+      .catch(() => setAiState("failed"));
+  };
   const answer = (q: Question, value: string) =>
     update({ followupAnswers: { ...intake.followupAnswers, [q.id]: { question: q.text, answer: value } } });
   const resultPath = intake.caseType === "criminal" ? "/result/criminal" : "/result/civil";
@@ -67,27 +74,6 @@ export default function Confirm() {
             <h1 className="page-title">確認內容</h1>
             <p className="lead">補上幾個缺少的細節，並確認哪些資料會被送出。</p>
           </div>
-
-          {asking && questions.length === 0 && (
-            <section className="card"><Loading>正在看還需要補充哪些細節，也可以先確認下面的內容……</Loading></section>
-          )}
-
-          {questions.length > 0 && (
-            <section className="card" aria-labelledby="q-title">
-              <h2 id="q-title">還想問你幾件事</h2>
-              <p className="hint">可以跳過；回答會加在你的描述後面，一起遮名後送出。</p>
-              {questions.map((q) => (
-                <div key={q.id} className="qa">
-                  <div className="bubble q">
-                    <label htmlFor={`q-${q.id}`}>{q.text}</label>
-                    <div className="hint" style={{ fontSize: 13 }}>{q.why}</div>
-                  </div>
-                  <input id={`q-${q.id}`} type="text" placeholder="你的回答（可留空）"
-                    value={intake.followupAnswers[q.id]?.answer ?? ""} onChange={(e) => answer(q, e.target.value)} />
-                </div>
-              ))}
-            </section>
-          )}
 
           <section className="card" aria-labelledby="mask-title">
             <h2 id="mask-title">會送出的內容（已遮名）</h2>
@@ -123,7 +109,7 @@ export default function Confirm() {
             <ul className="plain" style={{ fontSize: 15 }}>
               <li>蒐集者：JudgementDigest 專題團隊；目的：產生類案判決參考結果。</li>
               <li>送出的是上面遮名後的內容；本平台不保存你的描述，結果只顯示在你的瀏覽器裡。</li>
-              <li>追問功能之後改用 LLM 時，遮名後的內容會傳給付費 LLM API 處理（依其政策保留、不用於訓練），屆時會另外說明。</li>
+              {llmAvailable && <li>只有在你按下「請 AI 幫我看還缺什麼」時，遮名後的內容才會傳給 Google Gemini 付費 API，不用於改善 Google 的產品。</li>}
               <li>你可以不提供健康相關資料，只是參考結果可能比較不準。</li>
             </ul>
             {health && (
@@ -133,6 +119,33 @@ export default function Confirm() {
               </label>
             )}
           </section>
+
+          {llmAvailable && aiState !== "done" && (
+            <section className="card" aria-labelledby="ai-title">
+              <h2 id="ai-title">想問得更仔細嗎？（可略過）</h2>
+              <p className="hint">按下按鈕後，上面遮名後的內容（包含健康資料）會傳給 Google Gemini，由 AI 依你的案情提問。請先確認姓名都已遮掉。不按就不會傳。</p>
+              {aiState === "asking" ? <Loading>正在請 AI 看還需要補充哪些細節……</Loading> :
+                <button type="button" className="btn secondary" disabled={!ready} onClick={askLlm}>請 AI 幫我看還缺什麼</button>}
+              {aiState === "failed" && <p className="warn-text" style={{ fontSize: 14 }}>AI 暫時無法使用，先回答下面的問題就好。</p>}
+            </section>
+          )}
+
+          {questions.length > 0 && (
+            <section className="card" aria-labelledby="q-title">
+              <h2 id="q-title">還想問你幾件事</h2>
+              <p className="hint">可以跳過；回答會加在你的描述後面，一起遮名後送出。</p>
+              {questions.map((q) => (
+                <div key={q.id} className="qa">
+                  <div className="bubble q">
+                    <label htmlFor={`q-${q.id}`}>{q.text}</label>
+                    <div className="hint" style={{ fontSize: 13 }}>{q.why}</div>
+                  </div>
+                  <input id={`q-${q.id}`} type="text" placeholder="你的回答（可留空）"
+                    value={intake.followupAnswers[q.id]?.answer ?? ""} onChange={(e) => answer(q, e.target.value)} />
+                </div>
+              ))}
+            </section>
+          )}
 
           <div className="actions">
             <button type="button" className="btn" disabled={!ready} onClick={() => navigate(resultPath)}>看參考結果</button>

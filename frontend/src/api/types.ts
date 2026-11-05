@@ -44,6 +44,7 @@ export interface Question {
 export interface FollowupResponse {
   questions: Question[];
   source: "rules" | "llm";
+  llm_available?: boolean;
 }
 
 export interface CivilInput {

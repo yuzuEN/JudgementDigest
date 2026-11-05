@@ -123,8 +123,18 @@ class TestEndpoint(unittest.TestCase):
         with mock.patch("backend.main.llm.create_client", return_value=fake):
             return TestClient(create_app(Settings(artifacts_dir=Path(tmp.name), llm_provider=provider)))
 
-    def ask(self, client, text=DISPUTE):
-        return client.post("/api/intake/followup", json={"case_type": "civil", "mid": "民間借貸", "text": text}).json()
+    def ask(self, client, text=DISPUTE, allow_llm=True):
+        return client.post("/api/intake/followup", json={"case_type": "civil", "mid": "民間借貸", "text": text,
+                                                         "allow_llm": allow_llm}).json()
+
+    def test_nothing_leaves_without_explicit_permission(self):
+        fake = FakeClient(GOOD)
+        c = self.client(fake)
+        r = self.ask(c, allow_llm=False)
+        self.assertEqual((r["source"], r["llm_available"]), ("rules", True))
+        r = c.post("/api/intake/followup", json={"case_type": "civil", "text": DISPUTE}).json()
+        self.assertEqual(r["source"], "rules", "沒有寫 allow_llm 也不能傳")
+        self.assertEqual(fake.sent, [])
 
     def test_llm_used_when_configured(self):
         c = self.client(FakeClient(GOOD))
@@ -149,7 +159,8 @@ class TestEndpoint(unittest.TestCase):
         tmp = tempfile.TemporaryDirectory()
         self.addCleanup(tmp.cleanup)
         c = TestClient(create_app(Settings(artifacts_dir=Path(tmp.name))))
-        self.assertEqual(self.ask(c)["source"], "rules")
+        r = self.ask(c)
+        self.assertEqual((r["source"], r["llm_available"]), ("rules", False))
         self.assertEqual(c.get("/api/health").json()["followup"], "rules")
 
 

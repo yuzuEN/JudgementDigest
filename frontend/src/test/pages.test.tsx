@@ -55,40 +55,73 @@ describe("描述案情", () => {
   });
 });
 
-describe("確認與遮名：追問", () => {
-  it("等待追問時顯示載入中，出現問題後消失", async () => {
-    let release = () => {};
-    const gate = new Promise<void>((resolve) => { release = resolve; });
-    const real = mockApi({ "POST /intake/mask": () => ({ masked_text: "內容", spans: [] }) }).spy.getMockImplementation()!;
-    vi.spyOn(globalThis, "fetch").mockImplementation(async (input, init) => {
-      if (String(input).endsWith("/intake/followup")) {
-        await gate;
-        return new Response(JSON.stringify({ questions: [{ id: "a", text: "什麼時候發生的？", why: "時效" }], source: "llm" }),
-          { status: 200, headers: { "Content-Type": "application/json" } });
-      }
-      return real(input, init);
-    });
-    renderAt("/confirm", <Confirm />, "/confirm", { text: "內容" });
-    expect(await screen.findByText(/正在看還需要補充哪些細節/)).toBeInTheDocument();
-    release();
-    expect(await screen.findByText("什麼時候發生的？")).toBeInTheDocument();
-    expect(screen.queryByText(/正在看還需要補充哪些細節/)).not.toBeInTheDocument();
-  });
-
-  it("追問失敗時載入提示也要消失", async () => {
-    mockApi({ "POST /intake/mask": () => ({ masked_text: "內容", spans: [] }), "POST /intake/followup": { status: 500 } });
-    renderAt("/confirm", <Confirm />, "/confirm", { text: "內容" });
-    await waitFor(() => expect(screen.queryByText(/正在看還需要補充哪些細節/)).not.toBeInTheDocument());
-  });
-
-  it("送去追問的是遮名後的文字", async () => {
-    const seen: string[] = [];
+describe("確認與遮名：AI 追問", () => {
+  const AI_BUTTON = "請 AI 幫我看還缺什麼";
+  type Body = { text: string; allow_llm: boolean };
+  const setup = (reply: (b: Body) => unknown) => {
+    const sent: Body[] = [];
     mockApi({
-      "POST /intake/mask": () => ({ masked_text: "我的電話是【電話】", spans: [] }),
-      "POST /intake/followup": (body: { text: string }) => { seen.push(body.text); return { questions: [], source: "rules" }; },
+      "POST /intake/mask": (b: { text: string; names: string[] }) => ({ masked_text: b.names.reduce((t, n) => t.split(n).join("【姓名】"), b.text.replace("0912345678", "【電話】")), spans: [] }),
+      "POST /intake/followup": (b: Body) => { sent.push(b); return reply(b); },
     });
-    renderAt("/confirm", <Confirm />, "/confirm", { text: "我的電話是0912345678" });
-    await waitFor(() => expect(seen).toEqual(["我的電話是【電話】"]));
+    return sent;
+  };
+  const rulesReply = { questions: [{ id: "when", text: "什麼時候發生的？", why: "時效" }], source: "rules", llm_available: true };
+  const aiReply = { questions: [{ id: "llm1", text: "對方怎麼說？", why: "爭點" }], source: "llm", llm_available: true };
+
+  it("打開頁面時不會把內容傳給 LLM", async () => {
+    const sent = setup(() => rulesReply);
+    renderAt("/confirm", <Confirm />, "/confirm", { text: "王小明的電話是0912345678" });
+    expect(await screen.findByText("什麼時候發生的？")).toBeInTheDocument();
+    expect(sent).toHaveLength(1);
+    expect(sent[0]).toMatchObject({ allow_llm: false, text: "王小明的電話是【電話】" });
+  });
+
+  it("沒有設定 LLM 時不顯示按鈕", async () => {
+    setup(() => ({ ...rulesReply, llm_available: false }));
+    renderAt("/confirm", <Confirm />, "/confirm", { text: "內容" });
+    await screen.findByText("什麼時候發生的？");
+    expect(screen.queryByRole("button", { name: AI_BUTTON })).not.toBeInTheDocument();
+    expect(screen.queryByText(/Google Gemini/)).not.toBeInTheDocument();
+  });
+
+  it("健康資料沒有同意前不能傳給 LLM", async () => {
+    setup(() => rulesReply);
+    const user = userEvent.setup();
+    renderAt("/confirm", <Confirm />, "/confirm", { text: "我骨折住院" });
+    const button = await screen.findByRole("button", { name: AI_BUTTON });
+    await screen.findByText("我骨折住院");
+    expect(button).toBeDisabled();
+    await user.click(screen.getByRole("checkbox", { name: /我同意/ }));
+    await waitFor(() => expect(button).toBeEnabled());
+  });
+
+  it("按下按鈕才傳，而且加入的姓名已經遮掉", async () => {
+    const sent = setup((b) => (b.allow_llm ? aiReply : rulesReply));
+    const user = userEvent.setup();
+    renderAt("/confirm", <Confirm />, "/confirm", { text: "王小明的電話是0912345678" });
+    await screen.findByRole("button", { name: AI_BUTTON });
+    await user.type(screen.getByPlaceholderText("例如：王小明"), "王小明");
+    await user.click(screen.getByRole("button", { name: "加入" }));
+    await screen.findByText("【姓名】");
+    await waitFor(() => expect(screen.getByRole("button", { name: AI_BUTTON })).toBeEnabled());
+    await user.click(screen.getByRole("button", { name: AI_BUTTON }));
+    expect(await screen.findByText("對方怎麼說？")).toBeInTheDocument();
+    const toLlm = sent.filter((b) => b.allow_llm);
+    expect(toLlm).toHaveLength(1);
+    expect(toLlm[0].text).toBe("【姓名】的電話是【電話】");
+    expect(screen.queryByRole("button", { name: AI_BUTTON })).not.toBeInTheDocument();
+  });
+
+  it("AI 失敗時說明，並保留固定題庫", async () => {
+    setup(() => rulesReply);
+    const user = userEvent.setup();
+    renderAt("/confirm", <Confirm />, "/confirm", { text: "內容" });
+    const button = await screen.findByRole("button", { name: AI_BUTTON });
+    await waitFor(() => expect(button).toBeEnabled());
+    await user.click(button);
+    expect(await screen.findByText(/AI 暫時無法使用/)).toBeInTheDocument();
+    expect(screen.getByText("什麼時候發生的？")).toBeInTheDocument();
   });
 });
 

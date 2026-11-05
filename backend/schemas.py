@@ -58,6 +58,7 @@ class FollowupRequest(BaseModel):
     case_type: CaseType = "civil"
     mid: Optional[str] = None
     text: str = Field(default="", max_length=20000)
+    allow_llm: bool = Field(default=False, description="使用者看過說明並按下按鈕才是 true；預設不傳給外部服務")
 
 
 class Question(BaseModel):
@@ -69,6 +70,7 @@ class Question(BaseModel):
 class FollowupResponse(BaseModel):
     questions: List[Question]
     source: Literal["rules", "llm"]
+    llm_available: bool = False
 
 
 class CivilInput(BaseModel):

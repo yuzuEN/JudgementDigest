@@ -52,13 +52,19 @@ def create_app(settings: Optional[Settings] = None) -> FastAPI:
 
     @api.post("/intake/followup", response_model=schemas.FollowupResponse)
     def ask_followup(req: schemas.FollowupRequest):
-        """追問描述裡缺少的事實。有設定 LLM 就用 LLM，失敗或內容不像法律糾紛時用固定題庫。"""
-        if llm_client and looks_like_dispute(req.text):
+        """
+        追問描述裡缺少的事實。預設用固定題庫，文字不離開伺服器。
+        只有 allow_llm（使用者加好姓名、同意之後自己按按鈕）才傳給 LLM；失敗或內容不像法律糾紛時退回固定題庫。
+        """
+        available = llm_client is not None
+        if req.allow_llm and available and looks_like_dispute(req.text):
             try:
-                return {"questions": followup_questions(llm_client, req.case_type, req.mid, req.text), "source": "llm"}
+                return {"questions": followup_questions(llm_client, req.case_type, req.mid, req.text), "source": "llm",
+                        "llm_available": True}
             except llm.LLMError as e:
                 logger.warning("LLM 追問失敗，改用固定題庫：%s", e)
-        return {"questions": followup.questions(req.case_type, req.mid, req.text), "source": "rules"}
+        return {"questions": followup.questions(req.case_type, req.mid, req.text), "source": "rules",
+                "llm_available": available}
 
     @api.post("/civil/predict", response_model=schemas.CivilPrediction)
     def civil_predict(req: schemas.CivilInput):
