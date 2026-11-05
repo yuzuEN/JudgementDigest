@@ -24,6 +24,7 @@ describe("描述案情", () => {
     expect(await screen.findByRole("option", { name: "侵權：交通事故" })).toBeInTheDocument();
     expect(screen.getByRole("option", { name: "臺北地方法院" })).toBeInTheDocument();
     expect(screen.getByLabelText("診斷證明、病歷")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /被警察、檢察官調查，或想告對方犯罪/ })).toBeInTheDocument();
 
     await user.click(screen.getByRole("button", { name: /刑事/ }));
     expect(screen.getByRole("button", { name: /刑事/ })).toHaveAttribute("aria-pressed", "true");

@@ -12,7 +12,7 @@ const RECOMMENDED = 300;
 
 const CASE_TYPES: { id: CaseType; label: string; hint: string }[] = [
   { id: "civil", label: "民事", hint: "要求賠償、還錢、履行契約" },
-  { id: "criminal", label: "刑事", hint: "被告、提告、可能觸法" },
+  { id: "criminal", label: "刑事", hint: "被警察、檢察官調查，或想告對方犯罪" },
   { id: "unsure", label: "不確定", hint: "由系統幫你判斷，兩種都查" },
 ];
 
