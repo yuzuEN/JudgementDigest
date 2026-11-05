@@ -59,7 +59,9 @@ class TestExpandedRow(unittest.TestCase):
             self.assertEqual((case["default_judgment"], case["in_stats"]), (1, 0))
 
     def test_without_real_defense_not_in_statistics(self):
-        for defense in ("", "被告未於言詞辯論期日到場，亦未提出書狀作何聲明或陳述。", "被告答辯。"):
+        absent = "被告經合法通知，未於言詞辯論期日到場，亦未提出任何書狀作何聲明或陳述，本院無從審酌其答辯內容。"
+        self.assertGreaterEqual(len(absent), 30, "要比字數門檻長，才測得到「未到場」的判斷")
+        for defense in ("", absent, "被告答辯。"):
             case, _ = expanded_row(source(), derived(defendant_defense_text=defense))
             self.assertEqual((case["default_judgment"], case["in_stats"]), (0, 0), defense)
 

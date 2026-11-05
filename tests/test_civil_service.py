@@ -12,6 +12,7 @@ import sys
 import tempfile
 import unittest
 from pathlib import Path
+from unittest import mock
 
 import numpy as np
 import pandas as pd
@@ -19,7 +20,7 @@ import pandas as pd
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from civil.models import service as S  # noqa: E402
-from retrieval.build import provenance, write_artifacts  # noqa: E402
+from retrieval.build import build_civil, provenance, write_artifacts  # noqa: E402
 from retrieval.engine import TfidfIndex  # noqa: E402
 
 WIN = ["被告駕車闖紅燈撞傷原告，原告受有骨折並住院治療，提出診斷證明為證",
@@ -162,6 +163,21 @@ class TestRetrievalArtifacts(unittest.TestCase):
 
 
 class TestProvenance(unittest.TestCase):
+    def test_build_writes_provenance_into_meta(self):
+        d = synthetic(60)
+        corpus = pd.DataFrame({"id": d.id, "case_number": "第 1 號", "court": "臺北", "year": "2024",
+                               "case_type_category": "侵權", "case_type_mid": d.mid, "outcome": "勝訴", "y": 1,
+                               "plaintiff_claim_text": d.text, "claimed_amount": 1, "awarded_amount": 1,
+                               "grant_ratio": 1.0, "default_judgment": 0, "in_stats": 1})
+        sections = pd.DataFrame({"id": d.id, "plaintiff_claim_text": "", "defendant_defense_text": "",
+                                 "court_reasoning_text": "", "plaintiff": "", "defendant": "",
+                                 "plaintiff_agent": "", "defendant_agent": ""})
+        with tempfile.TemporaryDirectory() as tmp,                 mock.patch("retrieval.build.load_expanded", lambda: (corpus, sections)),                 mock.patch("retrieval.build.provenance", lambda db: {"rule_version": "9.9.9"}),                 mock.patch("builtins.print"):
+            out = build_civil(Path(tmp) / "out")
+            meta = json.loads((out / "meta.json").read_text(encoding="utf-8"))
+        self.assertEqual(meta["rule_version"], "9.9.9")
+        self.assertEqual((meta["n_cases"], meta["n_stats"], meta["n_default"]), (60, 60, 0))
+
     def test_records_where_the_data_came_from(self):
         with tempfile.TemporaryDirectory() as tmp:
             db = Path(tmp) / "judgments.db"
