@@ -6,7 +6,7 @@
 """
 import json
 import sqlite3
-import threading
+from contextlib import closing
 from pathlib import Path
 from typing import Dict, List, Optional
 
@@ -30,7 +30,6 @@ class CivilService:
     def __init__(self, artifacts_dir: Path, force_mock: bool = False):
         self.model = self.meta = self.index = None
         self.db_path: Optional[Path] = None
-        self._local = threading.local()
         if force_mock:
             return
         model_dir = model_service.artifact_dir(artifacts_dir)
@@ -39,9 +38,7 @@ class CivilService:
             self.model, self.meta = model_service.load(model_dir)
             self.index = TfidfIndex.load(retrieval_dir / "index.joblib")
             self.db_path = retrieval_dir / "cases.sqlite"
-            con = sqlite3.connect(f"file:{self.db_path}?mode=ro", uri=True)
-            rows = con.execute("SELECT mid, y, grant_ratio, evidence, defenses FROM cases ORDER BY row").fetchall()
-            con.close()
+            rows = self._query("SELECT mid, y, grant_ratio, evidence, defenses FROM cases ORDER BY row")
             assert len(rows) == len(self.index), "檢索索引和案件清單的件數不同，請重新執行 python -m retrieval.build"
             self.mids = np.array([r[0] or "" for r in rows])
             self.y = np.array([r[1] for r in rows])
@@ -53,14 +50,12 @@ class CivilService:
     def mock(self) -> bool:
         return self.model is None
 
-    def _db(self) -> sqlite3.Connection:
-        # sqlite 的連線不能跨執行緒共用；FastAPI 的同步端點跑在執行緒池裡，所以每個執行緒各開一條
-        con = getattr(self._local, "con", None)
-        if con is None:
-            con = sqlite3.connect(f"file:{self.db_path}?mode=ro", uri=True, check_same_thread=False)
+    def _query(self, sql: str, params=()) -> List[sqlite3.Row]:
+        # 每次查詢開一條唯讀連線、查完就關：FastAPI 的同步端點跑在執行緒池裡，sqlite 連線不能跨執行緒共用；
+        # 留著不關的話，Windows 上資料庫檔會一直被鎖住，重建檢索資料時刪不掉
+        with closing(sqlite3.connect(f"file:{self.db_path}?mode=ro", uri=True)) as con:
             con.row_factory = sqlite3.Row
-            self._local.con = con
-        return con
+            return con.execute(sql, params).fetchall()
 
     # ── 問卷選項 ──
     def options(self) -> Dict:
@@ -108,8 +103,8 @@ class CivilService:
         if len(rows) == 0:
             return []
         marks = ",".join("?" * len(rows))
-        found = {r["row"]: r for r in self._db().execute(f"SELECT * FROM cases WHERE row IN ({marks})",
-                                                        [int(x) for x in rows])}
+        found = {r["row"]: r for r in self._query(f"SELECT * FROM cases WHERE row IN ({marks})",
+                                                  [int(x) for x in rows])}
         return [self._case(found[int(row)], float(sim)) for row, sim in zip(rows, sims)]
 
     @staticmethod
@@ -146,9 +141,10 @@ class CivilService:
         if self.mock:
             cases = {c["case_id"]: c for c in mock.civil_cases()}
             return mock.guide(cases[case_id]) if case_id in cases else None
-        r = self._db().execute("SELECT * FROM cases WHERE id = ?", (case_id,)).fetchone()
-        if r is None:
+        found = self._query("SELECT * FROM cases WHERE id = ?", (case_id,))
+        if not found:
             return None
-        s = self._db().execute("SELECT claim, defense, court FROM sections WHERE id = ?", (case_id,)).fetchone()
+        r = found[0]
+        s = self._query("SELECT claim, defense, court FROM sections WHERE id = ?", (case_id,))[0]
         return {"case": self._case(r, 0.0), "paragraphs": guide_paragraphs(s["claim"], s["defense"], s["court"]),
                 "labeler": GUIDE_LABELER, "mock": False}
