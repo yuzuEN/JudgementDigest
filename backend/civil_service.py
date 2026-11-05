@@ -21,8 +21,11 @@ from retrieval import build as retrieval_build
 from retrieval.engine import TfidfIndex
 
 SHORT_TEXT = 150          # 描述少於這個字數時提醒：測試資料中 150 字時 AUC 從 0.769 降到 0.692
-N_NEIGHBORS = 30          # 相似判決統計（證據、抗辯、金額）用的件數
+N_NEIGHBORS = 30          # 相似判決統計（證據、抗辯、金額）用的件數，只算對審
 N_SHOWN = 10              # 頁面上列出的相似判決
+N_CANDIDATES = 60         # 列表從這麼多件裡挑（要去重、限制一造辯論的件數）
+MAX_DEFAULT_SHOWN = 3     # 列表裡一造辯論的上限
+DUPLICATE_PREFIX = 40     # 摘要開頭這麼多字相同，視為同一種制式案件
 MIN_SAME_MID = 10         # 同案由的判決少於這個數時，改在全部案件中找
 
 
@@ -38,13 +41,16 @@ class CivilService:
             self.model, self.meta = model_service.load(model_dir)
             self.index = TfidfIndex.load(retrieval_dir / "index.joblib")
             self.db_path = retrieval_dir / "cases.sqlite"
-            rows = self._query("SELECT mid, y, grant_ratio, evidence, defenses FROM cases ORDER BY row")
+            rows = self._query("SELECT mid, y, grant_ratio, evidence, defenses, in_stats, default_judgment "
+                               "FROM cases ORDER BY row")
             assert len(rows) == len(self.index), "檢索索引和案件清單的件數不同，請重新執行 python -m retrieval.build"
             self.mids = np.array([r[0] or "" for r in rows])
             self.y = np.array([r[1] for r in rows])
             self.grant_ratio = np.array([np.nan if r[2] is None else r[2] for r in rows], dtype=float)
             self.case_evidence = [json.loads(r[3]) for r in rows]
             self.case_defenses = [json.loads(r[4]) for r in rows]
+            self.in_stats = np.array([bool(r[5]) for r in rows])
+            self.default = np.array([bool(r[6]) for r in rows])
 
     @property
     def mock(self) -> bool:
@@ -93,11 +99,40 @@ class CivilService:
                 "mock": False}
 
     # ── 相似判決 ──
-    def _neighbors(self, text: str, mid: Optional[str], k: int):
-        allowed = None
-        if mid and (self.mids == mid).sum() >= MIN_SAME_MID:
-            allowed = self.mids == mid
-        return self.index.search(prepare_input(text), k, allowed)
+    def _allowed(self, mid: Optional[str], tier: Optional[np.ndarray] = None) -> Optional[np.ndarray]:
+        """tier 裡同案由的案件；同案由太少時不限案由。"""
+        same = None if not mid else (self.mids == mid if tier is None else (self.mids == mid) & tier)
+        return same if same is not None and same.sum() >= MIN_SAME_MID else tier
+
+    def _listed(self, sim: np.ndarray, mid: Optional[str], n: int) -> List[Dict]:
+        """候選是全部案件和對審案件各取前幾名：金融類的制式一造辯論很多，只取全部的話對審會被擠出去。"""
+        allowed = self._allowed(mid)
+        contested = ~self.default if allowed is None else allowed & ~self.default
+        k = max(N_CANDIDATES, n * 6)
+        rows = np.union1d(self.index.top(sim, k, allowed)[0], self.index.top(sim, k, contested)[0])
+        rows = rows[np.argsort(-sim[rows], kind="stable")]
+        return self._shortlist(rows, sim[rows], n)
+
+    def _shortlist(self, rows, sims, n: int) -> List[Dict]:
+        """
+        給人看的列表：去掉內容幾乎相同的判決（銀行、電信的制式起訴），一造辯論最多 MAX_DEFAULT_SHOWN 件。
+        被告沒到庭的案件原告幾乎都贏，放太多會讓人以為這類糾紛都會贏；對審的不夠時才用多的一造辯論補滿。
+        """
+        picked, spare, seen, defaults = [], [], set(), 0
+        for case in self._cases(rows, sims):
+            key = case["summary"][:DUPLICATE_PREFIX]
+            if key in seen:
+                continue
+            seen.add(key)
+            if case["default_judgment"] and defaults >= MAX_DEFAULT_SHOWN:
+                spare.append(case)
+                continue
+            defaults += case["default_judgment"]
+            picked.append(case)
+        picked = picked[:n]
+        if len(picked) < n:
+            picked = sorted(picked + spare[:n - len(picked)], key=lambda c: -c["similarity"])
+        return picked
 
     def _cases(self, rows, sims) -> List[Dict]:
         if len(rows) == 0:
@@ -111,25 +146,27 @@ class CivilService:
     def _case(r, similarity: float) -> Dict:
         return {"source": "civil", "case_id": r["id"], "case_number": r["case_number"], "court": r["court"],
                 "year": r["year"], "mid": r["mid"] or "", "outcome": r["outcome"], "similarity": round(similarity, 3),
-                "summary": r["summary"], "claimed_amount": r["claimed_amount"], "awarded_amount": r["awarded_amount"]}
+                "summary": r["summary"], "claimed_amount": r["claimed_amount"], "awarded_amount": r["awarded_amount"],
+                "default_judgment": bool(r["default_judgment"])}
 
     def search(self, text: str, mid: Optional[str], k: int) -> List[Dict]:
         if self.mock:
             return mock.civil_cases(mid)[:k]
-        rows, sims = self._neighbors(text, mid, k)
-        return self._cases(rows, sims)
+        return self._listed(self.index.scores(prepare_input(text)), mid, k)
 
     # ── 完整的參考結果 ──
     def report(self, req) -> Dict:
         if self.mock:
             return mock.civil_report(req.text, req.claimed_amount, req.evidence)
         prediction = self.predict(req)
-        rows, sims = self._neighbors(req.text, req.mid, N_NEIGHBORS)
+        sim = self.index.scores(prepare_input(req.text))
+        # 統計只用對審、有被告答辯的案件；一造辯論只出現在列表（見 retrieval/civil.py）
+        rows, _ = self.index.top(sim, N_NEIGHBORS, self._allowed(req.mid, self.in_stats))
         winners = [r for r in rows if self.y[r] == 1]
         return {
             "prediction": prediction,
             "amount_range": amount_range(self.grant_ratio[winners], req.claimed_amount),
-            "similar": self._cases(rows[:N_SHOWN], sims[:N_SHOWN]),
+            "similar": self._listed(sim, req.mid, N_SHOWN),
             "evidence": evidence_table([self.case_evidence[r] for r in winners], req.evidence),
             "defenses": defense_table([self.case_defenses[r] for r in rows]),
             "n_compared": int(len(rows)),

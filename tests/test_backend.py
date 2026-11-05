@@ -17,6 +17,7 @@ from unittest import mock
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
+from backend.civil_service import MAX_DEFAULT_SHOWN, CivilService  # noqa: E402
 from backend.main import create_app  # noqa: E402
 from backend.settings import Settings  # noqa: E402
 from civil.models import service  # noqa: E402
@@ -44,6 +45,40 @@ def build_artifacts(base: Path):
             "一、本件爭點為被告有無過失。二、原告未能舉證，難認可採。三、綜上，原告之請求無理由。"),
         "plaintiff": "王小明", "defendant": "陳大華", "plaintiff_agent": "", "defendant_agent": ""})
     build.write_artifacts(corpus, sections, build.artifact_dir(base), "test")
+
+
+def listed(summary, similarity, default=False):
+    return {"summary": summary, "similarity": similarity, "default_judgment": default}
+
+
+class TestShortlist(unittest.TestCase):
+    def shortlist(self, cases, n=10):
+        svc = CivilService.__new__(CivilService)
+        svc._cases = lambda rows, sims: cases
+        return svc._shortlist([], [], n)
+
+    def test_identical_templates_shown_once(self):
+        same = "原告主張被告向原告申請信用卡使用，依約應按期繳款，詎被告未依約還款，尚欠本金及利息未清償" + "，"
+        out = self.shortlist([listed(same + "甲", 0.9), listed(same + "乙", 0.8), listed("其他案件", 0.7)])
+        self.assertEqual([c["similarity"] for c in out], [0.9, 0.7])
+
+    def test_default_judgments_capped(self):
+        cases = [listed(f"一造{i}", 0.9 - i / 100, True) for i in range(8)]
+        cases += [listed(f"對審{i}", 0.5 - i / 100) for i in range(12)]
+        out = self.shortlist(cases)
+        self.assertEqual(len(out), 10)
+        self.assertEqual(sum(c["default_judgment"] for c in out), MAX_DEFAULT_SHOWN)
+        self.assertEqual([c["summary"] for c in out[:3]], ["一造0", "一造1", "一造2"])
+
+    def test_filled_with_default_judgments_when_contested_run_out(self):
+        cases = [listed(f"一造{i}", 0.9 - i / 100, True) for i in range(8)] + [listed("對審", 0.5)]
+        out = self.shortlist(cases, n=6)
+        self.assertEqual(len(out), 6)
+        sims = [c["similarity"] for c in out]
+        self.assertEqual(sims, sorted(sims, reverse=True), "補滿之後要照相似度排")
+
+    def test_empty(self):
+        self.assertEqual(self.shortlist([]), [])
 
 
 class _MockCase(unittest.TestCase):
@@ -160,6 +195,67 @@ class TestCommonEndpoints(_MockCase):
         paths = self.client.get("/openapi.json").json()["paths"]
         for p in ("/api/civil/report", "/api/criminal/predict", "/api/intake/mask", "/api/retrieval/search"):
             self.assertIn(p, paths)
+
+
+class TestTwoTiers(unittest.TestCase):
+    """最像的是一造辯論的案件時：列表可以出現但有上限，統計完全不算它們。"""
+
+    @classmethod
+    def setUpClass(cls):
+        cls.tmp = tempfile.TemporaryDirectory()
+        base = Path(cls.tmp.name)
+        d = synthetic(150)
+        service.train(d, "test", service.artifact_dir(base), {"原告主張＋特徵": {"auc": 0.77, "ece": 0.01, "brier": 0.2}})
+        n_default = 40
+        default = np.arange(len(d)) < n_default
+        text = np.where(default, [f"一造案件{i}，" + TRAFFIC[:40] for i in range(len(d))],
+                        [f"對審案件{i}，" + TRAFFIC[10:30] + "，其餘情節完全不同，請求賠償" for i in range(len(d))])
+        corpus = pd.DataFrame({
+            "id": d.id, "case_number": [f"第 {i} 號" for i in d.id], "court": "臺北", "year": "2024",
+            "case_type_category": "侵權", "case_type_mid": "侵權：交通事故",
+            "outcome": np.where(default, "勝訴", "一部勝訴一部敗訴"), "y": 1, "plaintiff_claim_text": text,
+            "claimed_amount": 100000, "awarded_amount": np.where(default, 100000, 50000),
+            "grant_ratio": np.where(default, 1.0, 0.5), "default_judgment": default.astype(int),
+            "in_stats": (~default).astype(int)})
+        sections = pd.DataFrame({
+            "id": d.id, "plaintiff_claim_text": "原告主張",
+            "defendant_defense_text": np.where(default, "", "被告則以：原告亦與有過失等語"),
+            "court_reasoning_text": np.where(default, "原告提出LINE對話紀錄為證。", "原告提出診斷證明書為證。"),
+            "plaintiff": "", "defendant": "", "plaintiff_agent": "", "defendant_agent": ""})
+        build.write_artifacts(corpus, sections, build.artifact_dir(base), "test")
+        cls.client = TestClient(create_app(Settings(artifacts_dir=base)))
+        cls.report = cls.client.post("/api/civil/report", json={"text": TRAFFIC, "mid": "侵權：交通事故",
+                                                                "claimed_amount": 100000}).json()
+
+    @classmethod
+    def tearDownClass(cls):
+        cls.tmp.cleanup()
+
+    def test_list_marks_and_caps_default_judgments(self):
+        flags = [c["default_judgment"] for c in self.report["similar"]]
+        self.assertEqual(len(flags), 10)
+        self.assertEqual(sum(flags), MAX_DEFAULT_SHOWN)
+        self.assertTrue(all(flags[:MAX_DEFAULT_SHOWN]), "一造辯論的案件在這份資料裡最像，要排在前面")
+
+    def test_statistics_ignore_default_judgments(self):
+        r = self.report
+        self.assertEqual(r["n_compared"], 30)
+        self.assertEqual(r["amount_range"]["ratio_median"], 0.5, "一造辯論全額勝訴，算進來中位數就不是 0.5")
+        self.assertEqual([e["key"] for e in r["evidence"]], ["medical"], "LINE 只出現在一造辯論的案件")
+        self.assertEqual(r["defenses"][0]["share"], 1)
+
+    def test_contested_cases_listed_even_if_default_judgments_fill_the_candidates(self):
+        """金融類的情況：相似度最高的幾十件全是一造辯論，對審還是要進得了列表。"""
+        with mock.patch("backend.civil_service.N_CANDIDATES", 5):
+            cases = self.client.post("/api/retrieval/search", json={
+                "text": TRAFFIC, "type": "civil", "mid": "侵權：交通事故", "k": 5}).json()["civil"]
+        self.assertEqual(sum(c["default_judgment"] for c in cases), MAX_DEFAULT_SHOWN)
+        self.assertEqual(len(cases), 5)
+
+    def test_search_uses_the_same_list(self):
+        r = self.client.post("/api/retrieval/search", json={"text": TRAFFIC, "type": "civil", "mid": "侵權：交通事故"}).json()
+        cases = r["civil"]
+        self.assertEqual(sum(c["default_judgment"] for c in cases), MAX_DEFAULT_SHOWN)
 
 
 class TestWithModel(unittest.TestCase):

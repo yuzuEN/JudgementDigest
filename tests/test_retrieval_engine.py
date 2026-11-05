@@ -59,12 +59,49 @@ class TestNeighbors(unittest.TestCase):
         self.assertTrue(np.all(MID[nn[:, 0]] == MID), "只在同一類裡找")
         self.assertEqual(list(nn[:, 0]), [1, 0, 3, 2, 5, 4])
 
+    def test_allowed_limits_neighbors(self):
+        index = small_index()
+        allowed = np.array([False, True, False, True, False, True])
+        nn, _ = index.neighbors(np.arange(len(CORPUS)), k=1, allowed=allowed)
+        self.assertTrue(np.all(allowed[nn[:, 0]]))
+
     def test_chunking_gives_same_result(self):
         index = small_index()
         rows = np.arange(len(CORPUS))
         a, _ = index.neighbors(rows, k=2)
         b, _ = index.neighbors(rows, k=2, chunk=2)
         self.assertTrue(np.array_equal(a, b))
+
+
+class TestFitSample(unittest.TestCase):
+    def test_vocabulary_from_sample_but_all_rows_indexed(self):
+        full = small_index()
+        part = TfidfIndex(min_df=1, max_features=None).fit(CORPUS, sample=3)
+        self.assertEqual(len(part), len(CORPUS))
+        self.assertLess(len(part.vectorizer.vocabulary_), len(full.vectorizer.vocabulary_))
+
+    def test_sample_is_reproducible(self):
+        a = TfidfIndex(min_df=1, max_features=None).fit(CORPUS, sample=3)
+        b = TfidfIndex(min_df=1, max_features=None).fit(CORPUS, sample=3)
+        self.assertEqual(a.vectorizer.vocabulary_, b.vectorizer.vocabulary_)
+
+    def test_sample_larger_than_corpus_uses_everything(self):
+        index = TfidfIndex(min_df=1, max_features=None).fit(CORPUS, sample=100)
+        self.assertEqual(index.vectorizer.vocabulary_, small_index().vectorizer.vocabulary_)
+
+
+class TestScores(unittest.TestCase):
+    def test_top_of_scores_equals_search(self):
+        index = small_index()
+        query = "機車被汽車撞傷"
+        a, _ = index.search(query, 3)
+        b, _ = index.top(index.scores(query), 3)
+        self.assertEqual(list(a), list(b))
+
+    def test_top_respects_allowed(self):
+        index = small_index()
+        rows, _ = index.top(index.scores("機車被汽車撞傷"), 2, MID == "租賃")
+        self.assertEqual(sorted(rows), [4, 5])
 
 
 class TestSaveLoad(unittest.TestCase):

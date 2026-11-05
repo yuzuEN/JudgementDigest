@@ -132,6 +132,24 @@ describe("民事結果", () => {
     expect(within(table).getAllByRole("row")).toHaveLength(2);
   });
 
+  it("一造辯論的判決標示被告未到庭，並說明不計入統計", async () => {
+    const [first, ...rest] = CIVIL_REPORT.similar;
+    mockApi({ "POST /civil/report": () => ({ ...CIVIL_REPORT, similar: [{ ...first, default_judgment: true }, ...rest] }) });
+    renderAt("/result/civil", <CivilResult />, "/result/civil", intake);
+    const table = await screen.findByRole("table");
+    expect(within(table).getAllByText("被告未到庭")).toHaveLength(1);
+    expect(within(within(table).getAllByRole("row")[1]).getByText("被告未到庭")).toBeInTheDocument();
+    expect(screen.getByText(/統計不包含這些判決/)).toBeInTheDocument();
+  });
+
+  it("沒有一造辯論的判決就不顯示說明", async () => {
+    mockApi({ "POST /civil/report": () => CIVIL_REPORT });
+    renderAt("/result/civil", <CivilResult />, "/result/civil", intake);
+    await screen.findByRole("table");
+    expect(screen.queryByText("被告未到庭")).not.toBeInTheDocument();
+    expect(screen.queryByText(/統計不包含這些判決/)).not.toBeInTheDocument();
+  });
+
   it("示例資料要標示；下載 PDF 會開啟列印", async () => {
     mockApi({ "POST /civil/report": () => ({ ...CIVIL_REPORT, mock: true }) });
     const print = vi.spyOn(window, "print").mockImplementation(() => {});

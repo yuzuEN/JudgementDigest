@@ -120,6 +120,7 @@ class SimilarCase(BaseModel):
     claimed_amount: Optional[int] = None
     awarded_amount: Optional[int] = None
     sentence: Optional[str] = None
+    default_judgment: bool = False      # 一造辯論：被告沒有到庭
 
 
 class EvidenceRow(BaseModel):

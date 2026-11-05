@@ -19,7 +19,7 @@ import pandas as pd
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from civil.models import service as S  # noqa: E402
-from retrieval.build import write_artifacts  # noqa: E402
+from retrieval.build import provenance, write_artifacts  # noqa: E402
 from retrieval.engine import TfidfIndex  # noqa: E402
 
 WIN = ["被告駕車闖紅燈撞傷原告，原告受有骨折並住院治療，提出診斷證明為證",
@@ -159,6 +159,22 @@ class TestRetrievalArtifacts(unittest.TestCase):
         self.assertNotIn("陳大華", sec[0] + sec[1])
         self.assertNotIn("簡建祥", sec[0], "別的段落寫了稱謂，這段也要遮")
         self.assertEqual(meta["n_cases"], 30)
+
+
+class TestProvenance(unittest.TestCase):
+    def test_records_where_the_data_came_from(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            db = Path(tmp) / "judgments.db"
+            con = sqlite3.connect(db)
+            con.execute("CREATE TABLE judgments (id INTEGER)")
+            con.executemany("INSERT INTO judgments VALUES (?)", [(1,), (2,)])
+            con.commit()
+            con.close()
+            p = provenance(db)
+        self.assertEqual(p["source_rows"], 2)
+        self.assertRegex(p["rule_version"], r"^\d+\.\d+\.\d+$")
+        self.assertIn("git_commit", p)
+        self.assertIn("source_modified", p)
 
 
 if __name__ == "__main__":
