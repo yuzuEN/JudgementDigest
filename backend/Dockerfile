@@ -5,6 +5,7 @@ COPY backend/requirements.txt backend/requirements.txt
 RUN pip install --no-cache-dir -r backend/requirements.txt
 COPY config.py ./
 COPY civil civil
+COPY criminal criminal
 COPY retrieval retrieval
 COPY backend backend
 # 模型與檢索資料不放進映像檔，執行時掛載（docker-compose.yml 的 volumes）
