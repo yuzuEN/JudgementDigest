@@ -158,6 +158,12 @@ class TestCriminalWithModel(unittest.TestCase):
         self.assertIn(r["similar"][0]["sentence"], ("有期徒刑 4 月", "拘役 20 日"))
         guide = self.client.get(f"/api/judgments/criminal/{r['similar'][0]['case_id']}/guide")
         self.assertEqual(guide.status_code, 404)
+        # 每個罪名另外附相似判決的宣告刑分布（合成資料：酒駕 30 件，有期徒刑 4 月與拘役各半）
+        drunk = r["charges"][0]
+        self.assertEqual(drunk["n_similar"], 30)
+        shares = {b["label"]: b["share"] for b in drunk["similar_sentence"]}
+        self.assertAlmostEqual(shares["拘役、罰金"] + shares["1～6 個月"], 1.0)
+        self.assertEqual(r["model"]["name"], "criminal_v1")
 
     def test_search(self):
         r = self.client.post("/api/retrieval/search", json={"type": "criminal", "text": CRIMINAL_DRUNK, "k": 3}).json()

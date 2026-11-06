@@ -554,6 +554,20 @@ describe("刑事結果", () => {
     expect(screen.queryByRole("table")).not.toBeInTheDocument();
   });
 
+  it("修法提示、相似判決的宣告刑、模型測試結果", async () => {
+    const [first, ...rest] = CRIMINAL_REPORT.charges;
+    mockApi({ "POST /criminal/predict": () => ({ ...CRIMINAL_REPORT, mock: false,
+      charges: [{ ...first, law_note: "修法前為洗錢防制法第 14 條", n_similar: 50,
+        similar_sentence: [{ label: "拘役、罰金", share: 0.2 }, { label: "1～6 個月", share: 0.8 }] }, ...rest],
+      model: { name: "criminal_v1", description: "TF-IDF ＋ SVM", n_test: 10000, charge_top1: 0.93,
+        bucket_accuracy: 0.7, bucket_within_one: 0.95 } }) });
+    renderAt("/result/criminal", <CriminalResult />, "/result/criminal", { text: "x", maskedText: "開車撞到人" });
+    expect(await screen.findByText("修法前為洗錢防制法第 14 條")).toBeInTheDocument();
+    expect(screen.getByText(/最相似的 50 件「過失傷害罪」有罪判決/)).toBeInTheDocument();
+    expect(screen.getByText("80%")).toBeInTheDocument();
+    expect(screen.getByText(/第一個罪名猜中 93%/)).toBeInTheDocument();
+  });
+
   it("真的刑事判決連到司法院原文，不連判決導讀", async () => {
     const url = "https://judgment.judicial.gov.tw/FJUD/data.aspx?ty=JD&id=TPDM";
     mockApi({ "POST /criminal/predict": () => ({ ...CRIMINAL_REPORT, mock: false,

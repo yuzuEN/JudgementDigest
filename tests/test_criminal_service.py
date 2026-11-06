@@ -73,6 +73,19 @@ class TestLabels(unittest.TestCase):
         m["label_detail"]["standard_charges_by_offense"] = [["酒駕罪", "竊盜罪"]]   # 兩個罪名的犯罪，分不出法條屬於誰
         self.assertEqual(service.offense_laws(m), [])
 
+    def test_bucket_of_text(self):
+        texts = ["拘役 20 日", "罰金 10,000 元", "有期徒刑 3 月", "有期徒刑 1 年", "有期徒刑 1 年 2 月", "有期徒刑 12 年",
+                 "無期徒刑", None, "有期徒刑併拘役"]
+        self.assertEqual([service.bucket_of_text(t) for t in texts], [0, 0, 1, 2, 3, 5, 5, None, None])
+
+    def test_renumbered_law_shows_current_article(self):
+        m = service.CriminalModel()
+        m.laws = {"洗錢罪": ["洗錢防制法第14條"], "竊盜罪": ["刑法第320條"], "新法洗錢": ["洗錢防制法第19條"]}
+        self.assertEqual(m.law_info("洗錢罪", {}), {
+            "law": "洗錢防制法第 19 條", "law_note": "修法後改為洗錢防制法第 19 條；修法前的行為適用舊法洗錢防制法第 14 條"})
+        self.assertEqual(m.law_info("新法洗錢", {})["law_note"], "修法前為洗錢防制法第 14 條")
+        self.assertEqual(m.law_info("竊盜罪", {}), {"law": "刑法第 320 條", "law_note": None})
+
     def test_input_is_nfc_normalized(self):
         self.assertEqual(service.normalize("不確定故意"), "不確定故意")
 
@@ -114,6 +127,15 @@ class TestTrainedModel(unittest.TestCase):
         self.assertEqual([b["label"] for b in charges[0]["sentence"]], service.BUCKETS)
         self.assertAlmostEqual(sum(b["share"] for b in charges[0]["sentence"]), 1.0, places=5)
         self.assertLessEqual(len(charges), service.MAX_SHOWN)
+
+    def test_platform_metrics(self):
+        with tempfile.TemporaryDirectory() as d:
+            src = Path(d) / "cail.jsonl"
+            write_jsonl(synthetic(), src)
+            m = service.platform_metrics(self.model, service.read(src))
+        self.assertEqual(m["n_test"], 60)
+        self.assertGreater(m["charge_top1"], 0.9)
+        self.assertGreaterEqual(m["bucket_within_one"], m["bucket_accuracy"])
 
     def test_meta(self):
         self.assertEqual((self.meta["name"], self.meta["charges"], self.meta["n_train"]), ("criminal_v1", 2, 60))

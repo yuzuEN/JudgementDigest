@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { Link, Navigate } from "react-router-dom";
 import { api } from "../api/client";
-import type { CriminalReport } from "../api/types";
+import type { CriminalModelInfo, CriminalReport } from "../api/types";
 import { ErrorBox, InfoLink, LAF_URL, Loading, ResultNotes } from "../components/Common";
 import { ResultFrame } from "../components/ResultFrame";
 import { percent } from "../format";
@@ -40,6 +40,7 @@ export default function CriminalResult() {
                   <button key={c.name} type="button" className="charge" aria-pressed={i === selected} onClick={() => setSelected(i)}>
                     <span className="row"><strong>{c.name}</strong><span>{percent(c.probability)}</span></span>
                     <span className="hint">{c.law}</span>
+                    {c.law_note && <span className="hint" style={{ fontSize: 13 }}>{c.law_note}</span>}
                     <span className="bar thin" style={{ width: "100%" }}><span style={{ width: percent(c.probability) }} /></span>
                   </button>
                 ))}
@@ -51,13 +52,14 @@ export default function CriminalResult() {
                 <h2 id={`sentence-title-${i}`}>刑期範圍：{c.name}</h2>
                 <p className="hint">{report.mock ? "相似的有罪判決中，宣告刑落在各區間的比例。"
                   : "模型依類似的有罪判決推估，宣告刑落在各區間的機率（整個案件的刑度，各罪名相同）。"}</p>
-                {c.sentence.map((b) => (
-                  <div key={b.label} className="bucket">
-                    <span>{b.label}</span>
-                    <div className="bar warm" role="img" aria-label={`${b.label} ${percent(b.share)}`}><span style={{ width: percent(b.share) }} /></div>
-                    <span className="pct">{percent(b.share)}</span>
-                  </div>
-                ))}
+                <Buckets items={c.sentence} />
+                {c.similar_sentence && c.n_similar ? (
+                  <>
+                    <h3 style={{ fontSize: 16, margin: "16px 0 4px" }}>相似判決的實際宣告刑</h3>
+                    <p className="hint">最相似的 {c.n_similar} 件「{c.name}」有罪判決中，宣告刑落在各區間的比例。</p>
+                    <Buckets items={c.similar_sentence} />
+                  </>
+                ) : null}
                 <p className="hint">實際刑期還會受到是否和解、有無前科、犯後態度等影響。</p>
               </section>
             ))}
@@ -85,6 +87,7 @@ export default function CriminalResult() {
             </div>
             )}
           </section>
+          {report.model && <ModelScore model={report.model} />}
           <ResultNotes items={[
             "結果只代表「有判決書的案件」的統計；不起訴、撤回告訴的案件不在資料裡。",
             "告訴乃論之罪（例如過失傷害）和解並撤回告訴後，通常不會有判決。",
@@ -93,5 +96,30 @@ export default function CriminalResult() {
         </>
       )}
     </ResultFrame>
+  );
+}
+
+function Buckets({ items }: { items: { label: string; share: number }[] }) {
+  return (
+    <>
+      {items.map((b) => (
+        <div key={b.label} className="bucket">
+          <span>{b.label}</span>
+          <div className="bar warm" role="img" aria-label={`${b.label} ${percent(b.share)}`}><span style={{ width: percent(b.share) }} /></div>
+          <span className="pct">{percent(b.share)}</span>
+        </div>
+      ))}
+    </>
+  );
+}
+
+function ModelScore({ model }: { model: CriminalModelInfo }) {
+  const { n_test: n, charge_top1: top1, bucket_accuracy: acc, bucket_within_one: near } = model;
+  if (n == null || top1 == null || acc == null || near == null) return null;
+  return (
+    <p className="hint" style={{ fontSize: 13 }}>
+      模型：{model.description}。用 {n.toLocaleString()} 件沒參與訓練的判決測試時，第一個罪名猜中 {percent(top1)}；
+      刑期區間猜中 {percent(acc)}，差一格以內 {percent(near)}。測試用的是判決書的文字，一般口語描述的準確度可能較低。
+    </p>
   );
 }

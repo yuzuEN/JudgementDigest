@@ -187,13 +187,26 @@ class SentenceBucket(BaseModel):
 class Charge(BaseModel):
     name: str
     law: str
+    law_note: Optional[str] = None                        # 修法換條號時註明舊條號
     probability: float
-    sentence: List[SentenceBucket]
+    sentence: List[SentenceBucket]                        # 模型推估的刑度分布
+    similar_sentence: Optional[List[SentenceBucket]] = None   # 相似判決中同罪名案件的宣告刑分布
+    n_similar: Optional[int] = None                       # similar_sentence 用了幾件判決
+
+
+class CriminalModelInfo(BaseModel):
+    name: str
+    description: str
+    n_test: Optional[int] = None
+    charge_top1: Optional[float] = None                   # 第一個罪名猜中的比例
+    bucket_accuracy: Optional[float] = None               # 刑度區間猜中的比例
+    bucket_within_one: Optional[float] = None             # 刑度區間差一格以內的比例
 
 
 class CriminalReport(BaseModel):
     charges: List[Charge]
     similar: List[SimilarCase]
+    model: Optional[CriminalModelInfo] = None
     mock: bool
 
 

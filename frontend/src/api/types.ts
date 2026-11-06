@@ -121,13 +121,26 @@ export interface CivilReport {
 export interface Charge {
   name: string;
   law: string;
+  law_note?: string | null;
   probability: number;
   sentence: { label: string; share: number }[];
+  similar_sentence?: { label: string; share: number }[] | null;
+  n_similar?: number | null;
+}
+
+export interface CriminalModelInfo {
+  name: string;
+  description: string;
+  n_test?: number | null;
+  charge_top1?: number | null;
+  bucket_accuracy?: number | null;
+  bucket_within_one?: number | null;
 }
 
 export interface CriminalReport {
   charges: Charge[];
   similar: SimilarCase[];
+  model?: CriminalModelInfo | null;
   mock: boolean;
 }
 

@@ -48,6 +48,8 @@ CAL_SHARE = 0.1                           # svm_cal：留這個比例的訓練�
 MIN_CAL_POSITIVES = 5
 SEED = 42
 LAW_RE = re.compile(r"^(.+?第\d+條(?:之\d+)?)")
+# 修法換條號（與 CAIL 格式資料集 v2 的 relevant_articles_merged 相同）：平台顯示現行條號，另外註明舊條號
+LAW_RENUMBERED = {"洗錢防制法第14條": "洗錢防制法第19條", "性侵害犯罪防治法第21條": "性侵害犯罪防治法第50條"}
 # 不是罪名本身的條文（刑法總則、程序法、定義或加重條文…），與 CAIL 格式資料集 v2 的篩選相同
 NOT_LAW = re.compile(
     r"^(?:刑法第([1-9]|[1-9][0-9])條|刑事訴訟法.*|民法.*|刑法施行法.*|憲法.*"
@@ -72,11 +74,31 @@ def bucket_of(meta: Dict) -> Optional[int]:
     if kind == "死刑或無期徒刑":
         return len(BUCKETS) - 1
     if kind == "有期徒刑" and meta.get("task_validity", {}).get("imprisonment"):
-        months = meta["term_of_imprisonment"]["imprisonment"]
-        if months <= 0:
-            return None
-        return 1 + next((i for i, hi in enumerate(BUCKET_UPPER) if months <= hi), len(BUCKET_UPPER))
+        return bucket_of_months(meta["term_of_imprisonment"]["imprisonment"])
     return None                           # 刑期未明、有期徒刑併拘役、刑期任務不可用
+
+
+def bucket_of_months(months: float) -> Optional[int]:
+    if months <= 0:
+        return None
+    return 1 + next((i for i, hi in enumerate(BUCKET_UPPER) if months <= hi), len(BUCKET_UPPER))
+
+
+def bucket_of_text(sentence: Optional[str]) -> Optional[int]:
+    """檢索資料的宣告刑文字（retrieval.criminal.sentence_text）→ 區間。"""
+    if not sentence:
+        return None
+    if sentence.startswith(("拘役", "罰金")):
+        return 0
+    if sentence in ("死刑", "無期徒刑"):
+        return len(BUCKETS) - 1
+    m = re.match(r"有期徒刑 (?:(\d+) 年)? ?(?:(\d+) 月)?$", sentence)
+    return bucket_of_months(int(m.group(1) or 0) * 12 + int(m.group(2) or 0)) if m else None
+
+
+def law_text(law: str) -> str:
+    """刑法第185條之4 → 刑法第 185 條之 4（畫面上好讀）。"""
+    return re.sub(r"第(\d+)條(?:之(\d+))?", lambda m: f"第 {m.group(1)} 條" + (f"之 {m.group(2)}" if m.group(2) else ""), law)
 
 
 def offense_laws(meta: Dict) -> List[tuple]:
@@ -214,14 +236,20 @@ class CriminalModel:
             p[:, self.term.classes_] = self.term.predict_proba(X)
         return p
 
-    def law_for(self, charge: str, article_p: Dict[str, float]) -> str:
+    def law_info(self, charge: str, article_p: Dict[str, float]) -> Dict[str, Optional[str]]:
+        """罪名對應的法條（現行條號）；修法換過條號的，law_note 註明舊條號。"""
         cands = self.laws.get(charge) or []
         if not cands:
-            return ""
+            return {"law": "", "law_note": None}
         # 候選依出現次數排序；粗分法條（去掉「之○」）機率較高的優先，同分維持次數順序
-        best = max(range(len(cands)), key=lambda i: (round(article_p.get(re.sub(r"之\d+$", "", cands[i]), 0.0), 2), -i))
-        return re.sub(r"第(\d+)條(?:之(\d+))?", lambda m: f"第 {m.group(1)} 條" + (f"之 {m.group(2)}" if m.group(2) else ""),
-                      cands[best])
+        best = cands[max(range(len(cands)),
+                         key=lambda i: (round(article_p.get(re.sub(r"之\d+$", "", cands[i]), 0.0), 2), -i))]
+        current = LAW_RENUMBERED.get(best, best)
+        note = f"修法後改為{law_text(current)}；修法前的行為適用舊法{law_text(best)}" if current != best else None
+        if best in LAW_RENUMBERED.values():
+            old = next(k for k, v in LAW_RENUMBERED.items() if v == best)
+            note = f"修法前為{law_text(old)}"
+        return {"law": law_text(current), "law_note": note}
 
     def predict(self, text: str) -> List[Dict]:
         """平台用：機率最高的幾個罪名，各附法條與刑度分布（CriminalReport.charges 的格式）。"""
@@ -230,7 +258,7 @@ class CriminalModel:
         dist = self.term_dist([text])[0]
         order = [i for i in np.argsort(-pc)[:MAX_SHOWN] if pc[i] >= MIN_SHOWN] or [int(np.argmax(pc))]
         sentence = [{"label": b, "share": float(s)} for b, s in zip(BUCKETS, dist)]
-        return [{"name": self.charge_mlb.classes_[i], "law": self.law_for(self.charge_mlb.classes_[i], pa),
+        return [{"name": self.charge_mlb.classes_[i], **self.law_info(self.charge_mlb.classes_[i], pa),
                  "probability": min(float(pc[i]), MAX_SHOWN_PROBABILITY), "sentence": sentence} for i in order]
 
 
@@ -294,6 +322,20 @@ def evaluate(shared: Path, fold: str, kinds: Iterable[str], jobs: int, out: Path
         out.write_text("\n".join(lines) + "\n", encoding="utf-8")   # 每個模型寫一次，中途停掉也留得下
 
 
+def platform_metrics(model: CriminalModel, rows: List[Dict]) -> Dict[str, float]:
+    """給使用者看的測試結果（沒參與訓練的判決）：第一個罪名猜中、刑度區間猜中、差一格以內。"""
+    a = [r for r in rows if r["charges"]]
+    pc = model.charge_scores([r["text"] for r in a])
+    top = model.charge_mlb.classes_[pc.argmax(1)]
+    t = [r for r in rows if r["bucket"] is not None]
+    pred = model.term_dist([r["text"] for r in t]).argmax(1)
+    y = np.array([r["bucket"] for r in t])
+    s = scores_of(model, rows)
+    return {"n_test": len(rows), "charge_top1": float(np.mean([c in r["charges"] for c, r in zip(top, a)])),
+            "charge_micro": s["罪名 micro"], "article_micro": s["法條 micro"],
+            "bucket_accuracy": float((pred == y).mean()), "bucket_within_one": float((np.abs(pred - y) <= 1).mean())}
+
+
 # ─── 正式模型 ──────────────────────────────────────────────────────────────────
 def artifact_dir(base: Optional[Path] = None) -> Path:
     return Path(base or config.ARTIFACTS_DIR) / MODEL_NAME
@@ -331,11 +373,21 @@ def main():
     t.add_argument("--data", required=True, type=Path)
     t.add_argument("--jobs", type=int, default=3)
     t.add_argument("--out", type=Path, default=None)
+    mt = sub.add_parser("metrics", help="在沒參與訓練的判決上測試已訓練的模型，結果寫進 meta.json")
+    mt.add_argument("--data", required=True, type=Path, help="CAIL 格式 .jsonl（和 train 同一份）")
+    mt.add_argument("--lines", required=True, type=Path,
+                    help="測試用的行號：每行一個 JSON、含 line（如 criminal_bucket_electra/test.jsonl）")
     t.add_argument("--max-rows", type=int, default=300_000,
                    help="隨機抽這麼多筆訓練；全量 113 萬筆的 TF-IDF 矩陣要 5 GB 以上記憶體。學習曲線上 20 萬筆以後 micro 幾乎不再上升")
     a = ap.parse_args()
     if a.cmd == "evaluate":
         evaluate(a.shared, a.fold, a.kinds.split(","), a.jobs, a.out)
+    elif a.cmd == "metrics":
+        keep = {json.loads(l)["line"] for l in open(a.lines, encoding="utf-8")}
+        model, meta = load()
+        meta["metrics"] = {**platform_metrics(model, read(a.data, keep)), "test_lines": a.lines.parent.name + "/" + a.lines.name}
+        (artifact_dir() / "meta.json").write_text(json.dumps(meta, ensure_ascii=False, indent=2), encoding="utf-8")
+        print(json.dumps(meta["metrics"], ensure_ascii=False, indent=2))
     else:
         with open(a.data, encoding="utf-8") as f:
             n = sum(1 for _ in f)

@@ -4,6 +4,7 @@
 模型（artifacts/criminal_v1）與檢索資料（artifacts/retrieval_criminal_v1）在啟動時讀進記憶體。
 沒有模型時整個刑事回傳示例資料（mock = true）；有模型、沒有檢索資料時 similar 是空清單，前端顯示「開發中」。
 相似判決只在「含預測的第一個罪名」的判決裡找，這類判決太少時才放寬到全部。
+每個罪名另外統計相似判決中含這個罪名的案件的宣告刑分布（similar_sentence），和模型推估並列。
 刑事判決沒有判決導讀，列表附司法院的原文網址。
 """
 import json
@@ -23,6 +24,8 @@ N_SHOWN = 10
 N_CANDIDATES = 40         # 列表從這麼多件裡挑（要去掉摘要開頭相同的制式判決）
 DUPLICATE_PREFIX = 40
 MIN_SAME_CHARGE = 10      # 含這個罪名的判決少於這個數時，改在全部判決中找
+N_SENTENCE_STATS = 50     # 每個罪名的宣告刑分布：取最相似、含這個罪名、有單一宣告刑的這麼多件
+MIN_SENTENCE_STATS = 10   # 少於這個數不顯示（件數太少，比例沒有意義）
 
 
 class CriminalService:
@@ -38,9 +41,11 @@ class CriminalService:
         if (retrieval_dir / "index.joblib").exists():
             self.index = TfidfIndex.load(retrieval_dir / "index.joblib")
             self.db_path = retrieval_dir / "cases.sqlite"
-            rows = self._query("SELECT charges FROM cases ORDER BY row")
+            rows = self._query("SELECT charges, sentence FROM cases ORDER BY row")
             assert len(rows) == len(self.index), "刑事檢索索引和案件清單的件數不同，請重新執行 python -m retrieval.criminal"
             self.charges = [set(json.loads(r[0])) for r in rows]
+            self.buckets = np.array([-1 if b is None else b for b in
+                                     (model_service.bucket_of_text(r[1]) for r in rows)])
 
     @property
     def mock(self) -> bool:
@@ -51,22 +56,42 @@ class CriminalService:
             con.row_factory = sqlite3.Row
             return con.execute(sql, params).fetchall()
 
+    def model_info(self) -> Dict:
+        m = self.meta.get("metrics", {})
+        return {"name": self.meta["name"], "description": "犯罪事實的 TF-IDF ＋ SVM（機率經過校正）",
+                **{k: m.get(k) for k in ("n_test", "charge_top1", "bucket_accuracy", "bucket_within_one")}}
+
     def report(self, text: str) -> Dict:
         if self.mock:
             return mock.criminal_report()
         charges = self.model.predict(text)
-        return {"charges": charges, "similar": self.similar(text, charges[0]["name"] if charges else None),
-                "mock": False}
+        sim = self.index.scores(model_service.normalize(text)) if self.index is not None else None
+        for c in charges:
+            c.update(self.sentence_stats(sim, c["name"]))
+        return {"charges": charges, "similar": self.similar(text, charges[0]["name"] if charges else None, sim=sim),
+                "model": self.model_info(), "mock": False}
+
+    def sentence_stats(self, sim: Optional[np.ndarray], charge: str) -> Dict:
+        """相似判決中、含這個罪名的案件，宣告刑落在各區間的比例；件數太少時不給。"""
+        if sim is None:
+            return {}
+        rows, _ = self.index.top(sim, N_SENTENCE_STATS,
+                                 np.array([charge in c for c in self.charges]) & (self.buckets >= 0))
+        if len(rows) < MIN_SENTENCE_STATS:
+            return {}
+        counts = np.bincount(self.buckets[rows], minlength=len(model_service.BUCKETS))
+        return {"similar_sentence": [{"label": b, "share": float(n / len(rows))}
+                                     for b, n in zip(model_service.BUCKETS, counts)], "n_similar": int(len(rows))}
 
     def search(self, text: str, k: int) -> List[Dict]:
         if self.mock:
             return mock.criminal_report()["similar"][:k]
         return self.similar(text, self.model.predict(text)[0]["name"], k)
 
-    def similar(self, text: str, charge: Optional[str], n: int = N_SHOWN) -> List[Dict]:
+    def similar(self, text: str, charge: Optional[str], n: int = N_SHOWN, sim: Optional[np.ndarray] = None) -> List[Dict]:
         if self.index is None:
             return []
-        sim = self.index.scores(model_service.normalize(text))
+        sim = self.index.scores(model_service.normalize(text)) if sim is None else sim
         allowed = np.array([charge in c for c in self.charges]) if charge else None
         if allowed is not None and allowed.sum() < MIN_SAME_CHARGE:
             allowed = None
