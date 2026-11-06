@@ -205,6 +205,8 @@ class CivilService:
             "evidence": evidence_table([self.case_evidence[r] for r in winners], user_evidence(req.text, req.evidence)),
             "defenses": defense_table([self.case_defenses[r] for r in rows]),
             "outcomes": outcome_counts([self.outcomes[r] for r in rows]),
+            # 被告未到庭的判決不算進比例，但要讓使用者知道有多少：看不分層的前 N_NEIGHBORS 件
+            "default_cases": int(self.default[self.index.top(sim, N_NEIGHBORS, self._allowed(mid))[0]].sum()),
             "n_compared": int(len(rows)),
             "mock": False,
         }

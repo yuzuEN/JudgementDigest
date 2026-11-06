@@ -293,6 +293,7 @@ class TestTwoTiers(unittest.TestCase):
         r = self.report
         self.assertEqual(r["n_compared"], 30)
         self.assertEqual(r["outcomes"], {"total": 30, "win": 0, "partial": 30, "lose": 0}, "一造辯論全額勝訴，不能算進來")
+        self.assertGreater(r["default_cases"], 0, "一造辯論不算進比例，但件數要另外告訴使用者")
         self.assertEqual(r["amount_range"]["ratio_median"], 0.5, "一造辯論全額勝訴，算進來中位數就不是 0.5")
         self.assertEqual([e["key"] for e in r["evidence"]], ["medical"], "LINE 只出現在一造辯論的案件")
         self.assertEqual(r["defenses"][0]["share"], 1)

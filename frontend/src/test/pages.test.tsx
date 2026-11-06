@@ -85,6 +85,17 @@ describe("相似判決的結果", () => {
     expect(screen.getByText("62%").closest("details")).not.toBeNull();
   });
 
+  it("被告未到庭的件數另外說明", async () => {
+    show({ default_cases: 12 });
+    expect(await screen.findByText(/有 12 件被告未到庭/)).toBeInTheDocument();
+  });
+
+  it("沒有被告未到庭時不顯示", async () => {
+    show({});
+    await screen.findByText("62%");
+    expect(screen.queryByText(/件被告未到庭/)).not.toBeInTheDocument();
+  });
+
   it("模型參考依訊號顯示固定文字", async () => {
     show({ prediction: prediction("weak") });
     expect(await screen.findByText(/勝訴訊號較弱/)).toBeInTheDocument();

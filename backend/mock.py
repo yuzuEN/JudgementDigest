@@ -57,6 +57,7 @@ def civil_report(text: str, claimed: int = None, user_evidence=()) -> Dict:
         "defenses": [{"key": k, "label": defense[k][0], "description": defense[k][1], "share": s}
                      for k, s in (("contributory", 0.46), ("excessive", 0.38), ("paid", 0.21))],
         "outcomes": {"total": 30, "win": 8, "partial": 13, "lose": 9},
+        "default_cases": 4,
         "n_compared": 30,
         "mock": True,
     }

@@ -118,6 +118,7 @@ export interface OutcomeCounts {
 export interface CivilReport {
   prediction: CivilPrediction;
   outcomes: OutcomeCounts;
+  default_cases: number;
   amount_range: AmountRange | null;
   similar: SimilarCase[];
   evidence: EvidenceRow[];

@@ -85,6 +85,7 @@ export const CIVIL_REPORT: CivilReport = {
   ],
   defenses: [{ key: "contributory", label: "你也有過失（與有過失）", description: "主張你對損害的發生也有責任，要求減少賠償", share: 0.46 }],
   outcomes: { total: 30, win: 8, partial: 13, lose: 9 },
+  default_cases: 0,
   n_compared: 30,
   mock: false,
 };

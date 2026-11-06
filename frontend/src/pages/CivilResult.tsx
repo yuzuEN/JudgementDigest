@@ -108,12 +108,19 @@ function Outcomes({ report }: { report: CivilReport }) {
         <>
           <p style={{ margin: 0 }}>{total} 件相似判決中</p>
           <div className="outcome-bar" role="img" aria-label={parts.map((x) => `${x.label} ${x.count} 件`).join("、")}>
-            {parts.map((x) => <span key={x.key} className={x.key} style={{ width: `${(x.count / total) * 100}%` }} />)}
+            {parts.filter((x) => x.count > 0).map((x) => (
+              <span key={x.key} className={x.key} title={`${x.label} ${x.count} 件`} style={{ flexGrow: x.count }} />
+            ))}
           </div>
           <ul className="outcome-legend">
             {parts.map((x) => <li key={x.key}><span className={`swatch ${x.key}`} />{x.label} <strong>{x.count}</strong> 件</li>)}
           </ul>
-          <p className="hint" style={{ fontSize: 14 }}>只統計雙方都有攻防的判決，不包含被告未到庭的案件。這是過去判決的統計，不代表你的案件會有相同結果。</p>
+          <p className="hint" style={{ fontSize: 14 }}>只統計雙方都有攻防的判決。這是過去判決的統計，不代表你的案件會有相同結果。</p>
+          {report.default_cases > 0 && (
+            <p className="hint" style={{ fontSize: 14 }}>
+              另外，最相似的 30 件判決裡有 {report.default_cases} 件被告未到庭。這類案件原告幾乎都贏，但沒有經過雙方攻防，所以不算進上面的比例。
+            </p>
+          )}
         </>
       ) : <p className="hint">有被告答辯的相似判決不夠多，這次不顯示比例。</p>}
       <p style={{ margin: 0 }}><strong>模型參考：</strong>{SIGNAL_TEXT[signal]}</p>

@@ -162,6 +162,7 @@ class OutcomeCounts(BaseModel):
 class CivilReport(BaseModel):
     prediction: CivilPrediction
     outcomes: OutcomeCounts
+    default_cases: int = 0     # 最相似的 30 件（含一造辯論）裡，被告未到庭的件數
     amount_range: Optional[AmountRange]
     similar: List[SimilarCase]
     evidence: List[EvidenceRow]
