@@ -4,6 +4,10 @@
 # 虛擬環境
 .venv/
 
+# 擋我的小key key
+.env
+*.key
+
 # Python 快取
 __pycache__/
 *.pyc
