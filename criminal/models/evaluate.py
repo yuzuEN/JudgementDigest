@@ -2,7 +2,7 @@
 """
 CAIL 格式資料集的共用讀取、切分與評估（所有模型共用，分數才能互相比較）。
 
-只依賴 numpy；訓練腳本另外需要 scikit-learn／PyTorch（見 model/BASELINES.md）。
+只依賴 numpy；訓練腳本另外需要 scikit-learn／PyTorch（見 criminal/models/BASELINES.md）。
 
 資料：CAIL 格式 jsonl（或含一個 .jsonl 的 .zip），每行 {"fact": ..., "meta": {...}}。
   - meta.fold：0–9，依 jid／裁判字號雜湊固定分組

@@ -6,7 +6,7 @@ SVM 刑期加入罪名：TF-IDF 後面接罪名 one-hot，看知道罪名對刑�
   只看事實；事實 ＋ 正確罪名（上限，實際使用時拿不到）；事實 ＋ 預測罪名（實際可用）。
 訓練一律用正確罪名；預測罪名來自只用該輪 train 訓練的 LinearSVC。罪名任務不可用的案件 one-hot 全 0。
 
-用法：python model/svm_term_charge.py --shared <共用包> --out svm_term_charge.md
+用法：python criminal/models/svm_term_charge.py --shared <共用包> --out svm_term_charge.md
 """
 
 import argparse

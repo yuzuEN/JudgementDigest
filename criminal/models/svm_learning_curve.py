@@ -9,7 +9,7 @@ TF-IDF ＋ LinearSVC 的學習曲線：固定測試集，訓練資料逐步增�
 更大的訓練量請用 fasttext_gpu.py。本機記憶體不足時可在 Kaggle（CPU 即可）執行。
 
 用法：
-  python model/svm_learning_curve.py --data cail_v2.jsonl --sizes 50000,100000,200000
+  python criminal/models/svm_learning_curve.py --data cail_v2.jsonl --sizes 50000,100000,200000
 """
 
 import argparse

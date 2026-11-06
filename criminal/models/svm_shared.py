@@ -8,8 +8,8 @@ TF-IDF（字 1–2 gram）＋ LinearSVC，在共用實驗包（share_national150
 CPU 即可，不需要 GPU。
 
 用法：
-  python model/svm_shared.py --shared share_national150_100k_5fold_20261022
-  python model/svm_shared.py --shared ... --folds fold_01 --out svm_fold01.md
+  python criminal/models/svm_shared.py --shared share_national150_100k_5fold_20261022
+  python criminal/models/svm_shared.py --shared ... --folds fold_01 --out svm_fold01.md
 """
 
 import argparse
