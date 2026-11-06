@@ -39,6 +39,7 @@ export interface FollowupResponse {
 
 export interface CivilInput {
   text: string;
+  search_text?: string | null;
   mid?: string | null;
   court?: string | null;
   plaintiff_has_lawyer?: boolean | null;
@@ -113,6 +114,13 @@ export interface OutcomeCounts {
   win: number;
   partial: number;
   lose: number;
+}
+
+export interface RewriteResponse {
+  text?: string | null;
+  source: "llm" | "none";
+  added_numbers: string[];
+  fallback?: "no_llm" | "not_dispute" | "error" | "limited" | null;
 }
 
 export interface CivilReport {

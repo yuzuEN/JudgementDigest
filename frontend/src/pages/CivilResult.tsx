@@ -29,7 +29,7 @@ export default function CivilResult() {
     : "正在比對相似的真實判決……";
 
   return (
-    <ResultFrame active="civil" title={title} lead={lead} mock={report?.mock ?? false} maskedText={intake.maskedText}>
+    <ResultFrame active="civil" title={title} lead={lead} mock={report?.mock ?? false} maskedText={intake.maskedText} searchText={intake.searchText}>
       {error && <ErrorBox message={error} onRetry={load} />}
       {!report && !error && <Loading>正在計算，約需幾秒鐘……</Loading>}
       {report && (
@@ -38,7 +38,7 @@ export default function CivilResult() {
             <Outcomes report={report} />
             <Amount range={report.amount_range} />
           </div>
-          <SimilarCases cases={report.similar} onlyWin={onlyWin} setOnlyWin={setOnlyWin} />
+          <SimilarCases cases={report.similar} onlyWin={onlyWin} setOnlyWin={setOnlyWin} rewritten={Boolean(intake.searchText)} />
           <div className="grid-2">
             <section className="card" aria-labelledby="ev-title">
               <h2 id="ev-title">證據對照</h2>
@@ -219,7 +219,7 @@ function Amount({ range }: { range: AmountRange | null }) {
   );
 }
 
-function SimilarCases({ cases, onlyWin, setOnlyWin }: { cases: SimilarCase[]; onlyWin: boolean; setOnlyWin: (v: boolean) => void }) {
+function SimilarCases({ cases, onlyWin, setOnlyWin, rewritten }: { cases: SimilarCase[]; onlyWin: boolean; setOnlyWin: (v: boolean) => void; rewritten: boolean }) {
   const visible = (c: SimilarCase) => !onlyWin || outcomeTone(c.outcome) !== "lose";
   const shown = cases.filter(visible);
   return (
@@ -228,6 +228,7 @@ function SimilarCases({ cases, onlyWin, setOnlyWin }: { cases: SimilarCase[]; on
         <h2 id="sim-title">相似的真實判決</h2>
         <label className="check no-print"><input type="checkbox" checked={onlyWin} onChange={(e) => setOnlyWin(e.target.checked)} /> 只看原告勝訴的</label>
       </div>
+      <p className="hint" style={{ fontSize: 14 }}>{rewritten ? "用你確認過的整理文字搜尋。" : "用你原本的描述搜尋。"}</p>
       <div className="table-wrap">
         <table className="cases">
           <thead><tr><th scope="col">字號</th><th scope="col">結果</th><th scope="col">判准／請求</th><th scope="col">相似度 <InfoLink to="相似度" label="相似度說明" /></th><th scope="col" className="no-print"><span className="sr-only">動作</span></th></tr></thead>

@@ -121,11 +121,15 @@ class CivilService:
             out.append(mid_note)
         return out
 
+    def _similarity(self, req) -> np.ndarray:
+        """使用者確認過的改寫只用來搜尋；勝訴機率仍用原本的描述（口語測試中改寫沒有提高判斷力）。"""
+        return self.index.scores(prepare_input(without_questions(req.search_text or req.text)))
+
     def predict(self, req) -> Dict:
         if self.mock:
             return mock.civil_report(req.text, req.claimed_amount, req.evidence)["prediction"]
         text = without_questions(req.text)
-        sim = self.index.scores(prepare_input(text))
+        sim = self._similarity(req)
         mid, note = self._resolve_mid(req, sim)
         p = self.model.predict_one(text, {**self.answers(req), "mid": mid})
         return {"win_probability": round(p, 4), "signal": win_signal(p, text), "model": self._model_info(),
@@ -193,7 +197,7 @@ class CivilService:
         if self.mock:
             return mock.civil_report(req.text, req.claimed_amount, req.evidence)
         prediction = self.predict(req)
-        sim = self.index.scores(prepare_input(without_questions(req.text)))
+        sim = self._similarity(req)
         # 統計只用對審、有被告答辯的案件；一造辯論只出現在列表（見 retrieval/civil.py）
         mid, _ = self._resolve_mid(req, sim)
         rows, _ = self.index.top(sim, N_NEIGHBORS, self._allowed(mid, self.in_stats))

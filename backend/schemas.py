@@ -75,8 +75,22 @@ class FollowupResponse(BaseModel):
     fallback: Optional[Literal["not_dispute", "error", "limited"]] = None   # 要求用 LLM 卻改用固定題庫的原因
 
 
+class RewriteRequest(BaseModel):
+    mid: Optional[str] = None
+    text: str = Field(min_length=1, max_length=20000, description="遮名後的案情描述")
+    allow_llm: bool = Field(default=False, description="使用者看過說明並按下按鈕才是 true")
+
+
+class RewriteResponse(BaseModel):
+    text: Optional[str] = None
+    source: Literal["llm", "none"]
+    added_numbers: List[str] = Field(default_factory=list, description="改寫裡有、描述裡沒有的數字，要提醒使用者確認")
+    fallback: Optional[Literal["no_llm", "not_dispute", "error", "limited"]] = None
+
+
 class CivilInput(BaseModel):
     text: str = Field(min_length=1, max_length=20000, description="遮名後的案情描述")
+    search_text: Optional[str] = Field(default=None, max_length=20000, description="使用者確認過的改寫，只用來搜尋相似判決")
     mid: Optional[str] = Field(default=None, description="案由中類，例：侵權：交通事故")
     court: Optional[str] = Field(default=None, description="法院簡稱，例：臺北；不知道就留空")
     plaintiff_has_lawyer: Optional[bool] = None

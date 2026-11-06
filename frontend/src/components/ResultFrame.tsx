@@ -26,12 +26,13 @@ function useOpenDetailsForPrint() {
 }
 
 /** 民事、刑事結果頁共用的外框：分頁、標題、下載 PDF，以及只在列印時出現的報告抬頭。 */
-export function ResultFrame({ active, title, lead, mock, maskedText, children }: {
+export function ResultFrame({ active, title, lead, mock, maskedText, searchText, children }: {
   active: "civil" | "criminal";
   title: string;
   lead: ReactNode;
   mock: boolean;
   maskedText: string;
+  searchText?: string;
   children: ReactNode;
 }) {
   useOpenDetailsForPrint();
@@ -44,6 +45,10 @@ export function ResultFrame({ active, title, lead, mock, maskedText, children }:
           {mock && <p><strong>本報告是示例資料：數字與判決都不是真的，請勿作為判斷依據。</strong></p>}
           <h2 style={{ fontSize: 16 }}>案情描述（已遮名）</h2>
           <p style={{ whiteSpace: "pre-wrap", fontSize: 14 }}>{maskedText}</p>
+          {searchText && <>
+            <h2 style={{ fontSize: 16 }}>用來搜尋相似判決的文字（已確認）</h2>
+            <p style={{ whiteSpace: "pre-wrap", fontSize: 14 }}>{searchText}</p>
+          </>}
         </div>
 
         <div style={{ display: "flex", flexWrap: "wrap", alignItems: "flex-end", justifyContent: "space-between", gap: 12 }}>

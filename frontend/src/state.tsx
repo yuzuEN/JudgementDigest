@@ -16,6 +16,8 @@ export interface Intake {
   names: string[];
   maskedText: string;
   sensitiveConsent: boolean;
+  searchText: string;    // 使用者確認過的改寫，只用來搜尋相似判決
+  rewriteFor: string;    // 改寫時的遮名描述；描述改了，改寫就不能再用
 }
 
 export const EMPTY_INTAKE: Intake = {
@@ -31,6 +33,8 @@ export const EMPTY_INTAKE: Intake = {
   names: [],
   maskedText: "",
   sensitiveConsent: false,
+  searchText: "",
+  rewriteFor: "",
 };
 
 /** 描述加上追問的回答，作為遮名與送出的全文。 */
@@ -45,6 +49,7 @@ export function fullText(intake: Intake): string {
 export function civilInput(intake: Intake): CivilInput {
   return {
     text: intake.maskedText || fullText(intake),
+    search_text: intake.searchText || null,
     mid: intake.mid || null,
     court: intake.court || null,
     plaintiff_has_lawyer: intake.lawyer === "" ? null : intake.lawyer === "yes",

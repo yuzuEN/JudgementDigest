@@ -72,6 +72,87 @@ describe("頁首的步驟", () => {
   });
 });
 
+describe("整理成判決書的寫法", () => {
+  const BUTTON = "請 AI 整理敘述";
+  const rules = { questions: [], source: "rules", llm_available: true };
+  const setup = (reply: unknown) => {
+    const sent: { text: string }[] = [];
+    mockApi({
+      "POST /intake/followup": () => rules,
+      "POST /intake/rewrite": (b: { text: string }) => { sent.push(b); return reply; },
+    });
+    return sent;
+  };
+  const llm = { text: "原告主張被告未還款。", source: "llm", added_numbers: [] };
+
+  it("沒有設定 LLM 時不顯示", async () => {
+    mockApi({ "POST /intake/followup": () => ({ ...rules, llm_available: false }) });
+    renderAt("/confirm", <Confirm />, "/confirm", { text: "他欠我錢" });
+    await waitFor(() => expect(screen.getByRole("button", { name: "看參考結果" })).toBeEnabled());
+    expect(screen.queryByRole("button", { name: BUTTON })).not.toBeInTheDocument();
+  });
+
+  it("刑事不顯示", async () => {
+    mockApi({ "POST /intake/followup": () => rules });
+    renderAt("/confirm", <Confirm />, "/confirm", { text: "他打我", caseType: "criminal" });
+    await screen.findByRole("button", { name: "請 AI 幫我看還缺什麼" });
+    expect(screen.queryByRole("button", { name: BUTTON })).not.toBeInTheDocument();
+  });
+
+  it("按下按鈕才傳，送的是遮名後的文字", async () => {
+    const sent = setup(llm);
+    const user = userEvent.setup();
+    renderAt("/confirm", <Confirm />, "/confirm", { text: "王小明的電話是0912345678，他欠我錢", names: ["王小明"] });
+    const button = await screen.findByRole("button", { name: BUTTON });
+    expect(sent).toHaveLength(0);
+    await user.click(button);
+    await screen.findByRole("textbox", { name: /請確認整理後的內容/ });
+    expect(sent).toHaveLength(1);
+    expect(sent[0].text).not.toContain("王小明");
+    expect(sent[0].text).not.toContain("0912345678");
+  });
+
+  it("確認前不能看結果，改過的文字會再遮一次", async () => {
+    setup(llm);
+    const user = userEvent.setup();
+    renderAt("/confirm", <Confirm />, "/confirm", { text: "他欠我錢", names: ["王小明"] });
+    await user.click(await screen.findByRole("button", { name: BUTTON }));
+    const box = await screen.findByRole("textbox", { name: /請確認整理後的內容/ });
+    expect(screen.getByRole("button", { name: "看參考結果" })).toBeDisabled();
+    await user.clear(box);
+    await user.type(box, "原告王小明主張被告未還款");
+    await user.click(screen.getByRole("button", { name: "確認用這段搜尋" }));
+    expect(await screen.findByText(/已確認/)).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "看參考結果" })).toBeEnabled();
+    const previews = document.querySelectorAll(".masked-preview");
+    expect(previews[previews.length - 1].textContent).toBe("原告【姓名】主張被告未還款");
+  });
+
+  it("提醒描述裡沒有的數字", async () => {
+    setup({ ...llm, added_numbers: ["112"] });
+    const user = userEvent.setup();
+    renderAt("/confirm", <Confirm />, "/confirm", { text: "他欠我錢" });
+    await user.click(await screen.findByRole("button", { name: BUTTON }));
+    expect(await screen.findByText(/這些數字沒有出現在你的描述裡.*112/)).toBeInTheDocument();
+  });
+
+  it("AI 不能用時改用原本的描述", async () => {
+    setup({ source: "none", added_numbers: [], fallback: "error" });
+    const user = userEvent.setup();
+    renderAt("/confirm", <Confirm />, "/confirm", { text: "他欠我錢" });
+    await user.click(await screen.findByRole("button", { name: BUTTON }));
+    expect(await screen.findByText(/會用你原本的描述搜尋/)).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "看參考結果" })).toBeEnabled();
+  });
+
+  it("結果頁送出確認過的文字", async () => {
+    const { calls } = mockApi({ "POST /civil/report": () => CIVIL_REPORT });
+    renderAt("/result/civil", <CivilResult />, "/result/civil", { text: "內容", maskedText: "內容", searchText: "原告主張" });
+    expect(await screen.findByText("用你確認過的整理文字搜尋。")).toBeInTheDocument();
+    expect(calls[0].body).toMatchObject({ text: "內容", search_text: "原告主張" });
+  });
+});
+
 describe("相似判決的結果", () => {
   const show = (over: Partial<typeof CIVIL_REPORT>) => {
     mockApi({ "POST /civil/report": () => ({ ...CIVIL_REPORT, ...over }) });

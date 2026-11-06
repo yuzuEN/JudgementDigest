@@ -4,6 +4,7 @@ import { api } from "../api/client";
 import type { Question } from "../api/types";
 import { Loading } from "../components/Common";
 import { Layout } from "../components/Layout";
+import { RewriteCard } from "../components/RewriteCard";
 import { money, parseAmount, sensitiveKinds, splitMasked } from "../format";
 import { maskText } from "../mask";
 import { fullText, useIntake } from "../state";
@@ -21,6 +22,7 @@ export default function Confirm() {
   const [llmAvailable, setLlmAvailable] = useState(false);
   const [aiState, setAiState] = useState<"idle" | "asking" | "done" | "failed" | "unrelated" | "limited" | "declined">("idle");
   const [nameInput, setNameInput] = useState("");
+  const [reviewing, setReviewing] = useState(false);
   const text = useMemo(() => fullText(intake), [intake]);
 
   // 打開頁面時只用固定題庫，描述不離開瀏覽器。傳給 LLM 要等使用者加好姓名、同意之後自己按按鈕（askLlm）
@@ -40,7 +42,9 @@ export default function Confirm() {
   }, [intake.caseType, intake.mid, intake.text]);
 
   useEffect(() => {
-    update({ maskedText: maskText(text, intake.names) });
+    const maskedText = maskText(text, intake.names);
+    // 描述或姓名改了，之前確認的改寫就對不上了
+    update(intake.rewriteFor && intake.rewriteFor !== maskedText ? { maskedText, searchText: "", rewriteFor: "" } : { maskedText });
     // 不把 update 放進依賴：它會隨 intake 變動，放進去會一直重跑
   }, [text, intake.names]);
 
@@ -112,13 +116,13 @@ export default function Confirm() {
             <ul className="plain" style={{ fontSize: 15 }}>
               <li>蒐集者：JudgementDigest 專題團隊；目的：產生類案判決參考結果。</li>
               <li>遮名在你的瀏覽器裡完成，原文和你加入的姓名不會傳到我們的伺服器。送出的是上面遮名後的內容；本平台不保存你的描述，結果只顯示在你的瀏覽器裡。</li>
-              {llmAvailable && <li>只有在你按下「請 AI 幫我看還缺什麼」時，遮名後的內容才會傳給 Google Gemini 付費 API，不用於改善 Google 的產品。</li>}
+              {llmAvailable && <li>只有在你按下「請 AI 幫我看還缺什麼」或「請 AI 整理敘述」時，遮名後的內容才會傳給 Google Gemini 付費 API，不用於改善 Google 的產品。</li>}
               <li>病歷、醫療、健康檢查、基因、性生活、犯罪前科是法律特別保護的資料。你可以不提供：不同意的話，回上一步刪掉這些描述就能繼續，只是參考結果可能比較不準。</li>
             </ul>
             {sensitive && (
               <label className="consent">
                 <input type="checkbox" checked={intake.sensitiveConsent} onChange={(e) => update({ sensitiveConsent: e.target.checked })} />
-                <span><strong>我同意</strong>本平台處理我提供的敏感個人資料（偵測到：{kinds.join("、")}），只用於產生這次的參考結果。{llmAvailable && "如果你選擇請 AI 提問，這些內容也會傳給 Google Gemini。"}</span>
+                <span><strong>我同意</strong>本平台處理我提供的敏感個人資料（偵測到：{kinds.join("、")}），只用於產生這次的參考結果。{llmAvailable && "如果你選擇請 AI 提問或整理敘述，這些內容也會傳給 Google Gemini。"}</span>
               </label>
             )}
             {sensitive && !intake.sensitiveConsent && <div><Link to="/start" className="btn secondary small">不同意，回上一步刪掉這些描述</Link></div>}
@@ -164,8 +168,11 @@ export default function Confirm() {
             </section>
           )}
 
+          {llmAvailable && intake.caseType !== "criminal" && <RewriteCard ready={ready} onReviewing={setReviewing} />}
+
           <div className="actions">
-            <button type="button" className="btn" disabled={!ready} onClick={() => navigate(resultPath)}>看參考結果</button>
+            <button type="button" className="btn" disabled={!ready || reviewing} onClick={() => navigate(resultPath)}>看參考結果</button>
+            {reviewing && <span className="warn-text">請先確認整理後的內容，或改用原本的描述。</span>}
             {sensitive && !intake.sensitiveConsent && <span className="warn-text">內容包含敏感個人資料，請先在上面選擇同意或不同意。</span>}
           </div>
         </div>
