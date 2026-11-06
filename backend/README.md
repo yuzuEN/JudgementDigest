@@ -29,6 +29,7 @@ API 文件（可以直接在網頁上試）：http://127.0.0.1:8000/docs
 | `GET /api/meta/options` | 問卷選項：糾紛類型（案由中類）、法院、證據 | 來自模型的訓練資料 |
 | `POST /api/intake/mask` | 遮掉身分證字號、電話、電子郵件、地址、指定的名字 | 規則；網站改在瀏覽器遮名，這個 API 留給其他用途 |
 | `POST /api/intake/followup` | 追問描述裡缺少的事實 | 固定題庫；`allow_llm: true` 且有設定 LLM 時用 LLM |
+| `POST /api/intake/rewrite` | 把描述整理成判決書寫法 | LLM；不能用時回傳 `source: none` |
 | `POST /api/civil/predict` | 民事勝訴機率 | 模型 |
 | `POST /api/civil/report` | 結果頁的全部內容：相似判決的勝敗件數、機率與提示、金額範圍、相似判決、證據對照、常見抗辯 | 模型＋檢索 |
 | `POST /api/criminal/predict` | 罪名、法條、刑期分布、相似判決 | **示例資料**（刑事組開發中） |
@@ -83,6 +84,8 @@ API 文件（可以直接在網頁上試）：http://127.0.0.1:8000/docs
 - 沒有設定 `JD_LLM_PROVIDER` 時完全不呼叫外部服務
 - 有設定時也要 `allow_llm: true` 才傳：打開確認頁只用固定題庫；使用者加好姓名、同意敏感個資的處理後，自己按按鈕才傳
 - LLM 失敗、逾時或格式不對時，追問退回固定題庫，回應的 `source` 會是 `rules`，`fallback` 說明原因
+- 整理敘述（`rewrite_claim`）的結果只有使用者確認後才會以 `search_text` 送回，用來搜尋相似判決；勝訴機率仍用原本的描述
+- 整理後多出描述裡沒有的數字時，`added_numbers` 會列出來提醒使用者；這是提醒，不能保證抓到所有多加的事實
 - 傳給 LLM 的文字最多 3,000 字；說明（`why`）提到法律或法院做法時，換成固定的說明
 - 新增廠商：寫一個有 `generate_json` 的類別，在 `create_client` 加一行
 - Gemini 只能用付費層：免費層的資料會用於改善 Google 的產品

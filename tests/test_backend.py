@@ -356,6 +356,12 @@ class TestWithModel(unittest.TestCase):
         self.assertFalse(r["mock"])
         self.assertEqual({g["category"] for g in r["mid_groups"]}, {"侵權", "契約"})
 
+    def test_confirmed_rewrite_only_changes_the_search(self):
+        plain = self.report(text=WIN[0] * 5)
+        rewritten = self.report(text=WIN[0] * 5, search_text=LOSE[0] * 5)
+        self.assertEqual(plain["prediction"]["win_probability"], rewritten["prediction"]["win_probability"], "機率用原本的描述")
+        self.assertNotEqual([c["case_id"] for c in plain["similar"]], [c["case_id"] for c in rewritten["similar"]], "搜尋用確認過的改寫")
+
     def test_probability_follows_text(self):
         win = self.client.post("/api/civil/predict", json={"text": WIN[0] * 5, "mid": "侵權：交通事故"}).json()
         lose = self.client.post("/api/civil/predict", json={"text": LOSE[0] * 5, "mid": "侵權：交通事故"}).json()

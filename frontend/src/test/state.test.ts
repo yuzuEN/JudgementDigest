@@ -21,7 +21,7 @@ describe("civilInput", () => {
       lawyer: "no", defendantType: "company", claimedAmount: "50萬", evidence: ["transfer"],
     });
     expect(input).toEqual({
-      text: "我是【姓名】", mid: "民間借貸", court: null, plaintiff_has_lawyer: false,
+      text: "我是【姓名】", search_text: null, mid: "民間借貸", court: null, plaintiff_has_lawyer: false,
       defendant_type: "company", claimed_amount: 500000, evidence: ["transfer"],
     });
   });

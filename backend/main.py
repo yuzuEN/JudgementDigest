@@ -15,7 +15,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from backend import followup, llm, mock, schemas
 from backend.civil_service import CivilService
 from backend.llm.limits import UsageLimiter
-from backend.llm.tasks import followup_questions
+from backend.llm.tasks import followup_questions, rewrite_claim
 from backend.quality import looks_like_dispute
 from backend.settings import Settings
 from retrieval.masking import TAGS, mask
@@ -78,6 +78,24 @@ def create_app(settings: Optional[Settings] = None) -> FastAPI:
                 fallback = "error"
         return {"questions": followup.questions(req.case_type, req.mid, req.text), "source": "rules",
                 "llm_available": available, "fallback": fallback}
+
+    @api.post("/intake/rewrite", response_model=schemas.RewriteResponse)
+    def rewrite(req: schemas.RewriteRequest, request: Request):
+        """
+        把描述改寫成判決書的寫法，給使用者確認後用來搜尋相似判決。
+        只有 allow_llm 才傳給 LLM；不能用時回傳 source: none，前端改用原本的描述搜尋。
+        """
+        if not req.allow_llm or llm_client is None:
+            return {"source": "none", "fallback": "no_llm"}
+        if not looks_like_dispute(req.text):
+            return {"source": "none", "fallback": "not_dispute"}
+        if not llm_limit.allow(client_ip(request)):
+            return {"source": "none", "fallback": "limited"}
+        try:
+            return {**rewrite_claim(llm_client, req.mid, req.text), "source": "llm"}
+        except llm.LLMError as e:
+            logger.warning("LLM 改寫失敗，改用原本的描述：%s", e)
+            return {"source": "none", "fallback": "error"}
 
     @api.post("/civil/predict", response_model=schemas.CivilPrediction)
     def civil_predict(req: schemas.CivilInput):

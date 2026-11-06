@@ -9,7 +9,8 @@ class FakeClient:
 
     def __init__(self, reply: Optional[Dict] = None, error: Optional[Exception] = None):
         self.reply = reply if reply is not None else {"questions": [
-            {"text": "（測試）對方有沒有說過為什麼不處理？", "why": "（測試）對方的理由常是爭點。"}]}
+            {"text": "（測試）對方有沒有說過為什麼不處理？", "why": "（測試）對方的理由常是爭點。"}],
+            "claim": "（測試）原告主張被告未依約履行，致原告受有損害，爰請求被告賠償。"}
         self.error = error
         self.sent: List[str] = []
 
