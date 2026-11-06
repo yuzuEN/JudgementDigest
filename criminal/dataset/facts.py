@@ -12,13 +12,17 @@
 三種來源最後都切掉結尾交代案件來源的「（二、）案經…移送／報告…偵查起訴」。
 
 遮蔽原則（依人工審核結果訂定）：只遮「把罪名當名稱用」的地方，描述行為的字保留。
-  - 犯意句「基於○○之犯意／不確定故意／犯意聯絡」的○○一律遮（含改寫過的罪名，如「酒後駕駛動力交通工具」）
-  - 本案罪名後接「罪／罪嫌／案件／犯行」時遮（犯○○罪、○○罪嫌、前因○○案件）
+  - 犯意句「基於○○之犯意／不確定故意／犯意聯絡」的○○一律遮（含改寫過的罪名，如「酒後駕駛動力交通工具」）；
+    前段只留「…不違背其本意之」「意圖為自己不法所有之」這類描述
+  - 本案罪名後接「罪／罪嫌／案件／犯行／犯／既遂／未遂」時遮（犯○○罪、○○罪嫌、前因○○案件、施用毒品犯）；
+    常見罪名的「既遂／未遂」不論是否本案罪名都遮
+  - 前案名稱只有和本案罪名相同時才遮（「前因公共危險案件」在本案是竊盜時保留：前科是量刑資訊，不是本案答案）
   - 法條只遮「第○條（之○）（第○項）（第○款）」本身，以及緊接在前的法律名稱
   - 不遮：施用、侵占入己、詐欺集團、受有傷害、意圖為自己不法之所有
 """
 
 import re
+import unicodedata
 from typing import Iterable, List, Tuple
 
 MASK = "××"
@@ -133,6 +137,7 @@ LAW_NAMES = (
     "稅捐稽徵法", "商業會計法", "森林法", "就業服務法", "電信法", "著作權法", "野生動物保育法",
     "入出國及移民法", "貪污治罪條例", "懲治走私條例", "公職人員選舉罷免法", "建築法", "水土保持法",
     "區域計畫法", "動物保護法", "妨害兵役治罪條例", "替代役實施條例", "保護令",
+    "詐欺犯罪危害防制條例", "醫療法", "醫師法", "期貨交易法",
     "同法", "同條例", "該法", "該條例", "本法", "本條例", "前開條例", "前揭條例", "上開條例", "上述條例",
 )
 LAW_CITE_RE = re.compile(
@@ -140,11 +145,18 @@ LAW_CITE_RE = re.compile(
 # 犯意句：「基於／承前／接續前揭／萌生 ○○（之）犯意」。
 # 內容可含逗號（「基於意圖營利，供給賭博場所、聚眾賭博之犯意」），但不跨句、不跨另一個「基於」；
 # 「之」可省略（「基於意圖為自己不法所有之竊盜犯意」）。
+# 上限 100 字：v2 抽樣核對發現「基於無正當理由將…帳號3個以上交付、提供予他人使用之犯意」約 70 字，60 字抓不到。
 INTENT_RE = re.compile(
     r"(?:基於|承前揭|承前|承上開|承上揭|承上|接續前揭|接續上開|續前揭|續上開|萌生)"
-    r"(?P<inner>(?:(?!基於)[^。；]){1,60}?)之?(?:不確定故意|未必故意|間接故意|犯意聯絡|犯意|單一犯意|故意)")
+    r"(?P<inner>(?:(?!基於)[^。；]){1,100}?)之?(?:不確定故意|未必故意|間接故意|犯意聯絡|犯意|單一犯意|故意)")
 # 不是罪名的犯意修飾語（「基於同一犯意」「承前揭犯意」），不遮
 NOT_CHARGE_INTENT = re.compile(r"^(?:前|上)?(?:揭|開|述|同一|單一|概括|各別|個別|接續|共同|一個|相同|此|該|其|一貫|同)*$")
+# 犯意句前段可保留的描述：「…亦不違背其本意之」「意圖為自己不法所有之」；其他前段（如「詐欺取財及掩飾、隱匿
+# 詐欺犯罪所得去向及所在之」洗錢犯意）是構成要件，跟著一起遮
+KEEP_LEAD_RE = re.compile(r"(?:本意|意圖[^，、]{0,20}所有)之$")
+# 罪名的既遂／未遂（「隱匿詐欺犯罪所得而洗錢既遂」）：不限本案罪名，列舉常見罪名
+COMMON_CHARGES = ("洗錢", "詐欺取財", "詐欺", "竊盜", "強盜", "搶奪", "殺人", "傷害", "恐嚇取財", "恐嚇",
+                  "侵占", "背信", "強制性交", "強制猥褻", "擄人勒贖", "放火", "販賣毒品", "運輸毒品")
 
 
 def _mask_intent(m: re.Match) -> str:
@@ -153,7 +165,7 @@ def _mask_intent(m: re.Match) -> str:
     lead = ""
     if "之" in inner:                       # 「縱有人…亦不違背其本意之幫助詐欺取財及洗錢」→只遮最後一段
         cut = inner.rfind("之") + 1
-        lead = inner[:cut]
+        lead = inner[:cut] if KEEP_LEAD_RE.search(inner[:cut]) else ""
     if NOT_CHARGE_INTENT.match(inner[len(lead):]):
         return m.group(0)
     return m.group(0).replace(inner, lead + MASK, 1)
@@ -169,11 +181,17 @@ def charge_keys(charges: Iterable[str]) -> List[str]:
     return sorted(keys, key=len, reverse=True)
 
 
+# 本案罪名當名稱用：後接「罪／案件／犯（罪、行、受保護管束人）／既遂／未遂／之犯行」
+CHARGE_AS_NAME = r"(?=(?:等)?(?:罪|案件)|犯|既遂|未遂|之?(?:犯行|犯意|故意))"
+
+
 def mask_fact(fact: str, charges: Iterable[str] = ()) -> str:
-    text = INTENT_RE.sub(_mask_intent, fact)
+    # 相容字形（判決常見 U+F967「不」）轉成一般字，否則「不確定故意」等規則對不上；v2 抽樣約 7% 的事實有
+    text = INTENT_RE.sub(_mask_intent, unicodedata.normalize("NFC", fact))
     keys = charge_keys(charges)
     for key in keys:
-        text = re.sub(re.escape(key) + r"(?=(?:等)?(?:罪|案件)|之?(?:犯行|犯意|故意))", MASK, text)
+        text = re.sub(re.escape(key) + CHARGE_AS_NAME, MASK, text)
+    text = re.sub(rf"(?:{'|'.join(map(re.escape, COMMON_CHARGES))})(?:既遂|未遂)", MASK, text)
     # 列舉的罪名（「詐欺取財及××之犯行」）：後面接「、／及／與××」的也遮，直到不再變動
     while keys:
         new = re.sub(rf"(?:{'|'.join(map(re.escape, keys))})(?=(?:、|及|與|暨|或){MASK})", MASK, text)
@@ -188,6 +206,7 @@ def mask_fact(fact: str, charges: Iterable[str] = ()) -> str:
 
 def leaks(text: str, charges: Iterable[str] = ()) -> bool:
     """遮蔽後是否仍看得到本案罪名名稱或條號。"""
+    text = unicodedata.normalize("NFC", text)
     if re.search(ARTICLE, text):
         return True
-    return any(re.search(re.escape(k) + r"(?:(?:等)?(?:罪|案件)|之?(?:犯行|犯意|故意))", text) for k in charge_keys(charges))
+    return any(re.search(re.escape(k) + CHARGE_AS_NAME, text) for k in charge_keys(charges))

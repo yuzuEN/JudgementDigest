@@ -209,6 +209,39 @@ class TestMaskFact(unittest.TestCase):
         out = mask_fact("甲○○知悉甲基安非他命係毒品危害防制條例第2條第2項第2款所規定之第二級毒品。", [])
         self.assertEqual(out, "甲○○知悉甲基安非他命係××所規定之第二級毒品。")
 
+    def test_compat_ideograph_in_intent(self):
+        """REGRESSION：v2 抽樣核對，「不確定故意」的「不」是相容字形 U+F967，犯意句前段的罪名沒遮。"""
+        out = mask_fact("竟基於縱使他人利用其帳戶，亦不違其本意之幫助詐欺取財及幫助洗錢之不確定故意，交付帳戶。", [])
+        self.assertEqual(out, "竟基於縱使他人利用其帳戶，亦不違其本意之××之不確定故意，交付帳戶。")
+
+    def test_intent_lead_that_is_an_element_is_masked(self):
+        """REGRESSION：v2 抽樣核對，洗錢犯意句的前段「詐欺取財及掩飾、隱匿…」是構成要件，要一起遮。"""
+        out = mask_fact("基於詐欺取財及掩飾、隱匿詐欺犯罪所得去向及所在之洗錢犯意聯絡，詐騙被害人。", [])
+        self.assertEqual(out, "基於××犯意聯絡，詐騙被害人。")
+        out = mask_fact("竟基於意圖為自己不法所有之竊盜犯意，徒手竊取", [])
+        self.assertEqual(out, "竟基於意圖為自己不法所有之××犯意，徒手竊取")
+
+    def test_long_intent_clause(self):
+        """REGRESSION：v2 抽樣核對，約 70 字的犯意句超過舊上限 60 字，整句沒遮。"""
+        src = ("林○○基於無正當理由將自己或他人向金融機構申請開立之帳戶、向虛擬通貨平台及交易業務之事業"
+               "或第三方支付服務業申請之帳號3個以上交付、提供予他人使用之犯意，寄送提款卡。")
+        self.assertEqual(mask_fact(src, ["洗錢罪"]), "林○○基於××之犯意，寄送提款卡。")
+
+    def test_charge_name_with_fan_and_attempt(self):
+        """REGRESSION：v2 抽樣核對，「詐欺犯罪」「施用毒品犯」「洗錢既遂」留下罪名。"""
+        self.assertEqual(mask_fact("可能因此幫助他人從事詐欺犯罪之用", ["詐欺罪"]), "可能因此幫助他人從事××犯罪之用")
+        self.assertIn("屬於××犯受保護管束人",mask_fact("被告屬於施用毒品犯受保護管束人", ["施用毒品罪"]))
+        self.assertEqual(mask_fact("以此方式隱匿所得而洗錢既遂", ["詐欺罪"]), "以此方式隱匿所得而××")
+
+    def test_law_name_from_labels(self):
+        """REGRESSION：v2 抽樣核對，「醫療法第10條」只遮了條號。"""
+        self.assertEqual(mask_fact("屬醫療法第10條第1項所規定之醫事人員", []), "屬××所規定之醫事人員")
+
+    def test_prior_case_of_other_charge_is_kept(self):
+        """前案名稱和本案罪名不同時保留（前科是量刑資訊）。"""
+        src = "甲○○前因公共危險案件，經法院判處有期徒刑確定，又竊取機車。"
+        self.assertEqual(mask_fact(src, ["竊盜罪"]), src)
+
     def test_leaks(self):
         self.assertTrue(leaks("違反刑法第185條之3規定", []))
         self.assertTrue(leaks("前因竊盜案件入監", ["竊盜罪"]))
