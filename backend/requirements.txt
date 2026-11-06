@@ -1,0 +1,9 @@
+# 後端（API 伺服器）執行所需的套件。Docker 映像檔只裝這份；本機開發另外裝根目錄的 requirements.txt。
+# scikit-learn 鎖定版本：模型檔（joblib）要用訓練時的版本讀，版本不同可能讀不出來或結果不同。
+numpy>=1.24
+pandas>=2.0.0
+scikit-learn==1.6.1
+fastapi>=0.115,<0.116
+uvicorn>=0.32,<0.33
+httpx>=0.27,<0.29
+python-dotenv>=1.0,<2

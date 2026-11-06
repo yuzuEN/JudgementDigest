@@ -1,0 +1,230 @@
+{
+  "batch": {
+    "counts": {
+      "structured_rows": 107098,
+      "eligible": 70197,
+      "before_raw_empty": 3712,
+      "before_raw_partial": 338,
+      "before_empty_slots": 4078,
+      "before_accusation_gate": 64184,
+      "before_article_gate": 60657,
+      "before_imprisonment_gate": 44590,
+      "after_raw_empty": 1949,
+      "after_raw_partial": 299,
+      "after_empty_slots": 2134,
+      "after_accusation_gate": 64184,
+      "after_article_gate": 62457,
+      "after_imprisonment_gate": 44590,
+      "recovered_cases": 1808,
+      "recovered_slots": 1944,
+      "all_empty_to_nonempty": 1763,
+      "all_empty_to_complete": 1760,
+      "all_empty_to_partial": 3,
+      "partial_to_complete": 42
+    },
+    "attempt_reasons": {
+      "recovered": 1944,
+      "legacy_no_match_in_accepted_court_text": 1356,
+      "legacy_unparsed_law_string": 304,
+      "new_candidate_ambiguity": 246,
+      "new_parsed_different_offense": 201,
+      "law_in_rejected_claim_or_negative_passage": 39
+    },
+    "recovered_sources": {
+      "案件法條備援": 1539,
+      "適用法條": 287,
+      "理由": 118
+    },
+    "cohort_id_sha256": "75fae88bf4da0a4e9ad36dc64f25757196bc372c6990cb358511414b26c1eaeb",
+    "source_rows_sha256": "dca11b8dab12c1cff0e8d6c9e86459385dcad402583060afbc9386bd4bcd962c",
+    "code_sha256": {
+      "structure_tasks.py": "4a993231e126fb1810370c5e178ca5158f46e07f8b1ab60121d1bcf002b04ac9",
+      "law_fallback.py": "d441c94591fdc848781b866f8bd0c84bbe83d6b1cdafce849a85f12eaaa6a28a",
+      "law_label_validation.py": "6309cdf293928d46599b9b828c877b81054e8ce94199d361935cae6ac2324d7f",
+      "build_structured_review.py": "6465b90a89b94c5a46c9f02aaa032f994eafb264ed3356486203a17a90b9d623",
+      "normalize.py": "99aa4ac94046ff5b8358b71d2b29b360f3826dc3ee5d50fde958f89e5f894bb7",
+      "law_frequency.py": "ce322d982710575764b0f2e8c3fe1ed0070a3f63debcc06782be8beb06084943",
+      "driving_charge.py": "2e4a030d281c04cf1126d0c460209d95a623a22a71a2be33b94d5c099a432c93",
+      "refresh_modeldata.py": "0b65102cb962032e0860b87390f279953e84d011a61a33f40530f4e0596fa8ef",
+      "rebuild_fallback_outputs.py": "ec454bf0fd4dbaf14342d671b169eba8e40472e1a09fe48f6ac1c29f19397978"
+    },
+    "seconds": 604.35,
+    "raw_database_mode": "read_only",
+    "structured_id": "judgments.id",
+    "fallback_enabled": true,
+    "normalization_changed": false
+  },
+  "verification": {
+    "baseline_exact_rows": 70197,
+    "previous_experiment_different_rows": 8,
+    "previous_experiment_different_ids": [
+      53384,
+      81233,
+      87356,
+      95714,
+      95952,
+      120097,
+      122526,
+      132209
+    ],
+    "structured_integrity": "ok",
+    "xlsx_zip_integrity": "ok",
+    "excel_audits_over_cell_limit": 2,
+    "outputs": {
+      "2018-2025_罪法刑.db": {
+        "previous_sha256": "7aa818ec0d977fc523f9eb373c7f80d016d29017f34fded0114ea2125cc26670",
+        "sha256": "bd2a0b7e9488e0d3c14415efad543ee6823ea28fb580a9114c6ae8d76b924bcc",
+        "backup": "finaldata/before_formal_fallback_20261020/2018-2025_罪法刑.db"
+      },
+      "2018-2025_罪法刑.xlsx": {
+        "previous_sha256": "655ae935b189c200a8d6b335491be05345d851358dc29c150e7da421f4581c80",
+        "sha256": "77394da1c84a42c219ac8be49cf4d9187ea25e2579650670b51dcf64c66c7127",
+        "backup": "finaldata/before_formal_fallback_20261020/2018-2025_罪法刑.xlsx"
+      }
+    },
+    "historical_evidence_hashes_unchanged": true,
+    "code_commit": "4fabf00"
+  },
+  "samples": {
+    "reviewer": {
+      "counts": {
+        "n": 100,
+        "before_all_empty": 100,
+        "after_all_empty": 26,
+        "recovered": 74,
+        "same_as_latest_experiment": 100,
+        "article_gate_pass": 74
+      },
+      "changes": [],
+      "sample_sha256": "1e7d0d751a9c661bdc45dcadb39ddd8f73a86bc2da0e3638148b682b97304087"
+    },
+    "fallback": {
+      "counts": {
+        "n": 100,
+        "before_all_empty": 99,
+        "after_all_empty": 0,
+        "recovered": 100,
+        "same_as_latest_experiment": 100,
+        "article_gate_pass": 99
+      },
+      "changes": [],
+      "sample_sha256": "5dac3e7776865e7c7fc94ac8c493d89176e06f23475ca2deabbe0002f32a2a52"
+    }
+  },
+  "modeldata": {
+    "version": "v1.4",
+    "input_file": "../modeldata/CAIL格式_刑事判決_2018-2025_v1.1.zip",
+    "input_sha256": "198c0055346b597d045ae48260f123fc80e56009c952402f0cd61d5948f2ce93",
+    "counts": {
+      "input": 54214,
+      "reextracted": 52419,
+      "old_term_task": 39842,
+      "accusation_valid": 45542,
+      "article_valid": 44391,
+      "imprisonment_valid": 35363,
+      "accusation_and_article_valid": 44354,
+      "raw_not_found": 1795
+    },
+    "code_commit": "4fabf000ee9af9040d05337159e1f5628e093992",
+    "code_sha256": {
+      "structure_tasks.py": "4a993231e126fb1810370c5e178ca5158f46e07f8b1ab60121d1bcf002b04ac9",
+      "law_fallback.py": "d441c94591fdc848781b866f8bd0c84bbe83d6b1cdafce849a85f12eaaa6a28a",
+      "law_label_validation.py": "6309cdf293928d46599b9b828c877b81054e8ce94199d361935cae6ac2324d7f",
+      "driving_charge.py": "2e4a030d281c04cf1126d0c460209d95a623a22a71a2be33b94d5c099a432c93",
+      "normalize.py": "99aa4ac94046ff5b8358b71d2b29b360f3826dc3ee5d50fde958f89e5f894bb7",
+      "build_structured_review.py": "6465b90a89b94c5a46c9f02aaa032f994eafb264ed3356486203a17a90b9d623",
+      "law_frequency.py": "ce322d982710575764b0f2e8c3fe1ed0070a3f63debcc06782be8beb06084943",
+      "refresh_modeldata.py": "0b65102cb962032e0860b87390f279953e84d011a61a33f40530f4e0596fa8ef"
+    },
+    "original_fact_sequence_sha256": "f0157cf3a19bc2a203630f46fc136bd7be29c5c9047b598f8570f5c0a913b0f5",
+    "new_fact_sequence_sha256": "f0157cf3a19bc2a203630f46fc136bd7be29c5c9047b598f8570f5c0a913b0f5",
+    "output_sha256": "b83c037d3629082ad5a1d693724414d4fc351304f4cc6fcc021ede756b0bd983"
+  },
+  "modeldata_validation": {
+    "counts": {
+      "rows": 54214,
+      "fallback_records": 1077,
+      "fallback_article_eligible": 997,
+      "accusation_valid": 45542,
+      "article_valid": 44391,
+      "imprisonment_valid": 35363,
+      "invalid_article_with_partial_evidence": 6846
+    },
+    "prepared_task_eligibility_checked": {
+      "accusation": {
+        "train": 30448,
+        "valid": 6202,
+        "test": 7495
+      },
+      "article": {
+        "train": 29640,
+        "valid": 5956,
+        "test": 7562
+      },
+      "imprisonment": {
+        "train": 23596,
+        "valid": 4868,
+        "test": 6861
+      }
+    },
+    "fact_sequence_sha256": "f0157cf3a19bc2a203630f46fc136bd7be29c5c9047b598f8570f5c0a913b0f5",
+    "consumer": "Actual Taiwan prepare plus all produced rows checked; active empty labels and term_task enforce task boundaries; no model training"
+  },
+  "consumer": {
+    "accusation": {
+      "num_labels": 50,
+      "splits": {
+        "train": 30448,
+        "valid": 6202,
+        "test": 7495
+      },
+      "skipped": {
+        "empty_active_task_labels": 8672,
+        "train_without_frequent_label": 276,
+        "valid_without_frequent_label": 154,
+        "test_without_frequent_label": 920
+      }
+    },
+    "article": {
+      "num_labels": 59,
+      "splits": {
+        "train": 29640,
+        "valid": 5956,
+        "test": 7562
+      },
+      "skipped": {
+        "empty_active_task_labels": 9823,
+        "train_without_frequent_label": 339,
+        "valid_without_frequent_label": 237,
+        "test_without_frequent_label": 625
+      }
+    },
+    "imprisonment": {
+      "num_labels": 11,
+      "splits": {
+        "train": 23596,
+        "valid": 4868,
+        "test": 6861
+      },
+      "skipped": {
+        "not_eligible_for_term": 18851
+      }
+    }
+  },
+  "known_sample_errors": {
+    "fallback": {
+      "n": 100,
+      "article_error_cases": 9,
+      "units_only_cases": 1,
+      "helper_only_core_missing": 1
+    },
+    "reviewer": {
+      "n": 100,
+      "recovered": 74,
+      "article_error_cases": 4,
+      "helper_only_core_missing": 1,
+      "missing_companion_210": 1
+    }
+  },
+  "tests": 575
+}
