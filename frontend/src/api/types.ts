@@ -91,6 +91,7 @@ export interface SimilarCase {
   awarded_amount?: number | null;
   sentence?: string | null;
   default_judgment?: boolean;
+  url?: string | null;
 }
 
 export interface EvidenceRow {

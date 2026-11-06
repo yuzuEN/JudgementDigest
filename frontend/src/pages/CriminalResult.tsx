@@ -75,7 +75,9 @@ export default function CriminalResult() {
                       <td data-label="罪名">{c.mid}</td>
                       <td data-label="宣告刑">{c.sentence ?? "—"}</td>
                       <td data-label="相似度">{c.similarity.toFixed(2)}</td>
-                      <td className="no-print"><Link to={`/judgment/criminal/${c.case_id}`}>判決導讀</Link></td>
+                      <td className="no-print">{c.url
+                        ? <a href={c.url} target="_blank" rel="noreferrer">判決原文</a>
+                        : <Link to={`/judgment/criminal/${c.case_id}`}>判決導讀</Link>}</td>
                     </tr>
                   ))}
                 </tbody>

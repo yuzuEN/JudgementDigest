@@ -10,6 +10,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from criminal.models import service  # noqa: E402
+from retrieval import criminal as retrieval_criminal  # noqa: E402
 
 DRUNK = "被告飲用啤酒後，吐氣所含酒精濃度達每公升零點四毫克，仍騎乘機車上路，為警攔查。"
 THEFT = "被告徒手竊取店內商品，得手後離去，經店員報警查獲。"
@@ -19,7 +20,10 @@ def meta(charge, law, raw_law, kind="有期徒刑", months=3):
     return {"accusation": [charge], "relevant_articles": [law], "sentence_kind": kind,
             "task_validity": {"accusation": True, "article": True, "imprisonment": kind == "有期徒刑"},
             "term_of_imprisonment": {"imprisonment": months, "death_penalty": False, "life_imprisonment": False},
-            "label_detail": {"standard_charges_by_offense": [[charge]], "raw_laws_by_offense": [[raw_law, "刑法第41條第1項"]]}}
+            "label_detail": {"standard_charges_by_offense": [[charge]], "raw_laws_by_offense": [[raw_law, "刑法第41條第1項"]]},
+            "detention_days": 20 if kind == "拘役" else 0, "punish_of_money": 0, "criminals": ["王大明"],
+            "court": "臺北地方法院", "year": 2024, "judgment_date": "2024-05-01",
+            "source_url": "https://judgment.judicial.gov.tw/FJUD/data.aspx?ty=JD&id=TPDM"}
 
 
 def synthetic(n=60):
@@ -27,10 +31,11 @@ def synthetic(n=60):
     for i in range(n):
         if i % 2:
             m = meta("酒駕罪", "刑法第185條", "刑法第185條之3第1項第1款", "拘役" if i % 4 == 1 else "有期徒刑", 4)
-            text = DRUNK + f"第{i}次。"
+            text = f"民國{100 + i}年，王大明" + DRUNK
         else:
             m = meta("竊盜罪", "刑法第320條", "刑法第320條第1項", months=8)
-            text = THEFT + f"第{i}次。"
+            text = f"民國{100 + i}年，" + THEFT
+        m["case_number"] = f"臺灣臺北地方法院 113 年度 簡 字第 {i} 號刑事簡易判決"
         rows.append({"fact": text, "meta": m})
     return rows
 
@@ -41,9 +46,11 @@ def write_jsonl(rows, path: Path):
             f.write(json.dumps(r, ensure_ascii=False) + "\n")
 
 
-def train_artifacts(base: Path) -> Path:
+def train_artifacts(base: Path, retrieval: bool = True) -> Path:
     src = base / "cail.jsonl"
     write_jsonl(synthetic(), src)
+    if retrieval:
+        retrieval_criminal.write_artifacts(retrieval_criminal.load_corpus(src), retrieval_criminal.artifact_dir(base))
     return service.train(service.read(src), service.artifact_dir(base), src.name)
 
 
@@ -55,6 +62,9 @@ class TestLabels(unittest.TestCase):
         self.assertEqual([b("有期徒刑", m) for m in (2, 6, 7, 12, 13, 36, 37, 120, 121)], [1, 1, 2, 2, 3, 3, 4, 4, 5])
         self.assertEqual((b("拘役"), b("死刑或無期徒刑")), (0, 5))
         self.assertIsNone(b("刑期未明"))
+        fine = {"sentence_kind": "刑期未明", "punish_of_money": 10000, "detention_days": 0,
+                "term_of_imprisonment": {"imprisonment": 0}}
+        self.assertEqual(service.bucket_of(fine), 0)          # 只判罰金
         self.assertIsNone(b("有期徒刑", 5, valid=False))
 
     def test_offense_laws_keep_suffix_and_drop_general_part(self):
@@ -65,6 +75,25 @@ class TestLabels(unittest.TestCase):
 
     def test_input_is_nfc_normalized(self):
         self.assertEqual(service.normalize("不確定故意"), "不確定故意")
+
+
+class TestRetrieval(unittest.TestCase):
+    def test_sentence_text(self):
+        t = lambda kind, months=0, days=0, money=0: retrieval_criminal.sentence_text(
+            {"sentence_kind": kind, "detention_days": days, "punish_of_money": money,
+             "term_of_imprisonment": {"imprisonment": months, "death_penalty": False}})
+        self.assertEqual([t("有期徒刑", 3), t("有期徒刑", 14), t("有期徒刑", 24)],
+                         ["有期徒刑 3 月", "有期徒刑 1 年 2 月", "有期徒刑 2 年"])
+        self.assertEqual((t("拘役", days=20), t("刑期未明", money=10000)), ("拘役 20 日", "罰金 10,000 元"))
+        self.assertIsNone(t("有期徒刑併拘役"))
+
+    def test_corpus_caps_each_charge_and_masks_defendant(self):
+        with tempfile.TemporaryDirectory() as d:
+            src = Path(d) / "cail.jsonl"
+            write_jsonl(synthetic(), src)
+            corpus = retrieval_criminal.load_corpus(src, per_charge=5)
+            self.assertEqual(sorted(corpus.charges.str[0].value_counts().tolist()), [5, 5])
+            self.assertFalse(corpus.text.str.contains("王大明").any())
 
 
 class TestTrainedModel(unittest.TestCase):

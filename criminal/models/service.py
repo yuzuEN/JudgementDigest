@@ -10,12 +10,13 @@
   刑度區間     multinomial logistic regression，6 區間與前端相同（拘役、罰金／1–6 月／7–12 月／1–3 年／3–10 年／10 年以上）
   罪名對法條   訓練資料裡單一罪名的犯罪，最常引用的法條（保留「之○」，如刑法第 185 條之 4）；
                有幾個候選時，取粗分法條模型機率最高的
-刑度是整個案件的分布，每個罪名附同一份。刑期未明、有期徒刑併拘役的案件不進刑度模型。
+刑度是整個案件的分布，每個罪名附同一份。只判罰金（資料集標「刑期未明」）算進「拘役、罰金」；其他刑期未明、有期徒刑併拘役的案件不進刑度模型。
 """
 import argparse
 import collections
 import csv
 import json
+import random
 import re
 import time
 import unicodedata
@@ -58,6 +59,10 @@ def normalize(text: str) -> str:
 def bucket_of(meta: Dict) -> Optional[int]:
     kind = meta.get("sentence_kind")
     if kind == "拘役":
+        return 0
+    # 只判罰金的案件在資料集裡是「刑期未明」（v2 約 5 萬件）：有罰金、沒有拘役與有期徒刑
+    if kind == "刑期未明" and (meta.get("punish_of_money") or 0) > 0 and not (meta.get("detention_days") or 0) \
+            and not meta["term_of_imprisonment"]["imprisonment"]:
         return 0
     if kind == "死刑或無期徒刑":
         return len(BUCKETS) - 1
@@ -234,7 +239,7 @@ def evaluate(shared: Path, fold: str, kinds: Iterable[str], jobs: int, out: Path
         m = CriminalModel(kind, jobs).fit(sp["train"])
         sec = time.time() - t0
         for threshold in ([None] if kind == "svm" else [None, 0.3]):
-            label = kind if threshold is None else f"{kind}（機率 ≥ {threshold}）"
+            label = kind if threshold is None else f"{kind}（機率 >= {threshold}）"
             for split in ("test", "holdout"):
                 s = scores_of(m, sp[split], threshold)
                 lines.append(f"| {label} | {split} | " + " | ".join(f"{s[k]:.3f}" for k in
@@ -279,11 +284,16 @@ def main():
     t.add_argument("--data", required=True, type=Path)
     t.add_argument("--jobs", type=int, default=3)
     t.add_argument("--out", type=Path, default=None)
+    t.add_argument("--max-rows", type=int, default=300_000,
+                   help="隨機抽這麼多筆訓練；全量 113 萬筆的 TF-IDF 矩陣要 5 GB 以上記憶體。學習曲線上 20 萬筆以後 micro 幾乎不再上升")
     a = ap.parse_args()
     if a.cmd == "evaluate":
         evaluate(a.shared, a.fold, a.kinds.split(","), a.jobs, a.out)
     else:
-        out = train(read(a.data), a.out or artifact_dir(), a.data.name, a.jobs)
+        with open(a.data, encoding="utf-8") as f:
+            n = sum(1 for _ in f)
+        keep = set(random.Random(SEED).sample(range(1, n + 1), min(a.max_rows, n)))
+        out = train(read(a.data, keep), a.out or artifact_dir(), a.data.name, a.jobs)
         print("存到", out)
 
 

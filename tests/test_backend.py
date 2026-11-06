@@ -150,9 +150,27 @@ class TestCriminalWithModel(unittest.TestCase):
     def test_predict(self):
         r = self.client.post("/api/criminal/predict", json={"text": CRIMINAL_DRUNK}).json()
         self.assertFalse(r["mock"])
-        self.assertEqual(r["similar"], [])
         self.assertEqual(r["charges"][0]["name"], "酒駕罪")
         self.assertEqual(len(r["charges"][0]["sentence"]), 6)
+        # 相似判決只在含「酒駕罪」的判決裡找，附宣告刑與原文網址；真的判決沒有導讀
+        self.assertTrue(r["similar"] and all(c["mid"] == "酒駕罪" for c in r["similar"]))
+        self.assertTrue(r["similar"][0]["url"].startswith("https://judgment.judicial.gov.tw/"))
+        self.assertIn(r["similar"][0]["sentence"], ("有期徒刑 4 月", "拘役 20 日"))
+        guide = self.client.get(f"/api/judgments/criminal/{r['similar'][0]['case_id']}/guide")
+        self.assertEqual(guide.status_code, 404)
+
+    def test_search(self):
+        r = self.client.post("/api/retrieval/search", json={"type": "criminal", "text": CRIMINAL_DRUNK, "k": 3}).json()
+        self.assertFalse(r["mock"])
+        self.assertEqual(len(r["criminal"]), 3)
+
+    def test_without_retrieval_index(self):
+        tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(tmp.cleanup)
+        train_criminal(Path(tmp.name), retrieval=False)
+        client = TestClient(create_app(Settings(artifacts_dir=Path(tmp.name))))
+        r = client.post("/api/criminal/predict", json={"text": CRIMINAL_DRUNK}).json()
+        self.assertEqual((r["mock"], r["similar"]), (False, []))
 
     def test_forced_mock_mode(self):
         client = TestClient(create_app(Settings(artifacts_dir=Path(self.tmp.name), mode="mock")))

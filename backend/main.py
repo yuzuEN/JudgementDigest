@@ -92,15 +92,15 @@ def create_app(settings: Optional[Settings] = None) -> FastAPI:
 
     @api.post("/criminal/predict", response_model=schemas.CriminalReport)
     def criminal_predict(req: schemas.CriminalInput):
-        """刑事：罪名、法條、刑期分布。沒有模型檔時回傳示例資料；相似判決檢索還沒做，有模型時是空清單。"""
+        """刑事：罪名、法條、刑期分布、相似判決。沒有模型檔時回傳示例資料。"""
         return criminal.report(req.text)
 
     @api.post("/retrieval/search", response_model=schemas.SearchResponse)
     def search(req: schemas.SearchRequest):
         civil_cases = civil.search(req.text, req.mid, req.k) if req.type in ("civil", "both") else []
-        criminal_cases = mock.criminal_report()["similar"][:req.k] if req.type in ("criminal", "both") else []
+        criminal_cases = criminal.search(req.text, req.k) if req.type in ("criminal", "both") else []
         return {"civil": civil_cases, "criminal": criminal_cases,
-                "mock": (civil.mock and req.type != "criminal") or req.type != "civil"}
+                "mock": (civil.mock and req.type != "criminal") or (criminal.mock and req.type != "civil")}
 
     @api.get("/judgments/{source}/{case_id}/guide", response_model=schemas.Guide)
     def guide(source: str, case_id: int):
@@ -108,7 +108,8 @@ def create_app(settings: Optional[Settings] = None) -> FastAPI:
         if source == "civil":
             result = civil.guide(case_id)
         elif source == "criminal":
-            cases = {c["case_id"]: c for c in mock.criminal_report()["similar"]}
+            # 真的刑事判決沒有導讀（列表附司法院原文網址），只有示例資料有
+            cases = {c["case_id"]: c for c in mock.criminal_report()["similar"]} if criminal.mock else {}
             result = mock.guide(cases[case_id]) if case_id in cases else None
         else:
             raise HTTPException(404, "source 只能是 civil 或 criminal")

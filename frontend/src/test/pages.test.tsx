@@ -553,6 +553,15 @@ describe("刑事結果", () => {
     expect(screen.queryByText(/刑事組開發中/)).not.toBeInTheDocument();
     expect(screen.queryByRole("table")).not.toBeInTheDocument();
   });
+
+  it("真的刑事判決連到司法院原文，不連判決導讀", async () => {
+    const url = "https://judgment.judicial.gov.tw/FJUD/data.aspx?ty=JD&id=TPDM";
+    mockApi({ "POST /criminal/predict": () => ({ ...CRIMINAL_REPORT, mock: false,
+      similar: [{ ...CRIMINAL_REPORT.similar[0], url }] }) });
+    renderAt("/result/criminal", <CriminalResult />, "/result/criminal", { text: "x", maskedText: "開車撞到人" });
+    expect(await screen.findByRole("link", { name: "判決原文" })).toHaveAttribute("href", url);
+    expect(screen.queryByRole("link", { name: "判決導讀" })).not.toBeInTheDocument();
+  });
 });
 
 describe("判決導讀", () => {

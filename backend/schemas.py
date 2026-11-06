@@ -135,6 +135,7 @@ class SimilarCase(BaseModel):
     awarded_amount: Optional[int] = None
     sentence: Optional[str] = None
     default_judgment: bool = False      # 一造辯論：被告沒有到庭
+    url: Optional[str] = None           # 刑事：司法院裁判書系統的原文網址（刑事判決沒有導讀）
 
 
 class EvidenceRow(BaseModel):
