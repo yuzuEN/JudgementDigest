@@ -11,7 +11,7 @@ import sys
 import unittest
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "criminal" / "dataset"))
 
 from facts import get_fact, leaks, mask_fact, trim_case_origin  # noqa: E402
 
