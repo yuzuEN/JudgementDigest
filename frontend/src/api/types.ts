@@ -6,7 +6,7 @@ export type DefendantType = "person" | "company" | "government";
 export interface Health {
   status: string;
   civil: "model" | "mock";
-  criminal: "mock";
+  criminal: "model" | "mock";
   followup: "rules" | "llm";
   model: string | null;
 }

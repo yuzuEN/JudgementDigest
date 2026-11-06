@@ -14,6 +14,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from backend import followup, llm, mock, schemas
 from backend.civil_service import CivilService
+from backend.criminal_service import CriminalService
 from backend.llm.limits import UsageLimiter
 from backend.llm.tasks import followup_questions
 from backend.quality import looks_like_dispute
@@ -32,6 +33,7 @@ def client_ip(request: Request) -> str:
 def create_app(settings: Optional[Settings] = None) -> FastAPI:
     settings = settings or Settings.from_env()
     civil = CivilService(settings.artifacts_dir, force_mock=settings.mode == "mock")
+    criminal = CriminalService(settings.artifacts_dir, force_mock=settings.mode == "mock")
     llm_client = llm.create_client(settings.llm_provider, settings.llm_model, settings.llm_api_key)
     llm_limit = UsageLimiter(settings.llm_per_ip_hour, settings.llm_per_day)
     app = FastAPI(title="類案判決參考平台 API", version="0.1.0",
@@ -42,7 +44,7 @@ def create_app(settings: Optional[Settings] = None) -> FastAPI:
 
     @api.get("/health", response_model=schemas.Health)
     def health():
-        return {"status": "ok", "civil": "mock" if civil.mock else "model", "criminal": "mock",
+        return {"status": "ok", "civil": "mock" if civil.mock else "model", "criminal": "mock" if criminal.mock else "model",
                 "followup": "llm" if llm_client else "rules", "model": None if civil.mock else civil.meta["name"]}
 
     @api.get("/meta/options", response_model=schemas.Options)
@@ -90,8 +92,8 @@ def create_app(settings: Optional[Settings] = None) -> FastAPI:
 
     @api.post("/criminal/predict", response_model=schemas.CriminalReport)
     def criminal_predict(req: schemas.CriminalInput):
-        """刑事：罪名、法條、刑期分布、相似判決。刑事組的模型完成前回傳示例資料。"""
-        return mock.criminal_report()
+        """刑事：罪名、法條、刑期分布。沒有模型檔時回傳示例資料；相似判決檢索還沒做，有模型時是空清單。"""
+        return criminal.report(req.text)
 
     @api.post("/retrieval/search", response_model=schemas.SearchResponse)
     def search(req: schemas.SearchRequest):

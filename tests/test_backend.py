@@ -23,6 +23,7 @@ from backend.settings import Settings  # noqa: E402
 from civil.models import service  # noqa: E402
 from retrieval import build  # noqa: E402
 from tests.test_civil_service import LOSE, WIN, synthetic  # noqa: E402
+from tests.test_criminal_service import DRUNK as CRIMINAL_DRUNK, train_artifacts as train_criminal  # noqa: E402
 
 TRAFFIC = "去年三月我騎機車在路口直行，被右轉的汽車撞到，右手骨折住院五天，之後三個月沒辦法工作。" * 3
 
@@ -128,6 +129,34 @@ class TestWithoutModel(_MockCase):
         build_artifacts(Path(tmp.name))
         client = TestClient(create_app(Settings(artifacts_dir=Path(tmp.name), mode="mock")))
         self.assertEqual(client.get("/api/health").json()["civil"], "mock")
+
+
+class TestCriminalWithModel(unittest.TestCase):
+    """有刑事模型檔：回傳模型結果、不標示例；相似判決檢索還沒做，回空清單。"""
+
+    @classmethod
+    def setUpClass(cls):
+        cls.tmp = tempfile.TemporaryDirectory()
+        train_criminal(Path(cls.tmp.name))
+        cls.client = TestClient(create_app(Settings(artifacts_dir=Path(cls.tmp.name))))
+
+    @classmethod
+    def tearDownClass(cls):
+        cls.tmp.cleanup()
+
+    def test_health(self):
+        self.assertEqual(self.client.get("/api/health").json()["criminal"], "model")
+
+    def test_predict(self):
+        r = self.client.post("/api/criminal/predict", json={"text": CRIMINAL_DRUNK}).json()
+        self.assertFalse(r["mock"])
+        self.assertEqual(r["similar"], [])
+        self.assertEqual(r["charges"][0]["name"], "酒駕罪")
+        self.assertEqual(len(r["charges"][0]["sentence"]), 6)
+
+    def test_forced_mock_mode(self):
+        client = TestClient(create_app(Settings(artifacts_dir=Path(self.tmp.name), mode="mock")))
+        self.assertTrue(client.post("/api/criminal/predict", json={"text": CRIMINAL_DRUNK}).json()["mock"])
 
 
 class TestStartupErrors(unittest.TestCase):

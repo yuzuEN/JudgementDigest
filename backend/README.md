@@ -15,10 +15,11 @@ API 文件（可以直接在網頁上試）：http://127.0.0.1:8000/docs
 | `main.py` | 路由（全部在 `/api` 底下） |
 | `schemas.py` | 輸入輸出格式；前端的 `frontend/src/api/types.ts` 和它一一對應 |
 | `civil_service.py` | 民事：讀模型與檢索資料，算勝訴機率、相似判決、金額範圍、證據對照、常見抗辯、判決導讀 |
+| `criminal_service.py` | 刑事：讀模型（`artifacts/criminal_v1`），算罪名、法條、刑度分布；沒有模型檔時回傳示例資料 |
 | `followup.py` | 追問的固定題庫 |
 | `llm/` | LLM 追問，見下面的「LLM」 |
 | `quality.py` | 描述的品質檢查 |
-| `mock.py` | 示例資料：刑事、以及沒有模型檔時的民事 |
+| `mock.py` | 示例資料：沒有模型檔時的民事、刑事 |
 | `settings.py` | 環境變數 |
 
 ## API
@@ -31,7 +32,7 @@ API 文件（可以直接在網頁上試）：http://127.0.0.1:8000/docs
 | `POST /api/intake/followup` | 追問描述裡缺少的事實 | 固定題庫；`allow_llm: true` 且有設定 LLM 時用 LLM |
 | `POST /api/civil/predict` | 民事勝訴機率 | 模型 |
 | `POST /api/civil/report` | 結果頁的全部內容：機率、金額範圍、相似判決、證據對照、常見抗辯 | 模型＋檢索 |
-| `POST /api/criminal/predict` | 罪名、法條、刑期分布、相似判決 | **示例資料**（刑事組開發中） |
+| `POST /api/criminal/predict` | 罪名、法條、刑期分布、相似判決 | 模型（`criminal.models.service`）；相似判決檢索開發中，回傳空清單 |
 | `POST /api/retrieval/search` | 相似判決，`type` 為 `civil`、`criminal`、`both` | 民事真的；刑事示例 |
 | `GET /api/judgments/{source}/{case_id}/guide` | 判決導讀：段落與功能標示 | 民事為規則版（`labeler: rule-v0`） |
 
@@ -86,7 +87,7 @@ API 文件（可以直接在網頁上試）：http://127.0.0.1:8000/docs
 
 ## 接上其他組的功能
 
-- **刑事**：在 `main.py` 的 `/api/criminal/predict` 把 `mock.criminal_report()` 換成刑事模型，回傳格式照 `schemas.CriminalReport`
+- **刑事相似判決**：`criminal_service.py` 的 `similar` 目前是空清單，刑事檢索做好後接在這裡
 - **LLM 追問**：已接上，見上面的「LLM」；送出的文字一律先經過 `retrieval.masking.mask()`
 - **段落功能標註**：`civil.insights.guide_paragraphs()` 換成標註模型，`labeler` 改成模型名稱
 

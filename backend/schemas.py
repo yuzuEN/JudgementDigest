@@ -10,7 +10,7 @@ DefendantType = Literal["person", "company", "government"]
 class Health(BaseModel):
     status: str
     civil: Literal["model", "mock"]
-    criminal: Literal["mock"]
+    criminal: Literal["model", "mock"]
     followup: Literal["rules", "llm"]
     model: Optional[str] = None
 

@@ -545,6 +545,14 @@ describe("刑事結果", () => {
     expect(screen.getByRole("heading", { name: "刑期範圍：過失傷害罪" }).closest("section")).toHaveClass("screen-hidden");
     expect(screen.getByText("98%")).toBeInTheDocument();
   });
+
+  it("真模型沒有相似判決時顯示開發中，不出現示例提示", async () => {
+    mockApi({ "POST /criminal/predict": () => ({ ...CRIMINAL_REPORT, similar: [], mock: false }) });
+    renderAt("/result/criminal", <CriminalResult />, "/result/criminal", { text: "x", maskedText: "開車撞到人" });
+    expect(await screen.findByText("刑事的相似判決檢索開發中。")).toBeInTheDocument();
+    expect(screen.queryByText(/刑事組開發中/)).not.toBeInTheDocument();
+    expect(screen.queryByRole("table")).not.toBeInTheDocument();
+  });
 });
 
 describe("判決導讀", () => {

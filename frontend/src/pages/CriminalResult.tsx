@@ -49,7 +49,8 @@ export default function CriminalResult() {
             {report.charges.map((c, i) => (
               <section key={c.name} className={`card${i === selected ? "" : " screen-hidden"}`} aria-labelledby={`sentence-title-${i}`}>
                 <h2 id={`sentence-title-${i}`}>刑期範圍：{c.name}</h2>
-                <p className="hint">相似的有罪判決中，宣告刑落在各區間的比例。</p>
+                <p className="hint">{report.mock ? "相似的有罪判決中，宣告刑落在各區間的比例。"
+                  : "模型依類似的有罪判決推估，宣告刑落在各區間的機率（整個案件的刑度，各罪名相同）。"}</p>
                 {c.sentence.map((b) => (
                   <div key={b.label} className="bucket">
                     <span>{b.label}</span>
@@ -63,6 +64,7 @@ export default function CriminalResult() {
           </div>
           <section className="card" aria-labelledby="crim-sim-title">
             <h2 id="crim-sim-title">相似的真實判決</h2>
+            {report.similar.length === 0 ? <p className="hint">刑事的相似判決檢索開發中。</p> : (
             <div className="table-wrap">
               <table className="cases">
                 <thead><tr><th scope="col">字號</th><th scope="col">罪名</th><th scope="col">宣告刑</th><th scope="col">相似度 <InfoLink to="相似度" label="相似度說明" /></th><th scope="col" className="no-print"><span className="sr-only">動作</span></th></tr></thead>
@@ -79,6 +81,7 @@ export default function CriminalResult() {
                 </tbody>
               </table>
             </div>
+            )}
           </section>
           <ResultNotes items={[
             "結果只代表「有判決書的案件」的統計；不起訴、撤回告訴的案件不在資料裡。",
