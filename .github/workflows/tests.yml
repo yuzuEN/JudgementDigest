@@ -14,11 +14,15 @@ on:
 
 jobs:
   unit:
-    runs-on: ubuntu-latest
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 15   # 預設是 6 小時；測試卡住時 15 分鐘就失敗
     strategy:
       fail-fast: false
       matrix:
+        os: [ubuntu-latest, windows-latest]
         python-version: ["3.9", "3.12"]
+    env:
+      PYTHONIOENCODING: utf-8
 
     steps:
       - uses: actions/checkout@v4
@@ -31,10 +35,34 @@ jobs:
       - name: 安裝相依套件
         run: |
           python -m pip install --upgrade pip
-          pip install -r requirements.txt
+          pip install -r requirements.txt -r backend/requirements.txt
 
       - name: 語法檢查
-        run: python -m compileall -q crawler.py crawl_batched.py html_parser.py export_excel.py pipeline.py
+        run: python -m compileall -q config.py data_pipeline scripts civil retrieval backend
 
       - name: 離線測試
         run: python -m unittest discover -s tests -t . -v
+
+  frontend:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: 安裝相依套件
+        run: npm ci --no-audit --no-fund
+
+      - name: 測試
+        run: npm test
+
+      - name: 型別檢查與建置
+        run: npm run build

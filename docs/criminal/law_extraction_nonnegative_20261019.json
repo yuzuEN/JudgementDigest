@@ -1,0 +1,90 @@
+{
+  "counts": {
+    "eligible": 70197,
+    "recovered": 348,
+    "new_empty": 161,
+    "changed_rows": 10004,
+    "raw_changed": 1190,
+    "charges_changed": 8266,
+    "nonempty_raw_changed": 681,
+    "nonempty_charges_changed": 8247,
+    "partial_resolved": 73,
+    "partial_new": 64,
+    "before_raw_empty": 3899,
+    "before_partial_raw": 347,
+    "before_standard_empty": 4416,
+    "after_raw_empty": 3712,
+    "after_partial_raw": 338,
+    "after_standard_empty": 4230
+  },
+  "cohort": "2018–2025 有罪、單被告刑事判決；排除案號含上字／上訴字",
+  "cohort_id_sha256": "75fae88bf4da0a4e9ad36dc64f25757196bc372c6990cb358511414b26c1eaeb",
+  "source_rows_sha256": "dca11b8dab12c1cff0e8d6c9e86459385dcad402583060afbc9386bd4bcd962c",
+  "code_sha256": {
+    "structure_tasks.py": "58c37ff4f36adc8f1588194934f96106ede918a2d4aa3b500c3706d8ed237e74",
+    "law_frequency.py": "ce322d982710575764b0f2e8c3fe1ed0070a3f63debcc06782be8beb06084943",
+    "normalize.py": "99aa4ac94046ff5b8358b71d2b29b360f3826dc3ee5d50fde958f89e5f894bb7",
+    "build_structured_review.py": "bc22bc328dc4aa016512e25c13b91c8ef047d1e0581ae40eda3628d99e968a06",
+    "driving_charge.py": "2e4a030d281c04cf1126d0c460209d95a623a22a71a2be33b94d5c099a432c93",
+    "refresh_modeldata.py": "3f3b2486cf33dc6f5e3c626d3aa33788b7bb0395494245793275010e352a1c21",
+    "compare_law_extraction.py": "f62eddd8695318ef39719a38927a4a549e503a0acd91064a9bf92d808226bb48"
+  },
+  "before_sha256": {
+    "compare_law_extraction.py": "f62eddd8695318ef39719a38927a4a549e503a0acd91064a9bf92d808226bb48",
+    "refresh_modeldata.py": "3f3b2486cf33dc6f5e3c626d3aa33788b7bb0395494245793275010e352a1c21",
+    "normalize.py": "99aa4ac94046ff5b8358b71d2b29b360f3826dc3ee5d50fde958f89e5f894bb7",
+    "driving_charge.py": "2e4a030d281c04cf1126d0c460209d95a623a22a71a2be33b94d5c099a432c93",
+    "law_frequency.py": "ce322d982710575764b0f2e8c3fe1ed0070a3f63debcc06782be8beb06084943",
+    "structure_tasks.py": "33a6e576aef0788e34f4b69bf60ff606dcc73a90dc8fd8baa04acf3384f89337",
+    "build_structured_review.py": "103830fec25c4d79ada908eca5844bca8e097dc2e0f28387a871f926686403e6"
+  },
+  "seconds": 242.79,
+  "database_mode": "read_only",
+  "additional_counts": {
+    "charge_text_only_same_name_key": 8110,
+    "nonempty_charge_or_law_changed_union": 8772,
+    "source_only_changed": 714,
+    "charge_identity_or_slots_changed": 156,
+    "standard_charge_slots_changed": 143,
+    "sentence_slots_changed": 135,
+    "standard_charge_set_changed": 40
+  },
+  "standardization_gaps": {
+    "case_count": 1528,
+    "law_occurrences": 1692,
+    "reasons": {
+      "not_in_current_whitelist": 1308,
+      "no_parseable_law_key": 384
+    }
+  },
+  "raw_state_transitions": {
+    "all_filled -> all_filled": 65735,
+    "all_empty -> all_empty": 3551,
+    "all_empty -> all_filled": 346,
+    "partial_empty -> partial_empty": 274,
+    "all_filled -> partial_empty": 62,
+    "partial_empty -> all_filled": 66,
+    "all_filled -> all_empty": 154,
+    "partial_empty -> all_empty": 7,
+    "all_empty -> partial_empty": 2
+  },
+  "verification": {
+    "real_cases_passed": 54,
+    "unchanged_filter_ast": [
+      "conviction_passages",
+      "REJECTED_CONVICTION_RE",
+      "PROSECUTION_CLAIM_RE",
+      "COURT_RESUMPTION_RE"
+    ],
+    "raw_database": "read_only",
+    "model_data_updated": false,
+    "unit_tests_passed": 538,
+    "mandatory_cases_passed": 16,
+    "followup_cases_passed": 9,
+    "elision_numeric_cases_passed": 6,
+    "numeric_recheck_cases_passed": 23,
+    "manual_fixed_sample_count": 36,
+    "manual_sampling_note": "seed42 from intermediate comparison_4, fixed IDs rechecked on final code; not a precision estimate"
+  },
+  "artifacts": "finaldata/law_extraction_nonnegative_20261019/"
+}
