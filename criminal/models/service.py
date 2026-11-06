@@ -5,9 +5,11 @@
     python -m criminal.models.service train --data <CAIL 格式 .jsonl>         # 全部資料訓練，存到 artifacts/criminal_v1/
 
 為什麼用線性模型：共用包上 SVM 與 fastText 的罪名、法條 micro-F1 平手（.924／.886），刑期 SVM 較好；
-後端只裝 scikit-learn，不用多裝 PyTorch。平台要顯示機率，所以用 logistic regression（LinearSVC 沒有機率）。
-  罪名、法條   one-vs-rest logistic regression（每類各自的機率）
-  刑度區間     multinomial logistic regression，6 區間與前端相同（拘役、罰金／1–6 月／7–12 月／1–3 年／3–10 年／10 年以上）
+後端只裝 scikit-learn，不用多裝 PyTorch。平台要顯示機率，LinearSVC 只有分數，所以加機率校正（svm_cal）：
+留 10% 訓練資料不訓練，在上面把分數換成機率（Platt scaling）。共用包 fold_01 上 SVM 的 macro-F1 比 LR 高約 .03。
+  罪名、法條   one-vs-rest LinearSVC（class_weight balanced），每類各自校正
+  刑度區間     LinearSVC 6 類，再用 multinomial LR 把 6 個分數換成機率；6 區間與前端相同
+               （拘役、罰金／1–6 月／7–12 月／1–3 年／3–10 年／10 年以上）
   罪名對法條   訓練資料裡單一罪名的犯罪，最常引用的法條（保留「之○」，如刑法第 185 條之 4）；
                有幾個候選時，取粗分法條模型機率最高的
 刑度是整個案件的分布，每個罪名附同一份。只判罰金（資料集標「刑期未明」）算進「拘役、罰金」；其他刑期未明、有期徒刑併拘役的案件不進刑度模型。
@@ -39,8 +41,11 @@ BUCKETS = ["拘役、罰金", "1～6 個月", "7～12 個月", "1～3 年", "3�
 BUCKET_UPPER = [6, 12, 36, 120]          # 有期徒刑月數上限 → 區間 1–4；超過 120 個月 → 區間 5
 MIN_SHOWN = 0.1                           # 機率達到這個值的罪名才列出（最多 MAX_SHOWN 個，至少列最高的一個）
 MAX_SHOWN = 3
+MAX_SHOWN_PROBABILITY = 0.99             # 校正後常到 1.0；畫面上不顯示 100%，避免讓人以為確定
 LAW_CANDIDATES = 3                        # 每個罪名考慮的常見法條數
 C_LR = 4.0
+CAL_SHARE = 0.1                           # svm_cal：留這個比例的訓練資料校正機率
+MIN_CAL_POSITIVES = 5
 SEED = 42
 LAW_RE = re.compile(r"^(.+?第\d+條(?:之\d+)?)")
 # 不是罪名本身的條文（刑法總則、程序法、定義或加重條文…），與 CAIL 格式資料集 v2 的篩選相同
@@ -110,32 +115,61 @@ def vectorizer():
 
 
 def classifier(kind: str, jobs: int):
-    if kind == "svm":
+    if kind in ("svm", "svm_cal"):
         return OneVsRestClassifier(LinearSVC(C=0.5, class_weight="balanced"), n_jobs=jobs)
     weight = "balanced" if kind == "lr_balanced" else None
     return OneVsRestClassifier(LogisticRegression(C=C_LR, solver="liblinear", class_weight=weight), n_jobs=jobs)
 
 
+class Platt:
+    """每個類別各自用 sigmoid 把 SVM 分數換成機率，在沒參與訓練的校正資料上擬合（Platt scaling）。
+    校正資料裡正例太少的類別，改用所有類別合起來擬合的一條 sigmoid。"""
+
+    def __init__(self, scores: np.ndarray, Y: np.ndarray):
+        pooled = LogisticRegression(C=1e4).fit(scores.reshape(-1, 1), Y.reshape(-1))
+        self.a = np.full(Y.shape[1], pooled.coef_[0, 0])
+        self.b = np.full(Y.shape[1], pooled.intercept_[0])
+        for j in range(Y.shape[1]):
+            if MIN_CAL_POSITIVES <= Y[:, j].sum() < len(Y):
+                lr = LogisticRegression(C=1e4).fit(scores[:, [j]], Y[:, j])
+                self.a[j], self.b[j] = lr.coef_[0, 0], lr.intercept_[0]
+
+    def __call__(self, scores: np.ndarray) -> np.ndarray:
+        return 1 / (1 + np.exp(-(scores * self.a + self.b)))
+
+
 class CriminalModel:
-    def __init__(self, kind: str = "lr", jobs: int = 1):
+    """kind：svm（只有分數，評估用）、svm_cal（SVM＋機率校正，平台用）、lr、lr_balanced。"""
+
+    def __init__(self, kind: str = "svm_cal", jobs: int = 1):
         self.kind, self.jobs = kind, jobs
         self.vec = self.charge = self.article = self.term = None
         self.charge_mlb = self.article_mlb = None
+        self.charge_cal = self.article_cal = self.term_cal = None
         self.laws: Dict[str, List[str]] = {}
 
     def fit(self, rows: List[Dict]) -> "CriminalModel":
         t0 = time.time()
         self.vec = vectorizer().fit([r["text"] for r in rows])
         print(f"TF-IDF 完成（{time.time() - t0:.0f}s）", flush=True)
-        self.charge, self.charge_mlb = self._fit_multilabel(rows, "charges")
+        cal = []
+        if self.kind == "svm_cal":                    # 留一部分不訓練，用來校正機率
+            order = random.Random(SEED).sample(range(len(rows)), len(rows))
+            n_cal = int(len(rows) * CAL_SHARE)
+            cal, rows = [rows[i] for i in order[:n_cal]], [rows[i] for i in order[n_cal:]]
+        self.charge, self.charge_mlb = self._fit_multilabel(rows, "charges", cal)
         print(f"罪名完成（{time.time() - t0:.0f}s）", flush=True)
-        self.article, self.article_mlb = self._fit_multilabel(rows, "articles")
+        self.article, self.article_mlb = self._fit_multilabel(rows, "articles", cal)
         print(f"法條完成（{time.time() - t0:.0f}s）", flush=True)
         t = [r for r in rows if r["bucket"] is not None]
         X = self.vec.transform([r["text"] for r in t])
         y = [r["bucket"] for r in t]
-        self.term = (LinearSVC(C=0.5) if self.kind == "svm" else
+        self.term = (LinearSVC(C=0.5) if self.kind.startswith("svm") else
                      LogisticRegression(C=C_LR, max_iter=1000)).fit(X, y)
+        if cal:
+            c = [r for r in cal if r["bucket"] is not None]
+            D = self.term.decision_function(self.vec.transform([r["text"] for r in c]))
+            self.term_cal = LogisticRegression(C=1e4, max_iter=1000).fit(D, [r["bucket"] for r in c])
         print(f"刑度完成（{time.time() - t0:.0f}s）", flush=True)
         counts = collections.defaultdict(collections.Counter)
         for r in rows:
@@ -144,28 +178,40 @@ class CriminalModel:
         self.laws = {c: [law for law, _ in n.most_common(LAW_CANDIDATES)] for c, n in counts.items()}
         return self
 
-    def _fit_multilabel(self, rows, key):
+    def _fit_multilabel(self, rows, key, cal=()):
         a = [r for r in rows if r[key]]
         mlb = MultiLabelBinarizer().fit([r[key] for r in a])
-        Y = mlb.transform([r[key] for r in a])
-        return classifier(self.kind, self.jobs).fit(self.vec.transform([r["text"] for r in a]), Y), mlb
+        clf = classifier(self.kind, self.jobs).fit(self.vec.transform([r["text"] for r in a]),
+                                                   mlb.transform([r[key] for r in a]))
+        c = [r for r in cal if r[key]]
+        if c:
+            known = set(mlb.classes_)
+            Y = mlb.transform([[x for x in r[key] if x in known] for r in c])
+            setattr(self, "charge_cal" if key == "charges" else "article_cal",
+                    Platt(clf.decision_function(self.vec.transform([r["text"] for r in c])), Y))
+        return clf, mlb
 
     @staticmethod
-    def _scores(clf, X):
+    def _scores(clf, X, cal=None):
+        if cal is not None:
+            return cal(clf.decision_function(X))
         return clf.predict_proba(X) if hasattr(clf, "predict_proba") and hasattr(clf.estimators_[0], "predict_proba") \
             else clf.decision_function(X)
 
     def charge_scores(self, texts) -> np.ndarray:
-        return self._scores(self.charge, self.vec.transform([normalize(t) for t in texts]))
+        return self._scores(self.charge, self.vec.transform([normalize(t) for t in texts]), self.charge_cal)
 
     def article_scores(self, texts) -> np.ndarray:
-        return self._scores(self.article, self.vec.transform([normalize(t) for t in texts]))
+        return self._scores(self.article, self.vec.transform([normalize(t) for t in texts]), self.article_cal)
 
     def term_dist(self, texts) -> np.ndarray:
         """每筆 6 個區間的機率；訓練資料沒出現的區間補 0。"""
         X = self.vec.transform([normalize(t) for t in texts])
         p = np.zeros((X.shape[0], len(BUCKETS)))
-        p[:, self.term.classes_] = self.term.predict_proba(X)
+        if self.term_cal is not None:
+            p[:, self.term.classes_[self.term_cal.classes_]] = self.term_cal.predict_proba(self.term.decision_function(X))
+        else:
+            p[:, self.term.classes_] = self.term.predict_proba(X)
         return p
 
     def law_for(self, charge: str, article_p: Dict[str, float]) -> str:
@@ -185,7 +231,7 @@ class CriminalModel:
         order = [i for i in np.argsort(-pc)[:MAX_SHOWN] if pc[i] >= MIN_SHOWN] or [int(np.argmax(pc))]
         sentence = [{"label": b, "share": float(s)} for b, s in zip(BUCKETS, dist)]
         return [{"name": self.charge_mlb.classes_[i], "law": self.law_for(self.charge_mlb.classes_[i], pa),
-                 "probability": float(pc[i]), "sentence": sentence} for i in order]
+                 "probability": min(float(pc[i]), MAX_SHOWN_PROBABILITY), "sentence": sentence} for i in order]
 
 
 # ─── 評估（共用實驗包）─────────────────────────────────────────────────────────
@@ -255,11 +301,12 @@ def artifact_dir(base: Optional[Path] = None) -> Path:
 
 def train(rows: List[Dict], out: Path, source: str, jobs: int = 1) -> Path:
     import sklearn
-    model = CriminalModel("lr", jobs).fit(rows)
+    model = CriminalModel("svm_cal", jobs).fit(rows)
     out.mkdir(parents=True, exist_ok=True)
     joblib.dump(model, out / "model.joblib", compress=3)
     meta = {"name": MODEL_NAME, "trained_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
-            "source": source, "n_train": len(rows), "sklearn": sklearn.__version__,
+            "source": source, "n_train": len(rows), "sklearn": sklearn.__version__, "kind": model.kind,
+            "calibration_share": CAL_SHARE,
             "charges": len(model.charge_mlb.classes_), "articles": len(model.article_mlb.classes_), "buckets": BUCKETS}
     (out / "meta.json").write_text(json.dumps(meta, ensure_ascii=False, indent=2), encoding="utf-8")
     return out
@@ -277,7 +324,7 @@ def main():
     e = sub.add_parser("evaluate")
     e.add_argument("--shared", required=True, type=Path)
     e.add_argument("--fold", default="fold_01")
-    e.add_argument("--kinds", default="svm,lr,lr_balanced")
+    e.add_argument("--kinds", default="svm_cal,svm,lr")
     e.add_argument("--jobs", type=int, default=3)
     e.add_argument("--out", type=Path, default=Path("criminal_service_eval.md"))
     t = sub.add_parser("train")
