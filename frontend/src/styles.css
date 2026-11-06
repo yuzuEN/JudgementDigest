@@ -191,6 +191,7 @@ mark.masked { background: var(--mask-bg); color: var(--warn-title); border-radiu
 /* ── 結果 ── */
 .tabs { display: flex; gap: 8px; margin-bottom: 12px; }
 .tab { padding: 6px 16px; border-radius: 8px; border: 1px solid var(--line-strong); background: var(--surface); color: var(--ink); text-decoration: none; }
+.tab[aria-disabled="true"] { background: var(--chip); color: var(--muted); cursor: not-allowed; }
 .tab[aria-current="page"] { background: var(--accent); border-color: var(--accent); color: var(--on-accent); font-weight: 700; }
 .big-number { font-size: 52px; line-height: 1; font-weight: 700; color: var(--accent-ink); }
 .mid-number { font-size: 40px; line-height: 1; font-weight: 700; color: var(--accent-ink); }

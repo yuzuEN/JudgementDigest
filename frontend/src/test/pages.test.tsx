@@ -153,6 +153,47 @@ describe("整理成判決書的寫法", () => {
   });
 });
 
+describe("結果頁的民事、刑事分頁", () => {
+  const intake = { text: "內容", maskedText: "內容" };
+
+  it("選民事時不能切到刑事", async () => {
+    mockApi({ "POST /civil/report": () => CIVIL_REPORT });
+    renderAt("/result/civil", <CivilResult />, "/result/civil", { ...intake, caseType: "civil" });
+    await screen.findByText("62%");
+    expect(screen.queryByRole("link", { name: "刑事" })).not.toBeInTheDocument();
+    expect(screen.getByText("刑事")).toHaveAttribute("aria-disabled", "true");
+  });
+
+  it("選刑事時不能切到民事", async () => {
+    mockApi({ "POST /criminal/predict": () => CRIMINAL_REPORT });
+    renderAt("/result/criminal", <CriminalResult />, "/result/criminal", { ...intake, caseType: "criminal" });
+    await screen.findByRole("heading", { name: "可能的罪名" });
+    expect(screen.queryByRole("link", { name: "民事" })).not.toBeInTheDocument();
+    expect(screen.getByText("民事")).toHaveAttribute("aria-disabled", "true");
+  });
+
+  it("選刑事時，直接開民事網址會回到刑事，也不查民事", async () => {
+    const { calls } = mockApi({ "POST /criminal/predict": () => CRIMINAL_REPORT });
+    renderApp("/result/civil", { ...intake, caseType: "criminal" });
+    expect(await screen.findByRole("heading", { name: "可能的罪名" })).toBeInTheDocument();
+    expect(calls.map((c) => c.key)).not.toContain("POST /civil/report");
+  });
+
+  it("不確定時可以切到刑事", async () => {
+    mockApi({ "POST /civil/report": () => CIVIL_REPORT });
+    renderAt("/result/civil", <CivilResult />, "/result/civil", { ...intake, caseType: "unsure" });
+    await screen.findByText("62%");
+    expect(screen.getByRole("link", { name: "刑事" })).toHaveAttribute("href", "/result/criminal");
+  });
+
+  it("選民事時，直接開刑事網址會回到民事，也不查刑事", async () => {
+    const { calls } = mockApi({ "POST /civil/report": () => CIVIL_REPORT });
+    renderApp("/result/criminal", { ...intake, caseType: "civil" });
+    expect(await screen.findByText("62%")).toBeInTheDocument();
+    expect(calls.map((c) => c.key)).not.toContain("POST /criminal/predict");
+  });
+});
+
 describe("相似判決的結果", () => {
   const show = (over: Partial<typeof CIVIL_REPORT>) => {
     mockApi({ "POST /civil/report": () => ({ ...CIVIL_REPORT, ...over }) });
@@ -671,7 +712,7 @@ describe("刑事結果", () => {
   it("點罪名切換刑期分布", async () => {
     mockApi({ "POST /criminal/predict": () => CRIMINAL_REPORT });
     const user = userEvent.setup();
-    renderAt("/result/criminal", <CriminalResult />, "/result/criminal", { text: "x", maskedText: "開車撞到人" });
+    renderAt("/result/criminal", <CriminalResult />, "/result/criminal", { caseType: "criminal", text: "x", maskedText: "開車撞到人" });
     expect(await screen.findByRole("heading", { name: "刑期範圍：過失傷害罪" })).toBeInTheDocument();
     expect(screen.getByText(/刑事組開發中/)).toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: /肇事逃逸罪/ }));

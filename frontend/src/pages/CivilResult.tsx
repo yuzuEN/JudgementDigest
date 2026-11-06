@@ -14,6 +14,7 @@ export default function CivilResult() {
   const [onlyWin, setOnlyWin] = useState(false);
 
   const load = useCallback(() => {
+    if (intake.caseType === "criminal") return;
     setError("");
     setReport(null);
     api.civilReport(civilInput(intake)).then(setReport).catch((e: Error) => setError(e.message));
@@ -21,6 +22,7 @@ export default function CivilResult() {
   }, []);
   useEffect(load, [load]);
 
+  if (intake.caseType === "criminal") return <Navigate to="/result/criminal" replace />;
   if (!intake.maskedText) return <Navigate to={intake.text ? "/confirm" : "/start"} replace />;
 
   const title = `民事參考結果${intake.mid ? `：${intake.mid}` : ""}`;

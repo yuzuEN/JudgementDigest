@@ -1,5 +1,6 @@
 import { useEffect, type ReactNode } from "react";
 import { Link } from "react-router-dom";
+import { useIntake } from "../state";
 import { DownloadIcon, MockBadge } from "./Common";
 import { Layout } from "./Layout";
 
@@ -36,6 +37,7 @@ export function ResultFrame({ active, title, lead, mock, maskedText, searchText,
   children: ReactNode;
 }) {
   useOpenDetailsForPrint();
+  const { intake } = useIntake();
   return (
     <Layout step={3}>
       <main className="page stack">
@@ -54,8 +56,12 @@ export function ResultFrame({ active, title, lead, mock, maskedText, searchText,
         <div style={{ display: "flex", flexWrap: "wrap", alignItems: "flex-end", justifyContent: "space-between", gap: 12 }}>
           <div>
             <nav className="tabs" aria-label="結果類型">
-              <Link to="/result/civil" className="tab" aria-current={active === "civil" ? "page" : undefined}>民事</Link>
-              <Link to="/result/criminal" className="tab" aria-current={active === "criminal" ? "page" : undefined}>刑事</Link>
+              {intake.caseType === "criminal"
+                ? <span className="tab" aria-disabled="true" title="這次選的是刑事">民事</span>
+                : <Link to="/result/civil" className="tab" aria-current={active === "civil" ? "page" : undefined}>民事</Link>}
+              {intake.caseType === "civil"
+                ? <span className="tab" aria-disabled="true" title="這次選的是民事">刑事</span>
+                : <Link to="/result/criminal" className="tab" aria-current={active === "criminal" ? "page" : undefined}>刑事</Link>}
             </nav>
             <h1 className="page-title" style={{ margin: 0 }}>{title}</h1>
             <p className="lead" style={{ marginTop: 4 }}>{lead}</p>
