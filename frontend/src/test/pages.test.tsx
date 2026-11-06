@@ -72,6 +72,48 @@ describe("頁首的步驟", () => {
   });
 });
 
+describe("相似判決的結果", () => {
+  const show = (over: Partial<typeof CIVIL_REPORT>) => {
+    mockApi({ "POST /civil/report": () => ({ ...CIVIL_REPORT, ...over }) });
+    renderAt("/result/civil", <CivilResult />, "/result/civil", { text: "內容", maskedText: "內容" });
+  };
+  const prediction = (signal: "strong" | "weak" | "insufficient") => ({ ...CIVIL_REPORT.prediction, signal });
+
+  it("主畫面是判決件數，機率放在模型細節", async () => {
+    show({});
+    expect(await screen.findByRole("img", { name: "全部勝訴 8 件、部分勝訴 13 件、敗訴 9 件" })).toBeInTheDocument();
+    expect(screen.getByText("62%").closest("details")).not.toBeNull();
+  });
+
+  it("模型參考依訊號顯示固定文字", async () => {
+    show({ prediction: prediction("weak") });
+    expect(await screen.findByText(/勝訴訊號較弱/)).toBeInTheDocument();
+  });
+
+  it("資訊不足時不說強弱", async () => {
+    show({ prediction: prediction("insufficient") });
+    expect(await screen.findByText(/資訊不足/)).toBeInTheDocument();
+    expect(screen.queryByText(/勝訴訊號/)).not.toBeInTheDocument();
+  });
+
+  it("相似判決太少時不畫比例", async () => {
+    show({ outcomes: { total: 6, win: 3, partial: 2, lose: 1 } });
+    expect(await screen.findByText(/這次不顯示比例/)).toBeInTheDocument();
+    expect(screen.queryByRole("img", { name: /全部勝訴/ })).not.toBeInTheDocument();
+  });
+
+  it("相似判決和模型不一致時提醒看判決", async () => {
+    show({ prediction: prediction("weak"), outcomes: { total: 30, win: 15, partial: 9, lose: 6 } });
+    expect(await screen.findByText(/不完全一致/)).toBeInTheDocument();
+  });
+
+  it("一致時不提醒", async () => {
+    show({});
+    await screen.findByText("62%");
+    expect(screen.queryByText(/不完全一致/)).not.toBeInTheDocument();
+  });
+});
+
 describe("模型表現", () => {
   it("用 precision、recall 說明，不顯示 AUC", async () => {
     mockApi({ "POST /civil/report": () => CIVIL_REPORT });

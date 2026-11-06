@@ -62,6 +62,7 @@ export const OPTIONS: Options = {
 export const CIVIL_REPORT: CivilReport = {
   prediction: {
     win_probability: 0.62,
+    signal: "strong",
     model: { name: "civil_winloss_v1", description: "TF-IDF（只用原告主張）＋案由中類、法院、律師、對方是否為法人", win_precision: 0.73, win_recall: 0.81, lose_precision: 0.66, lose_recall: 0.55, ece: 0.01 },
     warnings: [],
     mock: false,
@@ -83,6 +84,7 @@ export const CIVIL_REPORT: CivilReport = {
     { key: "receipt", label: "收據、發票、估價單", share: 0.74, user_has: false },
   ],
   defenses: [{ key: "contributory", label: "你也有過失（與有過失）", description: "主張你對損害的發生也有責任，要求減少賠償", share: 0.46 }],
+  outcomes: { total: 30, win: 8, partial: 13, lose: 9 },
   n_compared: 30,
   mock: false,
 };

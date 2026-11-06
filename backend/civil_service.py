@@ -13,9 +13,9 @@ from typing import Dict, List, Optional, Tuple
 import numpy as np
 
 from backend import mock
-from backend.quality import looks_like_dispute
+from backend.quality import looks_like_dispute, win_signal
 from civil.dataset.text import prepare_input
-from civil.insights import (EVIDENCE, QUESTIONNAIRE_EVIDENCE, amount_range, user_evidence, without_questions, defense_table, evidence_table,
+from civil.insights import (EVIDENCE, QUESTIONNAIRE_EVIDENCE, amount_range, outcome_counts, user_evidence, without_questions, defense_table, evidence_table,
                             guide_paragraphs, GUIDE_LABELER)
 from civil.models import service as model_service
 from retrieval import build as retrieval_build
@@ -43,7 +43,7 @@ class CivilService:
             self.model, self.meta = model_service.load(model_dir)
             self.index = TfidfIndex.load(retrieval_dir / "index.joblib")
             self.db_path = retrieval_dir / "cases.sqlite"
-            rows = self._query("SELECT mid, y, grant_ratio, evidence, defenses, in_stats, default_judgment "
+            rows = self._query("SELECT mid, y, grant_ratio, evidence, defenses, in_stats, default_judgment, outcome "
                                "FROM cases ORDER BY row")
             assert len(rows) == len(self.index), "檢索索引和案件清單的件數不同，請重新執行 python -m retrieval.build"
             self.mids = np.array([r[0] or "" for r in rows])
@@ -53,6 +53,7 @@ class CivilService:
             self.case_defenses = [json.loads(r[4]) for r in rows]
             self.in_stats = np.array([bool(r[5]) for r in rows])
             self.default = np.array([bool(r[6]) for r in rows])
+            self.outcomes = [r[7] for r in rows]
 
     @property
     def mock(self) -> bool:
@@ -127,7 +128,8 @@ class CivilService:
         sim = self.index.scores(prepare_input(text))
         mid, note = self._resolve_mid(req, sim)
         p = self.model.predict_one(text, {**self.answers(req), "mid": mid})
-        return {"win_probability": round(p, 4), "model": self._model_info(), "warnings": self.warnings(req, note),
+        return {"win_probability": round(p, 4), "signal": win_signal(p, text), "model": self._model_info(),
+                "warnings": self.warnings(req, note),
                 "mock": False}
 
     # ── 相似判決 ──
@@ -202,6 +204,7 @@ class CivilService:
             "similar": self._listed(sim, mid, N_SHOWN),
             "evidence": evidence_table([self.case_evidence[r] for r in winners], user_evidence(req.text, req.evidence)),
             "defenses": defense_table([self.case_defenses[r] for r in rows]),
+            "outcomes": outcome_counts([self.outcomes[r] for r in rows]),
             "n_compared": int(len(rows)),
             "mock": False,
         }

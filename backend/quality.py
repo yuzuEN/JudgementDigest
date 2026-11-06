@@ -14,3 +14,14 @@ _MONEY = re.compile(r"\d[\d,]*\s*(?:元|萬)|[一二三四五六七八九十百�
 
 def looks_like_dispute(text: str) -> bool:
     return bool(_SIGNAL.search(text) or _MONEY.search(text))
+
+
+SIGNAL_THRESHOLD = 0.5    # 72 件口語測試只分得出這一條線，等真人測試後再調整
+MIN_SIGNAL_TEXT = 40      # 少於這個字數時資訊太少，不給強弱
+
+
+def win_signal(probability: float, text: str) -> str:
+    """把模型機率轉成結果頁的提示。這是固定規則，不是對個案的判斷。"""
+    if len(text.strip()) < MIN_SIGNAL_TEXT or not looks_like_dispute(text):
+        return "insufficient"
+    return "strong" if probability >= SIGNAL_THRESHOLD else "weak"

@@ -35,7 +35,7 @@ export default function CivilResult() {
       {report && (
         <>
           <div className="grid-2">
-            <Probability report={report} />
+            <Outcomes report={report} />
             <Amount range={report.amount_range} />
           </div>
           <SimilarCases cases={report.similar} onlyWin={onlyWin} setOnlyWin={setOnlyWin} />
@@ -82,24 +82,58 @@ export default function CivilResult() {
   );
 }
 
-function Probability({ report }: { report: CivilReport }) {
-  const p = report.prediction.win_probability;
-  const n = Math.round(p * 100);
+const MIN_OUTCOME_CASES = 10;   // 比這少時比例沒有代表性，不畫圖
+
+const SIGNAL_TEXT: Record<CivilReport["prediction"]["signal"], string> = {
+  strong: "這段描述的勝訴訊號較強，但不代表一定會勝訴。",
+  weak: "這段描述的勝訴訊號較弱。可能是案件較不利，也可能是資訊還不夠；補充證據和經過後再看一次。",
+  insufficient: "資訊不足，還看不出訊號強弱。請補充發生的經過、損害和手上的證據。",
+};
+
+function Outcomes({ report }: { report: CivilReport }) {
+  const { total, win, partial, lose } = report.outcomes;
+  const { signal } = report.prediction;
+  const parts = [
+    { key: "win", label: "全部勝訴", count: win },
+    { key: "partial", label: "部分勝訴", count: partial },
+    { key: "lose", label: "敗訴", count: lose },
+  ];
+  const enough = total >= MIN_OUTCOME_CASES;
+  const share = total ? (win + partial) / total : 0;
+  const mixed = enough && ((signal === "strong" && share < 0.4) || (signal === "weak" && share >= 0.7));
   return (
     <section className="card" aria-labelledby="p-title">
-      <h2 id="p-title">原告勝訴的機率</h2>
-      <div style={{ display: "flex", alignItems: "baseline", gap: 8 }}>
-        <span className="big-number">{percent(p)}</span><span className="hint">勝訴或一部勝訴</span>
-      </div>
-      <div className="bar" role="img" aria-label={`勝訴機率 ${percent(p)}`}><span style={{ width: percent(p) }} /></div>
-      <p className="hint" style={{ fontSize: 15 }}>在 100 件和你類似、打到判決的案件中，大約 {n} 件原告至少拿到一部分。</p>
-      <p className="hint" style={{ fontSize: 14 }}>模型是用判決書的文字訓練的。初步測試中，一般口語描述算出來的機率常常偏低，也比較分不出輸贏，請當成粗略的參考。</p>
+      <h2 id="p-title">相似判決的結果</h2>
+      {enough ? (
+        <>
+          <p style={{ margin: 0 }}>{total} 件相似判決中</p>
+          <div className="outcome-bar" role="img" aria-label={parts.map((x) => `${x.label} ${x.count} 件`).join("、")}>
+            {parts.map((x) => <span key={x.key} className={x.key} style={{ width: `${(x.count / total) * 100}%` }} />)}
+          </div>
+          <ul className="outcome-legend">
+            {parts.map((x) => <li key={x.key}><span className={`swatch ${x.key}`} />{x.label} <strong>{x.count}</strong> 件</li>)}
+          </ul>
+          <p className="hint" style={{ fontSize: 14 }}>只統計雙方都有攻防的判決，不包含被告未到庭的案件。這是過去判決的統計，不代表你的案件會有相同結果。</p>
+        </>
+      ) : <p className="hint">有被告答辯的相似判決不夠多，這次不顯示比例。</p>}
+      <p style={{ margin: 0 }}><strong>模型參考：</strong>{SIGNAL_TEXT[signal]}</p>
+      {mixed && <p className="hint" style={{ fontSize: 14 }}>相似判決和模型參考不完全一致，請先看判決內容。</p>}
       {report.prediction.warnings.map((w) => <p key={w} className="warn-text" style={{ margin: 0, fontSize: 14 }}>{w}</p>)}
-      <p className="hint" style={{ fontSize: 13 }}>
-        模型：{report.prediction.model.description}。你的描述越完整，結果越可靠。
-      </p>
-      <ModelScore model={report.prediction.model} />
+      <ModelDetail report={report} />
     </section>
+  );
+}
+
+function ModelDetail({ report }: { report: CivilReport }) {
+  const { win_probability: p, model } = report.prediction;
+  return (
+    <details className="amount-detail">
+      <summary>模型細節</summary>
+      <p style={{ margin: "8px 0 0" }}>勝訴機率 <strong>{percent(p)}</strong>（勝訴或一部勝訴）<InfoLink to="勝訴機率" label="勝訴機率說明" /></p>
+      <p className="hint" style={{ fontSize: 14 }}>模型是用判決書的文字訓練的。初步測試中，一般口語描述算出來的機率常常偏低，也比較分不出輸贏，請當成粗略的參考。</p>
+      <p className="hint" style={{ fontSize: 13 }}>模型：{model.description}。你的描述越完整，結果越可靠。</p>
+      <ModelScore model={model} />
+    </details>
   );
 }
 

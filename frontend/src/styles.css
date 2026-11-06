@@ -271,10 +271,11 @@ details.faq summary { cursor: pointer; font-weight: 500; }
   .print-only { display: block; }
   .page { padding: 0; max-width: none; }
   .card { break-inside: avoid; border-color: #bbb; }
+  .grid-2 > .card:has(details), .card:has(table) { break-inside: auto; }   /* 很高的卡不允許跨頁時，會被整張推到下一頁 */
   .grid-2 { grid-template-columns: repeat(2, minmax(0, 1fr)) !important; }
   a { color: inherit; text-decoration: none; }
   a[href^="http"]::after { content: "（" attr(href) "）"; font-size: 12px; overflow-wrap: anywhere; }
-  .bar, .bar > span, .range .track, .range .fill, .tag { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  .bar, .bar > span, .range .track, .range .fill, .tag, .outcome-bar, .outcome-bar > span, .swatch { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
   .table-wrap { overflow: visible; }
   table.cases { min-width: 0; }
   table.cases tr { break-inside: avoid; }
@@ -303,6 +304,14 @@ details.faq summary { cursor: pointer; font-weight: 500; }
 .steps li > a:hover { color: var(--link-hover); }
 .label-row { display: inline-flex; align-items: center; gap: 6px; }
 .info-link { display: inline-flex; align-items: center; justify-content: center; width: 20px; height: 20px; border: 1px solid var(--link); border-radius: 50%; font-size: 13px; font-weight: 700; font-style: italic; text-decoration: none; }
+.outcome-bar { display: flex; height: 22px; border-radius: 6px; overflow: hidden; background: var(--track); }
+.outcome-bar > span { display: block; min-width: 0; }
+.outcome-bar .win, .swatch.win { background: var(--good); }
+.outcome-bar .partial, .swatch.partial { background: var(--accent); }
+.outcome-bar .lose, .swatch.lose { background: var(--warm); }
+.outcome-legend { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 4px 16px; font-size: 15px; }
+.outcome-legend li { display: inline-flex; align-items: center; gap: 6px; }
+.outcome-legend .swatch { width: 12px; height: 12px; border-radius: 3px; flex: none; }
 .amount-detail { margin-top: 4px; font-size: 15px; }
 .amount-detail summary { cursor: pointer; color: var(--link); min-height: 28px; }
 .amount-detail ul { list-style: none; margin: 8px 0; padding: 0; display: grid; gap: 8px; }

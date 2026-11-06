@@ -115,6 +115,14 @@ def defense_table(neighbor_defenses: Sequence[Iterable[str]], top: int = 3) -> L
     return sorted(rows, key=lambda r: -r["share"])[:top]
 
 
+def outcome_counts(outcomes: Iterable[str]) -> Dict:
+    """相似判決裡全部勝訴、部分勝訴、敗訴各幾件。確認勝訴算全部勝訴。"""
+    outcomes = list(outcomes)
+    win = sum(o in ("勝訴", "確認勝訴") for o in outcomes)
+    partial = sum(o.startswith("一部勝訴") for o in outcomes)
+    return {"total": len(outcomes), "win": win, "partial": partial, "lose": len(outcomes) - win - partial}
+
+
 def amount_buckets(ratios: np.ndarray, width: float = 0.2) -> List[Dict]:
     """獲償比例每兩成一組的件數，例如請求金額的 20%～40% 有幾件。"""
     edges = np.arange(0, 1 + width / 2, width)

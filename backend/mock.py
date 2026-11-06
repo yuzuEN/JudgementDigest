@@ -6,6 +6,7 @@
 """
 from typing import Dict, List
 
+from backend.quality import win_signal
 from civil.insights import DEFENSES, EVIDENCE
 
 MOCK_OPTIONS = {
@@ -48,13 +49,14 @@ def civil_report(text: str, claimed: int = None, user_evidence=()) -> Dict:
                   "claimed": claimed, "amount_low": round(claimed * 0.36), "amount_median": round(claimed * 0.6),
                   "amount_high": round(claimed * 0.84)}
     return {
-        "prediction": {"win_probability": p, "warnings": [], "mock": True,
+        "prediction": {"win_probability": p, "signal": win_signal(p, text), "warnings": [], "mock": True,
                        "model": {"name": "mock", "description": "示例資料（伺服器上沒有模型檔）"}},
         "amount_range": amount,
         "similar": civil_cases(),
         "evidence": [{"key": k, "label": labels[k], "share": s, "user_has": k in have} for k, s in zip(keys, shares)],
         "defenses": [{"key": k, "label": defense[k][0], "description": defense[k][1], "share": s}
                      for k, s in (("contributory", 0.46), ("excessive", 0.38), ("paid", 0.21))],
+        "outcomes": {"total": 30, "win": 8, "partial": 13, "lose": 9},
         "n_compared": 30,
         "mock": True,
     }
