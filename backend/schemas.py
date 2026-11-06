@@ -97,6 +97,7 @@ class ModelInfo(BaseModel):
 
 class CivilPrediction(BaseModel):
     win_probability: float
+    signal: Literal["strong", "weak", "insufficient"]    # 結果頁的提示，規則見 quality.win_signal
     model: ModelInfo
     warnings: List[str]
     mock: bool
@@ -151,8 +152,17 @@ class DefenseRow(BaseModel):
     share: float
 
 
+class OutcomeCounts(BaseModel):
+    total: int
+    win: int
+    partial: int
+    lose: int
+
+
 class CivilReport(BaseModel):
     prediction: CivilPrediction
+    outcomes: OutcomeCounts
+    default_cases: int = 0     # 最相似的 30 件（含一造辯論）裡，被告未到庭的件數
     amount_range: Optional[AmountRange]
     similar: List[SimilarCase]
     evidence: List[EvidenceRow]

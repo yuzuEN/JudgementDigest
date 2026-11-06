@@ -30,7 +30,7 @@ API 文件（可以直接在網頁上試）：http://127.0.0.1:8000/docs
 | `POST /api/intake/mask` | 遮掉身分證字號、電話、電子郵件、地址、指定的名字 | 規則；網站改在瀏覽器遮名，這個 API 留給其他用途 |
 | `POST /api/intake/followup` | 追問描述裡缺少的事實 | 固定題庫；`allow_llm: true` 且有設定 LLM 時用 LLM |
 | `POST /api/civil/predict` | 民事勝訴機率 | 模型 |
-| `POST /api/civil/report` | 結果頁的全部內容：機率、金額範圍、相似判決、證據對照、常見抗辯 | 模型＋檢索 |
+| `POST /api/civil/report` | 結果頁的全部內容：相似判決的勝敗件數、機率與提示、金額範圍、相似判決、證據對照、常見抗辯 | 模型＋檢索 |
 | `POST /api/criminal/predict` | 罪名、法條、刑期分布、相似判決 | **示例資料**（刑事組開發中） |
 | `POST /api/retrieval/search` | 相似判決，`type` 為 `civil`、`criminal`、`both` | 民事真的；刑事示例 |
 | `GET /api/judgments/{source}/{case_id}/guide` | 判決導讀：段落與功能標示 | 民事為規則版（`labeler: rule-v0`） |
@@ -50,10 +50,16 @@ API 文件（可以直接在網頁上試）：http://127.0.0.1:8000/docs
 
 檢索語料有 158,327 件，但不是每一件都適合算統計（見 `retrieval/README.md`）：
 
-- 金額範圍、證據對照、常見抗辯：只用對審且有被告答辯的案件（前 30 件）
+- 勝敗件數、金額範圍、證據對照、常見抗辯：只用對審且有被告答辯的案件（前 30 件）
+- `default_cases`：不分層的前 30 件裡有幾件被告未到庭，只用來另外說明，不算進比例
 - 相似判決列表：全部案件都可以出現；去掉內容幾乎相同的制式判決，一造辯論最多 3 件並標示 `default_judgment`
 
 資源（Docker）：後端記憶體約 1.1 GB，查詢約 0.65 秒。
+
+## 模型參考
+
+`signal` 由固定規則決定（`quality.win_signal`）：機率 0.5 以上是 `strong`，以下是 `weak`；少於 40 字或不像法律糾紛時是 `insufficient`。
+切線來自 72 件模擬口語，真人測試後要再調整。這段不呼叫 LLM。
 
 ## 描述的品質檢查
 

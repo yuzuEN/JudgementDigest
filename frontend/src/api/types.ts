@@ -59,6 +59,7 @@ export interface ModelInfo {
 
 export interface CivilPrediction {
   win_probability: number;
+  signal: "strong" | "weak" | "insufficient";
   model: ModelInfo;
   warnings: string[];
   mock: boolean;
@@ -107,8 +108,17 @@ export interface DefenseRow {
   share: number;
 }
 
+export interface OutcomeCounts {
+  total: number;
+  win: number;
+  partial: number;
+  lose: number;
+}
+
 export interface CivilReport {
   prediction: CivilPrediction;
+  outcomes: OutcomeCounts;
+  default_cases: number;
   amount_range: AmountRange | null;
   similar: SimilarCase[];
   evidence: EvidenceRow[];
