@@ -5,7 +5,8 @@
 
 語料：CAIL 格式資料集（全國地院第一審有罪、單一被告）裡罪名可用的案件。全量 113 萬件的索引太吃記憶體，
 每個主要罪名（第一個罪名）最多取 PER_CHARGE 件、新的判決優先；少見罪名全收。
-事實裡的罪名、法條已在資料集遮成「××」；被告姓名換成「被告」，再遮身分證字號、電話等。
+事實裡的罪名、法條已在資料集遮成「××」；被告姓名換成「被告」；被害人、店員、警員等有稱謂的人名
+只留姓（賴美君 → 賴○○），同一個名字在別處也換；再遮身分證字號、電話等。
 輸出：
   index.joblib   犯罪事實（前 INDEX_CHARS 字）的 TF-IDF 索引（列的順序＝cases 表的 row）
   cases.sqlite   cases：字號、法院、年份、罪名、宣告刑、摘要、司法院原文網址
@@ -14,6 +15,7 @@
 import argparse
 import collections
 import json
+import re
 import sqlite3
 from datetime import datetime, timezone
 from pathlib import Path
@@ -23,7 +25,13 @@ import pandas as pd
 
 import config
 from retrieval.engine import TfidfIndex
-from retrieval.masking import mask
+from retrieval.masking import _NAME, _NOT_NAME, mask
+
+# 刑事判決裡常寫在人名前面的稱謂（民事的「訴外人」等見 retrieval.masking.third_party_names）
+ROLES = ("被害人", "告訴人", "證人", "訴外人", "店員", "店長", "店經理", "經理", "警員", "員警", "職員", "護理師", "醫師",
+         "司機", "老闆", "負責人", "管理員", "保全", "女友", "男友", "前妻", "前夫", "同居人", "友人", "同事", "鄰居",
+         "母親", "父親", "配偶", "兒子", "女兒", "胞兄", "胞弟", "胞姊", "胞妹", "少年", "屋主", "住戶")
+_ROLE_NAME_RE = re.compile(r"(?:" + "|".join(ROLES) + r")" + _NOT_NAME + r"(" + _NAME + r")")
 
 NAME = "retrieval_criminal_v1"
 PER_CHARGE = 1500
@@ -55,6 +63,8 @@ def sentence_text(meta: Dict) -> Optional[str]:
 def masked(text: str, defendants: List[str]) -> str:
     for name in sorted({n for n in defendants if n and len(n) >= 2}, key=len, reverse=True):
         text = text.replace(name, "被告")
+    for name in sorted(set(_ROLE_NAME_RE.findall(text)), key=len, reverse=True):
+        text = text.replace(name, name[0] + "○" * (len(name) - 1))
     return mask(text)[0]
 
 

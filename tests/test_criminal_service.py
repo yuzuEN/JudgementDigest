@@ -108,6 +108,11 @@ class TestRetrieval(unittest.TestCase):
             self.assertEqual(sorted(corpus.charges.str[0].value_counts().tolist()), [5, 5])
             self.assertFalse(corpus.text.str.contains("王大明").any())
 
+    def test_named_third_parties_keep_only_surname(self):
+        text = "被告徒手竊取由店經理賴美君所管領之商品，經警員林建丞到場，賴美君報警。"
+        self.assertEqual(retrieval_criminal.masked(text, []),
+                         "被告徒手竊取由店經理賴○○所管領之商品，經警員林○○到場，賴○○報警。")
+
 
 class TestTrainedModel(unittest.TestCase):
     @classmethod
