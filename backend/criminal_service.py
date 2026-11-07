@@ -16,7 +16,7 @@ from typing import Dict, List, Optional
 import numpy as np
 
 from backend import mock
-from criminal.models import service as model_service
+from criminal.models import lay_terms, service as model_service
 from retrieval import criminal as retrieval_criminal
 from retrieval.engine import TfidfIndex
 
@@ -61,11 +61,17 @@ class CriminalService:
         return {"name": self.meta["name"], "description": "犯罪事實的 TF-IDF ＋ SVM（機率經過校正）",
                 **{k: m.get(k) for k in ("n_test", "charge_top1", "bucket_accuracy", "bucket_within_one")}}
 
+    @staticmethod
+    def query(text: str) -> str:
+        """使用者描述 → 模型與檢索的輸入：相容字形轉一般字，口語換成判決書用語（criminal/models/lay_terms.py）。"""
+        return lay_terms.to_legal(model_service.normalize(text))
+
     def report(self, text: str) -> Dict:
         if self.mock:
             return mock.criminal_report()
+        text = self.query(text)
         charges = self.model.predict(text)
-        sim = self.index.scores(model_service.normalize(text)) if self.index is not None else None
+        sim = self.index.scores(text) if self.index is not None else None
         for c in charges:
             c.update(self.sentence_stats(sim, c["name"]))
         return {"charges": charges, "similar": self.similar(text, charges[0]["name"] if charges else None, sim=sim),
@@ -86,12 +92,13 @@ class CriminalService:
     def search(self, text: str, k: int) -> List[Dict]:
         if self.mock:
             return mock.criminal_report()["similar"][:k]
+        text = self.query(text)
         return self.similar(text, self.model.predict(text)[0]["name"], k)
 
     def similar(self, text: str, charge: Optional[str], n: int = N_SHOWN, sim: Optional[np.ndarray] = None) -> List[Dict]:
         if self.index is None:
             return []
-        sim = self.index.scores(model_service.normalize(text)) if sim is None else sim
+        sim = self.index.scores(text) if sim is None else sim
         allowed = np.array([charge in c for c in self.charges]) if charge else None
         if allowed is not None and allowed.sum() < MIN_SAME_CHARGE:
             allowed = None
