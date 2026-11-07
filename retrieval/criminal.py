@@ -32,6 +32,8 @@ ROLES = ("被害人", "告訴人", "證人", "訴外人", "店員", "店長", "�
          "司機", "老闆", "負責人", "管理員", "保全", "女友", "男友", "前妻", "前夫", "同居人", "友人", "同事", "鄰居",
          "母親", "父親", "配偶", "兒子", "女兒", "胞兄", "胞弟", "胞姊", "胞妹", "少年", "屋主", "住戶")
 _ROLE_NAME_RE = re.compile(r"(?:" + "|".join(ROLES) + r")" + _NOT_NAME + r"(" + _NAME + r")")
+# 沒有稱謂、但後面的字足以判斷是人名：「在羅智平加盟經營之全家」「由陳大華所管領」
+_OWNER_NAME_RE = re.compile(r"(?<=[在由向與為、，])" + _NOT_NAME + r"(" + _NAME + r")(?=加盟|所?經營|所?管領|所有之|開設)")
 
 NAME = "retrieval_criminal_v1"
 PER_CHARGE = 1500
@@ -63,7 +65,7 @@ def sentence_text(meta: Dict) -> Optional[str]:
 def masked(text: str, defendants: List[str]) -> str:
     for name in sorted({n for n in defendants if n and len(n) >= 2}, key=len, reverse=True):
         text = text.replace(name, "被告")
-    for name in sorted(set(_ROLE_NAME_RE.findall(text)), key=len, reverse=True):
+    for name in sorted(set(_ROLE_NAME_RE.findall(text)) | set(_OWNER_NAME_RE.findall(text)), key=len, reverse=True):
         text = text.replace(name, name[0] + "○" * (len(name) - 1))
     return mask(text)[0]
 

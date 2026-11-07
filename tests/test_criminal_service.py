@@ -112,6 +112,7 @@ class TestRetrieval(unittest.TestCase):
         text = "被告徒手竊取由店經理賴美君所管領之商品，經警員林建丞到場，賴美君報警。"
         self.assertEqual(retrieval_criminal.masked(text, []),
                          "被告徒手竊取由店經理賴○○所管領之商品，經警員林○○到場，賴○○報警。")
+        self.assertEqual(retrieval_criminal.masked("在羅智平加盟經營之全家便利商店", []), "在羅○○加盟經營之全家便利商店")
 
 
 class TestTrainedModel(unittest.TestCase):
