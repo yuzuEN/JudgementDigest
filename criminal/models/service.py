@@ -343,7 +343,9 @@ def artifact_dir(base: Optional[Path] = None) -> Path:
 
 def train(rows: List[Dict], out: Path, source: str, jobs: int = 1) -> Path:
     import sklearn
-    model = CriminalModel("svm_cal", jobs).fit(rows)
+    # 用 python -m 執行時這個檔案是 __main__，直接用 CriminalModel 會存成 __main__.CriminalModel，後端讀不到
+    from criminal.models.service import CriminalModel as Model
+    model = Model("svm_cal", jobs).fit(rows)
     out.mkdir(parents=True, exist_ok=True)
     joblib.dump(model, out / "model.joblib", compress=3)
     meta = {"name": MODEL_NAME, "trained_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
@@ -357,6 +359,10 @@ def train(rows: List[Dict], out: Path, source: str, jobs: int = 1) -> Path:
 def load(path: Optional[Path] = None):
     """回傳（模型, meta）。"""
     path = Path(path or artifact_dir())
+    import __main__
+    for cls in (CriminalModel, Platt):            # 舊模型檔（2026-11-06 Kaggle）存成 __main__.CriminalModel
+        if not hasattr(__main__, cls.__name__):
+            setattr(__main__, cls.__name__, cls)
     return joblib.load(path / "model.joblib"), json.loads((path / "meta.json").read_text(encoding="utf-8"))
 
 
