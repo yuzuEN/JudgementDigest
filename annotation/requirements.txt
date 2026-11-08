@@ -1,0 +1,2 @@
+# annotation/ 額外需要的套件（呼叫 Claude API 標註）。其餘沿用根目錄的 requirements.txt。
+anthropic>=0.40

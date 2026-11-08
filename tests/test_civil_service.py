@@ -90,6 +90,19 @@ class TestModel(unittest.TestCase):
         self.assertAlmostEqual(c["ece"], 0.05)
         self.assertEqual(sum(row["n"] for row in c["table"]), 4)
 
+    def test_outcome_counts(self):
+        from civil.insights import outcome_counts
+        r = outcome_counts(["勝訴", "確認勝訴", "一部勝訴一部敗訴", "敗訴"])
+        self.assertEqual(r, {"total": 4, "win": 2, "partial": 1, "lose": 1})
+
+    def test_win_signal(self):
+        from backend.quality import win_signal
+        text = "我騎機車被右轉汽車撞到受傷，想請求賠償五十萬元，對方保險公司只願意賠十萬元，雙方一直談不攏，我手上有診斷證明。"
+        self.assertEqual(win_signal(0.5, text), "strong")
+        self.assertEqual(win_signal(0.49, text), "weak")
+        self.assertEqual(win_signal(0.9, "被撞到"), "insufficient", "內容太少時不給強弱")
+        self.assertEqual(win_signal(0.9, "今天天氣很好，我去公園散步，吃了牛肉麵，然後回家看電視，覺得今天過得很開心很放鬆，真的很不錯。"), "insufficient")
+
     def test_classification_scores_both_outcomes(self):
         r = S.classification([1, 1, 0, 0], [0.9, 0.2, 0.8, 0.1])
         self.assertEqual((r["win_precision"], r["win_recall"]), (0.5, 0.5))

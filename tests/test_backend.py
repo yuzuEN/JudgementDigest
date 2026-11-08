@@ -345,6 +345,8 @@ class TestTwoTiers(unittest.TestCase):
     def test_statistics_ignore_default_judgments(self):
         r = self.report
         self.assertEqual(r["n_compared"], 30)
+        self.assertEqual(r["outcomes"], {"total": 30, "win": 0, "partial": 30, "lose": 0}, "一造辯論全額勝訴，不能算進來")
+        self.assertGreater(r["default_cases"], 0, "一造辯論不算進比例，但件數要另外告訴使用者")
         self.assertEqual(r["amount_range"]["ratio_median"], 0.5, "一造辯論全額勝訴，算進來中位數就不是 0.5")
         self.assertEqual([e["key"] for e in r["evidence"]], ["medical"], "LINE 只出現在一造辯論的案件")
         self.assertEqual(r["defenses"][0]["share"], 1)
@@ -406,6 +408,12 @@ class TestWithModel(unittest.TestCase):
         r = self.client.get("/api/meta/options").json()
         self.assertFalse(r["mock"])
         self.assertEqual({g["category"] for g in r["mid_groups"]}, {"侵權", "契約"})
+
+    def test_confirmed_rewrite_only_changes_the_search(self):
+        plain = self.report(text=WIN[0] * 5)
+        rewritten = self.report(text=WIN[0] * 5, search_text=LOSE[0] * 5)
+        self.assertEqual(plain["prediction"]["win_probability"], rewritten["prediction"]["win_probability"], "機率用原本的描述")
+        self.assertNotEqual([c["case_id"] for c in plain["similar"]], [c["case_id"] for c in rewritten["similar"]], "搜尋用確認過的改寫")
 
     def test_probability_follows_text(self):
         win = self.client.post("/api/civil/predict", json={"text": WIN[0] * 5, "mid": "侵權：交通事故"}).json()

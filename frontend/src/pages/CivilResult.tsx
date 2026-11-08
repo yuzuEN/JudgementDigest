@@ -14,6 +14,7 @@ export default function CivilResult() {
   const [onlyWin, setOnlyWin] = useState(false);
 
   const load = useCallback(() => {
+    if (intake.caseType === "criminal") return;
     setError("");
     setReport(null);
     api.civilReport(civilInput(intake)).then(setReport).catch((e: Error) => setError(e.message));
@@ -21,6 +22,7 @@ export default function CivilResult() {
   }, []);
   useEffect(load, [load]);
 
+  if (intake.caseType === "criminal") return <Navigate to="/result/criminal" replace />;
   if (!intake.maskedText) return <Navigate to={intake.text ? "/confirm" : "/start"} replace />;
 
   const title = `民事參考結果${intake.mid ? `：${intake.mid}` : ""}`;
@@ -29,16 +31,16 @@ export default function CivilResult() {
     : "正在比對相似的真實判決……";
 
   return (
-    <ResultFrame active="civil" title={title} lead={lead} mock={report?.mock ?? false} maskedText={intake.maskedText}>
+    <ResultFrame active="civil" title={title} lead={lead} mock={report?.mock ?? false} maskedText={intake.maskedText} searchText={intake.searchText}>
       {error && <ErrorBox message={error} onRetry={load} />}
       {!report && !error && <Loading>正在計算，約需幾秒鐘……</Loading>}
       {report && (
         <>
           <div className="grid-2">
-            <Probability report={report} />
+            <Outcomes report={report} />
             <Amount range={report.amount_range} />
           </div>
-          <SimilarCases cases={report.similar} onlyWin={onlyWin} setOnlyWin={setOnlyWin} />
+          <SimilarCases cases={report.similar} onlyWin={onlyWin} setOnlyWin={setOnlyWin} rewritten={Boolean(intake.searchText)} />
           <div className="grid-2">
             <section className="card" aria-labelledby="ev-title">
               <h2 id="ev-title">證據對照</h2>
@@ -82,24 +84,65 @@ export default function CivilResult() {
   );
 }
 
-function Probability({ report }: { report: CivilReport }) {
-  const p = report.prediction.win_probability;
-  const n = Math.round(p * 100);
+const MIN_OUTCOME_CASES = 10;   // 比這少時比例沒有代表性，不畫圖
+
+const SIGNAL_TEXT: Record<CivilReport["prediction"]["signal"], string> = {
+  strong: "這段描述的勝訴訊號較強，但不代表一定會勝訴。",
+  weak: "這段描述的勝訴訊號較弱。可能是案件較不利，也可能是資訊還不夠；補充證據和經過後再看一次。",
+  insufficient: "資訊不足，還看不出訊號強弱。請補充發生的經過、損害和手上的證據。",
+};
+
+function Outcomes({ report }: { report: CivilReport }) {
+  const { total, win, partial, lose } = report.outcomes;
+  const { signal } = report.prediction;
+  const parts = [
+    { key: "win", label: "全部勝訴", count: win },
+    { key: "partial", label: "部分勝訴", count: partial },
+    { key: "lose", label: "敗訴", count: lose },
+  ];
+  const enough = total >= MIN_OUTCOME_CASES;
+  const share = total ? (win + partial) / total : 0;
+  const mixed = enough && ((signal === "strong" && share < 0.4) || (signal === "weak" && share >= 0.7));
   return (
     <section className="card" aria-labelledby="p-title">
-      <h2 id="p-title">原告勝訴的機率</h2>
-      <div style={{ display: "flex", alignItems: "baseline", gap: 8 }}>
-        <span className="big-number">{percent(p)}</span><span className="hint">勝訴或一部勝訴</span>
-      </div>
-      <div className="bar" role="img" aria-label={`勝訴機率 ${percent(p)}`}><span style={{ width: percent(p) }} /></div>
-      <p className="hint" style={{ fontSize: 15 }}>在 100 件和你類似、打到判決的案件中，大約 {n} 件原告至少拿到一部分。</p>
-      <p className="hint" style={{ fontSize: 14 }}>模型是用判決書的文字訓練的。初步測試中，一般口語描述算出來的機率常常偏低，也比較分不出輸贏，請當成粗略的參考。</p>
+      <h2 id="p-title">相似判決的結果</h2>
+      {enough ? (
+        <>
+          <p style={{ margin: 0 }}>{total} 件相似判決中</p>
+          <div className="outcome-bar" role="img" aria-label={parts.map((x) => `${x.label} ${x.count} 件`).join("、")}>
+            {parts.filter((x) => x.count > 0).map((x) => (
+              <span key={x.key} className={x.key} title={`${x.label} ${x.count} 件`} style={{ flexGrow: x.count }} />
+            ))}
+          </div>
+          <ul className="outcome-legend">
+            {parts.map((x) => <li key={x.key}><span className={`swatch ${x.key}`} />{x.label} <strong>{x.count}</strong> 件</li>)}
+          </ul>
+          <p className="hint" style={{ fontSize: 14 }}>只統計雙方都有攻防的判決。這是過去判決的統計，不代表你的案件會有相同結果。</p>
+          {report.default_cases > 0 && (
+            <p className="hint" style={{ fontSize: 14 }}>
+              另外，最相似的 30 件判決裡有 {report.default_cases} 件被告未到庭。這類案件原告幾乎都贏，但沒有經過雙方攻防，所以不算進上面的比例。
+            </p>
+          )}
+        </>
+      ) : <p className="hint">有被告答辯的相似判決不夠多，這次不顯示比例。</p>}
+      <p style={{ margin: 0 }}><strong>模型參考：</strong>{SIGNAL_TEXT[signal]}</p>
+      {mixed && <p className="hint" style={{ fontSize: 14 }}>相似判決和模型參考不完全一致，請先看判決內容。</p>}
       {report.prediction.warnings.map((w) => <p key={w} className="warn-text" style={{ margin: 0, fontSize: 14 }}>{w}</p>)}
-      <p className="hint" style={{ fontSize: 13 }}>
-        模型：{report.prediction.model.description}。你的描述越完整，結果越可靠。
-      </p>
-      <ModelScore model={report.prediction.model} />
+      <ModelDetail report={report} />
     </section>
+  );
+}
+
+function ModelDetail({ report }: { report: CivilReport }) {
+  const { win_probability: p, model } = report.prediction;
+  return (
+    <details className="amount-detail">
+      <summary>模型細節</summary>
+      <p style={{ margin: "8px 0 0" }}>勝訴機率 <strong>{percent(p)}</strong>（勝訴或一部勝訴）<InfoLink to="勝訴機率" label="勝訴機率說明" /></p>
+      <p className="hint" style={{ fontSize: 14 }}>模型是用判決書的文字訓練的。初步測試中，一般口語描述算出來的機率常常偏低，也比較分不出輸贏，請當成粗略的參考。</p>
+      <p className="hint" style={{ fontSize: 13 }}>模型：{model.description}。你的描述越完整，結果越可靠。</p>
+      <ModelScore model={model} />
+    </details>
   );
 }
 
@@ -178,7 +221,7 @@ function Amount({ range }: { range: AmountRange | null }) {
   );
 }
 
-function SimilarCases({ cases, onlyWin, setOnlyWin }: { cases: SimilarCase[]; onlyWin: boolean; setOnlyWin: (v: boolean) => void }) {
+function SimilarCases({ cases, onlyWin, setOnlyWin, rewritten }: { cases: SimilarCase[]; onlyWin: boolean; setOnlyWin: (v: boolean) => void; rewritten: boolean }) {
   const visible = (c: SimilarCase) => !onlyWin || outcomeTone(c.outcome) !== "lose";
   const shown = cases.filter(visible);
   return (
@@ -187,6 +230,7 @@ function SimilarCases({ cases, onlyWin, setOnlyWin }: { cases: SimilarCase[]; on
         <h2 id="sim-title">相似的真實判決</h2>
         <label className="check no-print"><input type="checkbox" checked={onlyWin} onChange={(e) => setOnlyWin(e.target.checked)} /> 只看原告勝訴的</label>
       </div>
+      <p className="hint" style={{ fontSize: 14 }}>{rewritten ? "用你確認過的整理文字搜尋。" : "用你原本的描述搜尋。"}</p>
       <div className="table-wrap">
         <table className="cases">
           <thead><tr><th scope="col">字號</th><th scope="col">結果</th><th scope="col">判准／請求</th><th scope="col">相似度 <InfoLink to="相似度" label="相似度說明" /></th><th scope="col" className="no-print"><span className="sr-only">動作</span></th></tr></thead>

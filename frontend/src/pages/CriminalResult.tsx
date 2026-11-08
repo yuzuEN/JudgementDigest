@@ -14,6 +14,7 @@ export default function CriminalResult() {
   const [selected, setSelected] = useState(0);
 
   const load = useCallback(() => {
+    if (intake.caseType === "civil") return;
     setError("");
     setReport(null);
     api.criminalReport(intake.maskedText).then(setReport).catch((e: Error) => setError(e.message));
@@ -21,6 +22,7 @@ export default function CriminalResult() {
   }, []);
   useEffect(load, [load]);
 
+  if (intake.caseType === "civil") return <Navigate to="/result/civil" replace />;
   if (!intake.maskedText) return <Navigate to={intake.text ? "/confirm" : "/start"} replace />;
 
   return (

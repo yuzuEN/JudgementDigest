@@ -72,6 +72,181 @@ describe("頁首的步驟", () => {
   });
 });
 
+describe("整理成判決書的寫法", () => {
+  const BUTTON = "請 AI 整理敘述";
+  const rules = { questions: [], source: "rules", llm_available: true };
+  const setup = (reply: unknown) => {
+    const sent: { text: string }[] = [];
+    mockApi({
+      "POST /intake/followup": () => rules,
+      "POST /intake/rewrite": (b: { text: string }) => { sent.push(b); return reply; },
+    });
+    return sent;
+  };
+  const llm = { text: "原告主張被告未還款。", source: "llm", added_numbers: [] };
+
+  it("沒有設定 LLM 時不顯示", async () => {
+    mockApi({ "POST /intake/followup": () => ({ ...rules, llm_available: false }) });
+    renderAt("/confirm", <Confirm />, "/confirm", { text: "他欠我錢" });
+    await waitFor(() => expect(screen.getByRole("button", { name: "看參考結果" })).toBeEnabled());
+    expect(screen.queryByRole("button", { name: BUTTON })).not.toBeInTheDocument();
+  });
+
+  it("刑事不顯示", async () => {
+    mockApi({ "POST /intake/followup": () => rules });
+    renderAt("/confirm", <Confirm />, "/confirm", { text: "他打我", caseType: "criminal" });
+    await screen.findByRole("button", { name: "請 AI 幫我看還缺什麼" });
+    expect(screen.queryByRole("button", { name: BUTTON })).not.toBeInTheDocument();
+  });
+
+  it("按下按鈕才傳，送的是遮名後的文字", async () => {
+    const sent = setup(llm);
+    const user = userEvent.setup();
+    renderAt("/confirm", <Confirm />, "/confirm", { text: "王小明的電話是0912345678，他欠我錢", names: ["王小明"] });
+    const button = await screen.findByRole("button", { name: BUTTON });
+    expect(sent).toHaveLength(0);
+    await user.click(button);
+    await screen.findByRole("textbox", { name: /請確認整理後的內容/ });
+    expect(sent).toHaveLength(1);
+    expect(sent[0].text).not.toContain("王小明");
+    expect(sent[0].text).not.toContain("0912345678");
+  });
+
+  it("確認前不能看結果，改過的文字會再遮一次", async () => {
+    setup(llm);
+    const user = userEvent.setup();
+    renderAt("/confirm", <Confirm />, "/confirm", { text: "他欠我錢", names: ["王小明"] });
+    await user.click(await screen.findByRole("button", { name: BUTTON }));
+    const box = await screen.findByRole("textbox", { name: /請確認整理後的內容/ });
+    expect(screen.getByRole("button", { name: "看參考結果" })).toBeDisabled();
+    await user.clear(box);
+    await user.type(box, "原告王小明主張被告未還款");
+    await user.click(screen.getByRole("button", { name: "確認用這段搜尋" }));
+    expect(await screen.findByText(/已確認/)).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "看參考結果" })).toBeEnabled();
+    const previews = document.querySelectorAll(".masked-preview");
+    expect(previews[previews.length - 1].textContent).toBe("原告【姓名】主張被告未還款");
+  });
+
+  it("提醒描述裡沒有的數字", async () => {
+    setup({ ...llm, added_numbers: ["112"] });
+    const user = userEvent.setup();
+    renderAt("/confirm", <Confirm />, "/confirm", { text: "他欠我錢" });
+    await user.click(await screen.findByRole("button", { name: BUTTON }));
+    expect(await screen.findByText(/這些數字沒有出現在你的描述裡.*112/)).toBeInTheDocument();
+  });
+
+  it("AI 不能用時改用原本的描述", async () => {
+    setup({ source: "none", added_numbers: [], fallback: "error" });
+    const user = userEvent.setup();
+    renderAt("/confirm", <Confirm />, "/confirm", { text: "他欠我錢" });
+    await user.click(await screen.findByRole("button", { name: BUTTON }));
+    expect(await screen.findByText(/會用你原本的描述搜尋/)).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "看參考結果" })).toBeEnabled();
+  });
+
+  it("結果頁送出確認過的文字", async () => {
+    const { calls } = mockApi({ "POST /civil/report": () => CIVIL_REPORT });
+    renderAt("/result/civil", <CivilResult />, "/result/civil", { text: "內容", maskedText: "內容", searchText: "原告主張" });
+    expect(await screen.findByText("用你確認過的整理文字搜尋。")).toBeInTheDocument();
+    expect(calls[0].body).toMatchObject({ text: "內容", search_text: "原告主張" });
+  });
+});
+
+describe("結果頁的民事、刑事分頁", () => {
+  const intake = { text: "內容", maskedText: "內容" };
+
+  it("選民事時不能切到刑事", async () => {
+    mockApi({ "POST /civil/report": () => CIVIL_REPORT });
+    renderAt("/result/civil", <CivilResult />, "/result/civil", { ...intake, caseType: "civil" });
+    await screen.findByText("62%");
+    expect(screen.queryByRole("link", { name: "刑事" })).not.toBeInTheDocument();
+    expect(screen.getByText("刑事")).toHaveAttribute("aria-disabled", "true");
+  });
+
+  it("選刑事時不能切到民事", async () => {
+    mockApi({ "POST /criminal/predict": () => CRIMINAL_REPORT });
+    renderAt("/result/criminal", <CriminalResult />, "/result/criminal", { ...intake, caseType: "criminal" });
+    await screen.findByRole("heading", { name: "可能的罪名" });
+    expect(screen.queryByRole("link", { name: "民事" })).not.toBeInTheDocument();
+    expect(screen.getByText("民事")).toHaveAttribute("aria-disabled", "true");
+  });
+
+  it("選刑事時，直接開民事網址會回到刑事，也不查民事", async () => {
+    const { calls } = mockApi({ "POST /criminal/predict": () => CRIMINAL_REPORT });
+    renderApp("/result/civil", { ...intake, caseType: "criminal" });
+    expect(await screen.findByRole("heading", { name: "可能的罪名" })).toBeInTheDocument();
+    expect(calls.map((c) => c.key)).not.toContain("POST /civil/report");
+  });
+
+  it("不確定時可以切到刑事", async () => {
+    mockApi({ "POST /civil/report": () => CIVIL_REPORT });
+    renderAt("/result/civil", <CivilResult />, "/result/civil", { ...intake, caseType: "unsure" });
+    await screen.findByText("62%");
+    expect(screen.getByRole("link", { name: "刑事" })).toHaveAttribute("href", "/result/criminal");
+  });
+
+  it("選民事時，直接開刑事網址會回到民事，也不查刑事", async () => {
+    const { calls } = mockApi({ "POST /civil/report": () => CIVIL_REPORT });
+    renderApp("/result/criminal", { ...intake, caseType: "civil" });
+    expect(await screen.findByText("62%")).toBeInTheDocument();
+    expect(calls.map((c) => c.key)).not.toContain("POST /criminal/predict");
+  });
+});
+
+describe("相似判決的結果", () => {
+  const show = (over: Partial<typeof CIVIL_REPORT>) => {
+    mockApi({ "POST /civil/report": () => ({ ...CIVIL_REPORT, ...over }) });
+    renderAt("/result/civil", <CivilResult />, "/result/civil", { text: "內容", maskedText: "內容" });
+  };
+  const prediction = (signal: "strong" | "weak" | "insufficient") => ({ ...CIVIL_REPORT.prediction, signal });
+
+  it("主畫面是判決件數，機率放在模型細節", async () => {
+    show({});
+    expect(await screen.findByRole("img", { name: "全部勝訴 8 件、部分勝訴 13 件、敗訴 9 件" })).toBeInTheDocument();
+    expect(screen.getByText("62%").closest("details")).not.toBeNull();
+  });
+
+  it("被告未到庭的件數另外說明", async () => {
+    show({ default_cases: 12 });
+    expect(await screen.findByText(/有 12 件被告未到庭/)).toBeInTheDocument();
+  });
+
+  it("沒有被告未到庭時不顯示", async () => {
+    show({});
+    await screen.findByText("62%");
+    expect(screen.queryByText(/件被告未到庭/)).not.toBeInTheDocument();
+  });
+
+  it("模型參考依訊號顯示固定文字", async () => {
+    show({ prediction: prediction("weak") });
+    expect(await screen.findByText(/勝訴訊號較弱/)).toBeInTheDocument();
+  });
+
+  it("資訊不足時不說強弱", async () => {
+    show({ prediction: prediction("insufficient") });
+    expect(await screen.findByText(/資訊不足/)).toBeInTheDocument();
+    expect(screen.queryByText(/勝訴訊號/)).not.toBeInTheDocument();
+  });
+
+  it("相似判決太少時不畫比例", async () => {
+    show({ outcomes: { total: 6, win: 3, partial: 2, lose: 1 } });
+    expect(await screen.findByText(/這次不顯示比例/)).toBeInTheDocument();
+    expect(screen.queryByRole("img", { name: /全部勝訴/ })).not.toBeInTheDocument();
+  });
+
+  it("相似判決和模型不一致時提醒看判決", async () => {
+    show({ prediction: prediction("weak"), outcomes: { total: 30, win: 15, partial: 9, lose: 6 } });
+    expect(await screen.findByText(/不完全一致/)).toBeInTheDocument();
+  });
+
+  it("一致時不提醒", async () => {
+    show({});
+    await screen.findByText("62%");
+    expect(screen.queryByText(/不完全一致/)).not.toBeInTheDocument();
+  });
+});
+
 describe("模型表現", () => {
   it("用 precision、recall 說明，不顯示 AUC", async () => {
     mockApi({ "POST /civil/report": () => CIVIL_REPORT });
@@ -537,7 +712,7 @@ describe("刑事結果", () => {
   it("點罪名切換刑期分布", async () => {
     mockApi({ "POST /criminal/predict": () => CRIMINAL_REPORT });
     const user = userEvent.setup();
-    renderAt("/result/criminal", <CriminalResult />, "/result/criminal", { text: "x", maskedText: "開車撞到人" });
+    renderAt("/result/criminal", <CriminalResult />, "/result/criminal", { caseType: "criminal", text: "x", maskedText: "開車撞到人" });
     expect(await screen.findByRole("heading", { name: "刑期範圍：過失傷害罪" })).toBeInTheDocument();
     expect(screen.getByText(/刑事組開發中/)).toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: /肇事逃逸罪/ }));
@@ -548,7 +723,7 @@ describe("刑事結果", () => {
 
   it("真模型沒有相似判決時顯示開發中，不出現示例提示", async () => {
     mockApi({ "POST /criminal/predict": () => ({ ...CRIMINAL_REPORT, similar: [], mock: false }) });
-    renderAt("/result/criminal", <CriminalResult />, "/result/criminal", { text: "x", maskedText: "開車撞到人" });
+    renderAt("/result/criminal", <CriminalResult />, "/result/criminal", { caseType: "criminal", text: "x", maskedText: "開車撞到人" });
     expect(await screen.findByText("刑事的相似判決檢索開發中。")).toBeInTheDocument();
     expect(screen.queryByText(/刑事組開發中/)).not.toBeInTheDocument();
     expect(screen.queryByRole("table")).not.toBeInTheDocument();
@@ -561,7 +736,7 @@ describe("刑事結果", () => {
         similar_sentence: [{ label: "拘役、罰金", share: 0.2 }, { label: "1～6 個月", share: 0.8 }] }, ...rest],
       model: { name: "criminal_v1", description: "TF-IDF ＋ SVM", n_test: 10000, charge_top1: 0.93,
         bucket_accuracy: 0.7, bucket_within_one: 0.95 } }) });
-    renderAt("/result/criminal", <CriminalResult />, "/result/criminal", { text: "x", maskedText: "開車撞到人" });
+    renderAt("/result/criminal", <CriminalResult />, "/result/criminal", { caseType: "criminal", text: "x", maskedText: "開車撞到人" });
     expect(await screen.findByText("修法前為洗錢防制法第 14 條")).toBeInTheDocument();
     expect(screen.getByText(/最相似的 50 件「過失傷害罪」有罪判決/)).toBeInTheDocument();
     expect(screen.getByText("80%")).toBeInTheDocument();
@@ -572,7 +747,7 @@ describe("刑事結果", () => {
     const url = "https://judgment.judicial.gov.tw/FJUD/data.aspx?ty=JD&id=TPDM";
     mockApi({ "POST /criminal/predict": () => ({ ...CRIMINAL_REPORT, mock: false,
       similar: [{ ...CRIMINAL_REPORT.similar[0], url }] }) });
-    renderAt("/result/criminal", <CriminalResult />, "/result/criminal", { text: "x", maskedText: "開車撞到人" });
+    renderAt("/result/criminal", <CriminalResult />, "/result/criminal", { caseType: "criminal", text: "x", maskedText: "開車撞到人" });
     expect(await screen.findByRole("link", { name: "判決原文" })).toHaveAttribute("href", url);
     expect(screen.queryByRole("link", { name: "判決導讀" })).not.toBeInTheDocument();
   });

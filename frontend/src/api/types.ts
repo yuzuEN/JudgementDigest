@@ -39,6 +39,7 @@ export interface FollowupResponse {
 
 export interface CivilInput {
   text: string;
+  search_text?: string | null;
   mid?: string | null;
   court?: string | null;
   plaintiff_has_lawyer?: boolean | null;
@@ -59,6 +60,7 @@ export interface ModelInfo {
 
 export interface CivilPrediction {
   win_probability: number;
+  signal: "strong" | "weak" | "insufficient";
   model: ModelInfo;
   warnings: string[];
   mock: boolean;
@@ -108,8 +110,24 @@ export interface DefenseRow {
   share: number;
 }
 
+export interface OutcomeCounts {
+  total: number;
+  win: number;
+  partial: number;
+  lose: number;
+}
+
+export interface RewriteResponse {
+  text?: string | null;
+  source: "llm" | "none";
+  added_numbers: string[];
+  fallback?: "no_llm" | "not_dispute" | "error" | "limited" | null;
+}
+
 export interface CivilReport {
   prediction: CivilPrediction;
+  outcomes: OutcomeCounts;
+  default_cases: number;
   amount_range: AmountRange | null;
   similar: SimilarCase[];
   evidence: EvidenceRow[];

@@ -17,10 +17,11 @@ from fastapi.testclient import TestClient
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from backend import llm  # noqa: E402
+from backend.llm.base import LLMError  # noqa: E402
 from backend.llm.fake import FakeClient  # noqa: E402
 from backend.llm.gemini import DEFAULT_MODEL, GeminiClient  # noqa: E402
 from backend.llm.limits import UsageLimiter  # noqa: E402
-from backend.llm.tasks import (FOLLOWUP_SCHEMA, MAX_INPUT, MAX_QUESTION, SAFE_WHY,  # noqa: E402
+from backend.llm.tasks import (added_numbers, rewrite_claim, FOLLOWUP_SCHEMA, MAX_INPUT, MAX_QUESTION, SAFE_WHY,  # noqa: E402
                                followup_questions, outgoing)
 from backend.main import create_app  # noqa: E402
 from backend.settings import Settings  # noqa: E402
@@ -181,6 +182,74 @@ class TestFollowupTask(unittest.TestCase):
         for reply in ({"questions": []}, {"other": 1}, {"questions": "x"}, {"questions": [{"text": ""}]}):
             with self.assertRaises(llm.LLMError):
                 followup_questions(FakeClient(reply), "civil", None, DISPUTE)
+
+
+class TestRewriteTask(unittest.TestCase):
+    def test_text_is_masked_and_questions_removed(self):
+        client = FakeClient({"claim": "原告主張被告借款三十萬元未還。"})
+        rewrite_claim(client, "民間借貸", DISPUTE + "\n追問：對方怎麼說？\n回答：他說沒錢")
+        self.assertNotIn("0912345678", client.sent[0])
+        self.assertNotIn("追問", client.sent[0])
+        self.assertIn("他說沒錢", client.sent[0])
+
+    def test_result_is_masked(self):
+        r = rewrite_claim(FakeClient({"claim": "原告電話0912345678，被告未還款。"}), None, DISPUTE)
+        self.assertNotIn("0912345678", r["text"])
+
+    def test_flags_numbers_that_are_not_in_the_description(self):
+        self.assertEqual(added_numbers("去年五月到期", "民國112年5月到期"), ["112"])
+        self.assertEqual(added_numbers("月租一萬四，押金兩萬八", "月租14,000元，押金新臺幣2萬8,000元"), [])
+        self.assertEqual(added_numbers("月租一萬四，押金兩萬八", "月租14,000元，押金28,000元"), [])
+        self.assertEqual(added_numbers("借七十五萬", "借款新臺幣75萬元"), [])
+        self.assertEqual(added_numbers("月薪六萬八", "月薪6萬8千元"), [])
+
+    def test_bad_results_fail(self):
+        for reply in ({}, {"claim": ""}, {"claim": "長" * 5000}, "不是物件"):
+            with self.assertRaises(LLMError):
+                rewrite_claim(FakeClient(reply), None, DISPUTE)
+
+
+class TestRewriteEndpoint(unittest.TestCase):
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmp.cleanup)
+
+    def client(self, fake, **settings):
+        with mock.patch("backend.main.llm.create_client", return_value=fake):
+            return TestClient(create_app(Settings(artifacts_dir=Path(self.tmp.name), **settings)))
+
+    def rewrite(self, c, text=DISPUTE, allow_llm=True):
+        return c.post("/api/intake/rewrite", json={"text": text, "allow_llm": allow_llm}).json()
+
+    def test_rewrites_when_allowed(self):
+        fake = FakeClient({"claim": "原告主張被告未還款。"})
+        r = self.rewrite(self.client(fake))
+        self.assertEqual((r["source"], r["text"]), ("llm", "原告主張被告未還款。"))
+
+    def test_nothing_is_sent_without_permission(self):
+        fake = FakeClient()
+        r = self.rewrite(self.client(fake), allow_llm=False)
+        self.assertEqual((r["source"], r["fallback"]), ("none", "no_llm"))
+        self.assertEqual(fake.sent, [])
+
+    def test_no_provider(self):
+        r = self.rewrite(self.client(None))
+        self.assertEqual(r["fallback"], "no_llm")
+
+    def test_unrelated_text_is_not_sent(self):
+        fake = FakeClient()
+        r = self.rewrite(self.client(fake), "今天天氣很好")
+        self.assertEqual(r["fallback"], "not_dispute")
+        self.assertEqual(fake.sent, [])
+
+    def test_failure_falls_back(self):
+        r = self.rewrite(self.client(FakeClient(error=LLMError("逾時"))))
+        self.assertEqual((r["source"], r["fallback"]), ("none", "error"))
+
+    def test_shares_the_limit(self):
+        fake = FakeClient({"claim": "原告主張。"})
+        c = self.client(fake, llm_per_ip_hour=1)
+        self.assertEqual([self.rewrite(c)["source"], self.rewrite(c)["fallback"]], ["llm", "limited"])
 
 
 class TestEndpoint(unittest.TestCase):
