@@ -35,7 +35,6 @@ from sklearn.preprocessing import OneHotEncoder
 
 import config
 from civil.dataset.text import prepare_input
-from civil.models.amount import ITEMS
 from civil.models.service import FEATURES, UNKNOWN, features_frame
 from civil.models.tfidf import vec
 
@@ -46,6 +45,12 @@ UNKNOWN_SHARE = 0.3        # 訓練與校準時，法院、請求金額各有這
 ALPHA = 1.0                # 事先固定（同 amount.py），不看測試結果調整
 SEED = 42
 MIN_RATIO = 0.001
+# 損害子項目的關鍵字。和 civil/models/amount.py 的 ITEMS 相同（tests/test_amount_service.py 檢查兩邊一致）；
+# 複製一份是因為後端載入模型時不該跟著 import 整支分析腳本。
+ITEMS = {"醫療費": r"醫療費|醫藥費", "住院": r"住院", "手術": r"手術", "骨折": r"骨折", "看護": r"看護",
+         "勞動能力": r"勞動能力", "工作損失": r"工作損失|不能工作|無法工作|薪資損失|營業損失",
+         "慰撫金": r"慰撫金|精神上?之?損害|非財產上", "車損": r"修復費|修理費|維修費|車損|車輛損害",
+         "死亡喪葬": r"死亡|喪葬", "律師費": r"律師費", "違約金": r"違約金", "租金": r"租金"}
 ITEM_PATTERNS = [re.compile(p) for p in ITEMS.values()]
 
 
