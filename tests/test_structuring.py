@@ -1660,3 +1660,89 @@ class TestRules250(unittest.TestCase):
         self.assertEqual(g("原告主張：爰依侵權行為關係，請求被告賠償。"), "侵權行為")
         self.assertEqual(g("原告主張：被告積欠管理費，爰依社區規約請求給付。"), "物權")
         self.assertEqual(g("原告主張：爰依國家賠償法之規定，請求被告賠償。"), "國家賠償")
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# 規則 2.5.1：金額抽取的修正（金額版 2.5.0 併入 A 的 2.5.0，見 docs/資料版本.md）
+class TestAmountRules251(unittest.TestCase):
+    """
+    每一則都是「2.5.0 會錯、2.5.1 才對」的案例；另有幾則防護測試，確認新規則沒有把不該改的也改掉。
+    案例是依金額核對（盲核 30 筆與兩批新樣本）發現的錯誤寫成的簡化句子，不是判決原文。
+    """
+
+    @staticmethod
+    def claimed(text):
+        return S.extract_claimed_amount(text, "", None, S.PARTIAL)
+
+    # ── 判准金額 ──
+    def test_labor_pension_contribution_is_a_money_verb(self):
+        """勞退的「提撥」「補繳」是給付金錢（2.5.0 抽不到金額）。"""
+        v = "被告應提撥新臺幣20,000元至原告之勞工退休金專戶。訴訟費用由被告負擔。"
+        self.assertEqual(S.extract_awarded_amounts(v)["awarded_total"], 20000)
+        v = "被告應補繳新臺幣50,000元至原告之勞工退休金專戶。訴訟費用由被告負擔。"
+        self.assertEqual(S.extract_awarded_amounts(v)["awarded_total"], 50000)
+
+    def test_chinese_decimal_point_is_not_truncated(self):
+        """美金 56,192.46 元寫成「…玖拾貳點肆陸元」，2.5.0 只抓到「肆陸元」＝46。元以下捨去。"""
+        self.assertEqual(S.cn_numeral_to_int("伍萬陸仟壹佰玖拾貳點肆陸"), 56192)
+        v = "被告應給付原告美金伍萬陸仟壹佰玖拾貳點肆陸元。訴訟費用由被告負擔。"
+        r = S.extract_awarded_amounts(v)
+        self.assertEqual((r["awarded_total"], r["awarded_currency"]), (56192, "USD"))
+
+    def test_point_only_counts_between_digits(self):
+        """「點」只在數字之間才算小數點，「地點」「要點」不能把後面的數字接進去。"""
+        import re
+        self.assertEqual(re.search(S._AMOUNT_TOKEN, "地點五十元").group(), "五十")
+
+    # ── 請求金額 ──
+    def test_each_of_n_people_multiplies(self):
+        """「甲等 6 人各 157 萬元」：沒有逐一列名，用人數相乘（2.5.0 只算一份）。"""
+        r = self.claimed("並聲明：被告應給付原告陳阿朝等6人各157萬元。二、被告則以：…")
+        self.assertEqual(r["claimed_total"], 9420000)
+
+    def test_ziying_zhunxu_ends_the_claim_segment(self):
+        """變更句之後的「自應准許」是聲明的結尾；2.5.0 一路讀進後面的理由，把理由裡的金額也加進來。"""
+        r = self.claimed("並聲明：被告應給付原告80萬元。自應准許。被告向原告借款，經原告催討，請求被告給付30萬元。")
+        self.assertEqual(r["claimed_total"], 800000)
+
+    def test_alternative_claim_written_as_beiwei_su_zhi_shengming(self):
+        """REGRESSION：「備位訴之聲明」多一個「訴」字，2.5.0 沒當成結束點，備位金額被加成兩倍。"""
+        r = self.claimed("訴之聲明：（一）被告應返還原告100萬元。（二）備位訴之聲明：被告應賠償原告100萬元。")
+        self.assertEqual(r["claimed_total"], 1000000)
+
+    def test_expanded_claim_phrase_with_ru_suoshi(self):
+        """「擴張…聲明如所示」是變更句，取最後一份聲明（2.5.0 把起訴時與擴張後的兩份相加）。"""
+        r = self.claimed("並聲明：被告應給付原告50萬元。又原告擴張聲明如所示：被告應給付原告80萬元。")
+        self.assertEqual(r["claimed_total"], 800000)
+
+    def test_back_reference_to_amended_claim_is_not_an_amendment(self):
+        """防護：「如前開變更後聲明所示」是回指，不是變更句；`(?!後)` 不能省，否則這種句子反而退步。"""
+        r = self.claimed("並聲明：被告應給付原告50萬元。並聲明：如前開變更後聲明所示。")
+        self.assertEqual(r["claimed_total"], 500000)
+
+    def test_reduced_claim_amount_phrase_finds_the_claim_anchor(self):
+        """「將請求（之）金額減縮／變更為」認得出聲明錨點（2.5.0 要退回「無聲明錨點」的備用抽法）。"""
+        for phrase in ("將請求金額減縮為", "將請求之金額變更為"):
+            r = self.claimed(f"原告起訴請求被告給付50萬元，嗣{phrase}：被告應給付原告30萬元。核屬減縮，應予准許。")
+            self.assertEqual(r["claimed_total"], 300000, phrase)
+            self.assertEqual(r["claimed_fallback"], 0, phrase)
+
+    # ── 給付類型 ──
+    def test_non_money_verbs_added_in_251(self):
+        for v in ("被告應騰空返還系爭房屋予原告。", "被告應補投保原告勞工保險。",
+                  "被告應將如附件所示道歉啟事刊登於報紙。"):
+            self.assertEqual(S.extract_relief_type(v + "訴訟費用由被告負擔。"), "非金錢給付", v)
+
+    def test_non_money_clause_found_in_a_later_clause(self):
+        """金錢與非金錢判項並列時要逐子句比對（2.5.0 整段一起比，只標成金錢給付）。"""
+        v = "被告應給付原告新臺幣10萬元。被告應遷出系爭房屋。訴訟費用由被告負擔。"
+        self.assertEqual(S.extract_relief_type(v), "金錢給付／非金錢給付")
+
+    def test_non_money_verb_far_from_ying(self):
+        """「應」與動詞間隔放寬到 150 字（地址與地號很長的移轉登記，2.5.0 間隔只有 40 字）。"""
+        v = ("被告應於本判決確定後三十日內，就坐落於臺北市某區某段某小段第一二三地號土地上之建物，"
+             "其門牌號碼為臺北市某區某路一段一二三號之三樓房屋，向主管機關辦理所有權移轉登記予原告。訴訟費用由被告負擔。")
+        self.assertEqual(S.extract_relief_type(v), "非金錢給付")
+
+    def test_version_is_251(self):
+        self.assertEqual(S.STRUCTURING_VERSION, "2.5.1")

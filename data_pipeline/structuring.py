@@ -85,6 +85,12 @@ def cn_numeral_to_int(raw: str) -> Optional[int]:
 
     s = s.replace("．", ".")
 
+    # 國字小數（「伍萬陸仟壹佰玖拾貳點肆陸」）：元以下捨去，只取「點」之前的整數部分
+    if "點" in s:
+        s = s.split("點")[0]
+        if not s:
+            return None
+
     # 純阿拉伯數字（含小數）
     if re.fullmatch(r"\d+(?:\.\d+)?", s):
         return int(float(s))
@@ -316,7 +322,7 @@ _GRANT_VERBS = (r"給付|返還|交付|移轉|塗銷|遷讓|遷出|遷離|騰空
                 r"補償|保留|變更為|供[^。；]{0,6}查閱|調整為|"
                 # 全國資料補上的寫法：交還物品、提繳勞退、修繕、清空、同意領取、
                 # 刊登道歉啟事、簡體「给付」（實測 416 筆落入敗訴，見 _classify_side）
-                r"交還|提繳|修繕|清空|同意|刊登|公告|给付")
+                r"交還|提繳|提撥|補繳|修繕|清空|同意|刊登|公告|给付")
 
 # 「應」與動詞之間的最大間隔。不動產類主文的受詞極長，例如
 # 「應將臺北市○○區○○段000000000地號土地（權利範圍：10000分之435）及其上
@@ -554,9 +560,9 @@ _CURRENCY_RE = re.compile("(" + "|".join(sorted(
 
 # 與 _GRANT_RE 同樣允許「應」與動詞之間夾受詞（「應於繼承…範圍內給付」）
 _MONEY_VERB_RE = re.compile(
-    r"應(?![^。；]{0,40}駁回)[^。；]{0,40}?(?:給付|返還|賠償|支付|清償|提繳)")
+    r"應(?![^。；]{0,40}駁回)[^。；]{0,40}?(?:給付|返還|賠償|支付|清償|提繳|提撥|補繳)")
 _NON_MONEY_VERB_RE = re.compile(
-    r"應(?![^。；]{0,40}駁回)[^。；]{0,40}?(?:交付|移轉|塗銷|遷讓|拆除|辦理|協同|容忍|停止|除去|回復|登記|開立|提出)")
+    r"應(?![^。；]{0,150}駁回)[^。；]{0,150}?(?:交付|移轉|塗銷|遷讓|拆除|辦理|協同|容忍|停止|除去|回復|登記|開立|提出|補投保|投保|加保|騰空|遷出|遷離|刊登)")
 
 
 def extract_relief_type(verdict: str) -> str:
@@ -579,7 +585,7 @@ def extract_relief_type(verdict: str) -> str:
     if any(_MONEY_VERB_RE.search(c) and re.search(r"\d|[零壹貳參肆伍陸柒捌玖拾佰仟萬]", c)
            and "元" in c for c in clauses):
         types.append("金錢給付")
-    if _NON_MONEY_VERB_RE.search(joined):
+    if any(_NON_MONEY_VERB_RE.search(c) for c in clauses):
         types.append("非金錢給付")
     # 逐子句比對：_CONFIRM_GRANT_RE 會排除「同一子句」出現駁回的情形，
     # 對串接後的 joined 比對時，下一句的「其餘之訴駁回」也會被看到
@@ -610,7 +616,11 @@ def detect_currency(text: str) -> str:
 # ═══════════════════════════════════════════════════════════════════════════
 
 # 金額 token：阿拉伯（含千分位）、國字、或兩者混合（21萬6201）
-_AMOUNT_TOKEN = rf"[{re.escape(_CN_NUM_CHARS)}]{{1,24}}"
+# 國字小數「點」：美金 5 萬 6,192.46 元在主文寫成「伍萬陸仟壹佰玖拾貳點肆陸元」。
+# 不處理的話 token 只能從「點」後面起算，抓到「肆陸元」＝46 元（實測 21 件，比例被算成 0.000）。
+# 「點」只允許出現在數字之間，才不會把「地點」「要點」之類的詞接進金額。
+_AMOUNT_TOKEN = (rf"[{re.escape(_CN_NUM_CHARS)}]{{1,24}}"
+                 rf"(?:點[{re.escape(''.join(_CN_DIGIT))}]{{1,6}})?")
 # 幣別可選（「新臺幣（下同）」之後的金額會省略幣別），後面必須接「元」
 _AMOUNT_RE = re.compile(
     rf"(?:(?P<cur>{'|'.join(sorted((re.escape(k) for k in _CURRENCY_MAP), key=len, reverse=True))})\s*)?"
@@ -667,6 +677,11 @@ def _iter_amounts_in_clause(clause: str, default_currency: str = "TWD") -> List[
             m_each = _EACH_RE.search(window[: ams[0].start()])
             if m_each:
                 mult = len(re.findall(r"、|及|與|和", m_each.group("who"))) + 1
+            else:
+                m_n = _EACH_N_RE.search(window[: ams[0].start()])
+                n_people = cn_numeral_to_int(m_n.group("n")) if m_n else None
+                if n_people and n_people > 1:
+                    mult = n_people
 
         for am in ams:
             span = (start + am.start(), start + am.end())
@@ -695,6 +710,8 @@ def _iter_amounts_in_clause(clause: str, default_currency: str = "TWD") -> List[
 _PERIODIC_RE = re.compile(r"(?:按|每)(?:月|年|日|季)")
 # 「…甲、乙各」緊接在金額前：who 是受領人列舉（至少有一個分隔符才算多人）
 _EACH_RE = re.compile(r"(?P<who>[^，。；]{1,40}?(?:、|及|與|和)[^，。；]{1,20}?)各\s*$")
+# 「陳阿朝等 6 人各 157 萬元」：沒有逐一列名，用人數相乘（判准那邊主文通常逐一列名，所以聲明才會漏）
+_EACH_N_RE = re.compile(r"等\s*(?P<n>[\d一二三四五六七八九十兩]+)\s*人各\s*$")
 
 
 def _lump_sum(items: List[Dict]) -> Optional[int]:
@@ -857,7 +874,8 @@ _CLAIM_STOP_RE = re.compile(
     r"|原告(?:所)?主張之(?:上開|前揭|上揭|前開)?事實|業據(?:其|原告)?提出"
     # 備位聲明是先位不成立時才審的替代請求，與先位擇一，不能相加。
     # 實測 110 年度訴字第 357 號：先位、備位各 728 萬 5 千元，加總成 1,457 萬。
-    r"|備位(?:之)?聲明")
+    r"|備位(?:訴)?(?:之)?聲明"
+    r"|自應(?:予)?准許")
 
 # 聲明變更（減縮、擴張、更正）。判決書會先寫起訴時的聲明，再寫變更後的聲明：
 #   「原告起訴時聲明…60萬元。嗣…減縮該項聲明為『…1萬3,200元』」
@@ -876,7 +894,9 @@ _CLAIM_CHANGE_RE = re.compile(
     r"|聲明[^。；]{0,6}?(?:變更|減縮|擴張|更正)為\s*[:：]?"
     r"|(?:變更|減縮|擴張)為?請求(?=被告[^。；]{0,20}?給付)"
     r"|(?:變更|減縮|擴張|追加)[^。；]{0,12}?聲明[^。；]{0,8}?狀[^。；]{0,10}?聲明\s*[:：]"
-    r"|(?:當庭|具狀|嗣)[^。；]{0,4}?(?:變更|減縮|擴張)為\s*[:：]")
+    r"|(?:當庭|具狀|嗣)[^。；]{0,4}?(?:變更|減縮|擴張)為\s*[:：]"
+    r"|(?:擴張|變更|減縮)(?!後)[^。；]{0,30}?聲明[^。；]{0,12}?(?:如後|如下|所示)"
+    r"|(?:將)?請求(?:之)?金額[^。；]{0,6}?(?:減縮|擴張|變更|更正)為\s*[:：]?")
 _AS_VERDICT_RE = re.compile(r"如主文(?:第[一二三四五六七八九十\d]+項)?所示")
 # 聲明段落中的編號符號，先剝除才能正確判斷「如主文所示」是否為整段內容
 _ENUM_PREFIX_RE = re.compile(r"^[\s\d一二三四五六七八九十㈠-㈩\(（][\s\d一二三四五六七八九十㈠-㈩\)）.、,]*")
@@ -2149,7 +2169,7 @@ SOURCE_COLUMNS = [
 ]
 
 # 規則版本。規則異動時遞增，讓回填過的資料可以辨識是用哪一版規則產生的。
-STRUCTURING_VERSION = "2.5.0"
+STRUCTURING_VERSION = "2.5.1"
 
 
 def derive_structured_fields(row: Dict) -> Dict:
