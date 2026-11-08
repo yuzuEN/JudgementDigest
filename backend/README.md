@@ -15,7 +15,7 @@ API 文件（可以直接在網頁上試）：http://127.0.0.1:8000/docs
 | `main.py` | 路由（全部在 `/api` 底下） |
 | `schemas.py` | 輸入輸出格式；前端的 `frontend/src/api/types.ts` 和它一一對應 |
 | `civil_service.py` | 民事：讀模型與檢索資料，算勝訴機率、相似判決、金額範圍、證據對照、常見抗辯、判決導讀 |
-| `criminal_service.py` | 刑事：讀模型（`artifacts/criminal_v1`）與檢索資料（`artifacts/retrieval_criminal_v1`），算罪名、法條、刑度分布、相似判決；沒有模型檔時回傳示例資料 |
+| `criminal_service.py` | 刑事：讀模型（`artifacts/criminal_v1`）與檢索資料（`artifacts/retrieval_criminal_v1`），算罪名、法條、刑度、相似判決；下半部是 ELECTRA 刑期模型（目前停用）；沒有模型檔時回傳示例資料 |
 | `followup.py` | 追問的固定題庫 |
 | `llm/` | LLM 追問，見下面的「LLM」 |
 | `quality.py` | 描述的品質檢查 |
@@ -30,10 +30,10 @@ API 文件（可以直接在網頁上試）：http://127.0.0.1:8000/docs
 | `GET /api/meta/options` | 問卷選項：糾紛類型（案由中類）、法院、證據 | 來自模型的訓練資料 |
 | `POST /api/intake/mask` | 遮掉身分證字號、電話、電子郵件、地址、指定的名字 | 規則；網站改在瀏覽器遮名，這個 API 留給其他用途 |
 | `POST /api/intake/followup` | 追問描述裡缺少的事實 | 固定題庫；`allow_llm: true` 且有設定 LLM 時用 LLM |
-| `POST /api/intake/rewrite` | 把描述整理成判決書寫法 | LLM；不能用時回傳 `source: none` |
+| `POST /api/intake/rewrite` | 把描述整理成判決書寫法：民事是原告主張，`case_type: criminal` 是犯罪事實 | LLM；不能用時回傳 `source: none` |
 | `POST /api/civil/predict` | 民事勝訴機率 | 模型 |
 | `POST /api/civil/report` | 結果頁的全部內容：相似判決的勝敗件數、機率與提示、金額範圍、相似判決、證據對照、常見抗辯 | 模型＋檢索 |
-| `POST /api/criminal/predict` | 罪名、法條、刑期分布、相似判決 | 模型（`criminal.models.service`）＋檢索（`retrieval.criminal`） |
+| `POST /api/criminal/predict` | 罪名、法條、刑度分布（`charges[].sentence`）、相似判決 | 罪名、法條、刑度：`criminal.models.service`；相似判決：`retrieval.criminal`（`mock`） |
 | `POST /api/retrieval/search` | 相似判決，`type` 為 `civil`、`criminal`、`both` | 檢索（沒有檢索資料時為示例） |
 | `GET /api/judgments/{source}/{case_id}/guide` | 判決導讀：段落與功能標示 | 民事為規則版（`labeler: rule-v0`）；刑事判決沒有導讀，列表附司法院原文網址 |
 
@@ -46,7 +46,17 @@ API 文件（可以直接在網頁上試）：http://127.0.0.1:8000/docs
 - `civil_winloss_v1/`：`python -m civil.models.service train` 產生
 - `retrieval_civil_v3/`：`python -m retrieval.build` 產生
 
-任一個不存在時，民事改回傳示例資料，伺服器照樣能啟動。`JD_BACKEND_MODE=mock` 可以強制使用示例資料。
+- `criminal_v1/`、`retrieval_criminal_v1/`：刑事罪名、法條模型與相似判決檢索（PR #39，`python -m criminal.models.service`、`python -m retrieval.criminal` 產生）
+- `criminal_term/`：ELECTRA 刑期模型（目前停用），Kaggle 訓練輸出的 `checkpoints/fold_01/`；啟用方式見 `criminal_service.py` 開頭說明
+
+民事任一個不存在時，民事改回傳示例資料；沒有 `criminal_v1/` 時罪名、法條、刑度、相似判決改回傳示例資料。伺服器照樣能啟動。
+
+刑期模型的注意事項：
+- 只用區間的頭（6 個區間；第 7 類無期／死刑訓練資料沒有，不顯示）。迴歸頭（估計月數）目前不用。
+- 訓練時 beta 固定為 0，罪名／法條向量對輸出沒有影響，所以只建 encoder 和刑期的頭；beta 不是 0 的 checkpoint 會拒絕載入。
+- 送進模型前把【姓名】【地址】這類標記換成訓練資料的寫法（甲○○、○○市○○區…），見 `to_training_style()`。
+- 有使用者確認過的整理文字時，前端送整理文字；沒有就送遮名後的原始描述。
+- CPU 推論一筆約 0.3 秒；後端映像檔裝 CPU 版的 torch。`JD_BACKEND_MODE=mock` 可以強制使用示例資料。
 
 ## 相似判決的兩層
 
@@ -89,13 +99,15 @@ API 文件（可以直接在網頁上試）：http://127.0.0.1:8000/docs
 - 整理後多出描述裡沒有的數字時，`added_numbers` 會列出來提醒使用者；這是提醒，不能保證抓到所有多加的事實
 - 傳給 LLM 的文字最多 3,000 字；說明（`why`）提到法律或法院做法時，換成固定的說明
 - 新增廠商：寫一個有 `generate_json` 的類別，在 `create_client` 加一行
-- Gemini 只能用付費層：免費層的資料會用於改善 Google 的產品
+- 廠商：`JD_LLM_PROVIDER=gemini`（`GEMINI_API_KEY`）或 `openai`（`OPENAI_API_KEY`，預設模型 gpt-4.1-mini，用 Structured Outputs 限定回傳格式）。確認頁的資料使用說明會依 `llm_vendor` 寫出內容傳給哪一家
+- Gemini 只能用付費層：免費層的資料會用於改善 Google 的產品。OpenAI 的 API 資料預設不用於訓練模型
 - 用量上限：每個 IP 每小時 10 次、全站每天 300 次（`JD_LLM_PER_IP_HOUR`、`JD_LLM_PER_DAY`），超過時改用固定題庫。
-  次數記在記憶體，重啟歸零，只適用單一程序。Google 帳單另外設定預算提醒
+  次數記在記憶體，重啟歸零，只適用單一程序。Google／OpenAI 帳單另外設定預算提醒
 - `docker logs` 的「LLM 用量」記錄模型與 token 數，不含案情內容
 
 ## 接上其他組的功能
 
+- **刑事**：罪名、法條、刑度、相似判決都在 `criminal_service.py`（TF-IDF＋SVM，PR #39）；ELECTRA 刑期也在同一檔、目前停用；模型檔另外傳，放進 `artifacts/`
 - **LLM 追問**：已接上，見上面的「LLM」；送出的文字一律先經過 `retrieval.masking.mask()`
 - **段落功能標註**：`civil.insights.guide_paragraphs()` 換成標註模型，`labeler` 改成模型名稱
 

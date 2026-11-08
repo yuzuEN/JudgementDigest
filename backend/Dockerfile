@@ -8,6 +8,8 @@ COPY civil civil
 COPY criminal criminal
 COPY retrieval retrieval
 COPY backend backend
+# 刑期模型只在推論時用到，不需要網路
+ENV HF_HUB_OFFLINE=1 TOKENIZERS_PARALLELISM=false
 # 模型與檢索資料不放進映像檔，執行時掛載（docker-compose.yml 的 volumes）
 ENV JD_ARTIFACTS_DIR=/app/artifacts
 EXPOSE 8000

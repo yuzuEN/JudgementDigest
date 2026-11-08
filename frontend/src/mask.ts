@@ -26,7 +26,7 @@ function halfWidth(text: string): string {
 
 function namePattern(names: string[]): RegExp | null {
   // 長的名字先比對：「王小明」不會先被「王小」吃掉
-  const unique = [...new Set(names.map((n) => n.trim()).filter((n) => n.length >= 2))];
+  const unique = [...new Set(names.map((n) => n.trim()).filter((n) => n.length > 0))];
   if (unique.length === 0) return null;
   unique.sort((a, b) => b.length - a.length);
   return new RegExp(unique.map((n) => n.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")).join("|"), "gu");

@@ -14,7 +14,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from backend import followup, llm, mock, schemas
 from backend.civil_service import CivilService
-from backend.criminal_service import CriminalService
+from backend.criminal_service import CriminalService  # , CriminalTermService  ← ELECTRA 刑期，目前停用
 from backend.llm.limits import UsageLimiter
 from backend.llm.tasks import followup_questions, rewrite_claim
 from backend.quality import looks_like_dispute
@@ -33,7 +33,8 @@ def client_ip(request: Request) -> str:
 def create_app(settings: Optional[Settings] = None) -> FastAPI:
     settings = settings or Settings.from_env()
     civil = CivilService(settings.artifacts_dir, force_mock=settings.mode == "mock")
-    criminal = CriminalService(settings.artifacts_dir, force_mock=settings.mode == "mock")
+    criminal = CriminalService(settings.artifacts_dir, force_mock=settings.mode == "mock")       # 罪名、法條、刑度、相似判決
+    # term = CriminalTermService(settings.artifacts_dir, force_mock=settings.mode == "mock")   # ELECTRA 刑期，目前停用
     llm_client = llm.create_client(settings.llm_provider, settings.llm_model, settings.llm_api_key)
     llm_limit = UsageLimiter(settings.llm_per_ip_hour, settings.llm_per_day)
     app = FastAPI(title="類案判決參考平台 API", version="0.1.0",
@@ -74,12 +75,12 @@ def create_app(settings: Optional[Settings] = None) -> FastAPI:
         elif req.allow_llm and available:
             try:
                 return {"questions": followup_questions(llm_client, req.case_type, req.mid, req.text), "source": "llm",
-                        "llm_available": True}
+                        "llm_available": True, "llm_vendor": llm_client.vendor}
             except llm.LLMError as e:
                 logger.warning("LLM 追問失敗，改用固定題庫：%s", e)
                 fallback = "error"
         return {"questions": followup.questions(req.case_type, req.mid, req.text), "source": "rules",
-                "llm_available": available, "fallback": fallback}
+                "llm_available": available, "llm_vendor": llm_client.vendor if available else None, "fallback": fallback}
 
     @api.post("/intake/rewrite", response_model=schemas.RewriteResponse)
     def rewrite(req: schemas.RewriteRequest, request: Request):
@@ -94,7 +95,7 @@ def create_app(settings: Optional[Settings] = None) -> FastAPI:
         if not llm_limit.allow(client_ip(request)):
             return {"source": "none", "fallback": "limited"}
         try:
-            return {**rewrite_claim(llm_client, req.mid, req.text), "source": "llm"}
+            return {**rewrite_claim(llm_client, req.mid, req.text, req.case_type), "source": "llm"}
         except llm.LLMError as e:
             logger.warning("LLM 改寫失敗，改用原本的描述：%s", e)
             return {"source": "none", "fallback": "error"}
@@ -110,8 +111,14 @@ def create_app(settings: Optional[Settings] = None) -> FastAPI:
 
     @api.post("/criminal/predict", response_model=schemas.CriminalReport)
     def criminal_predict(req: schemas.CriminalInput):
-        """刑事：罪名、法條、刑期分布、相似判決。沒有模型檔時回傳示例資料。"""
-        return criminal.report(req.text)
+        """
+        刑事：罪名、法條、刑度分布、相似判決。
+        模型 artifacts/criminal_v1（TF-IDF＋SVM）、檢索 artifacts/retrieval_criminal_v1；沒有模型時回傳示例資料（mock）。
+        刑度在 charges[].sentence（6 區間，含拘役、罰金）。
+        """
+        report = criminal.report(req.text)
+        # report["sentence"] = term.sentence(req.text)   # ELECTRA 刑期（只估有期徒刑），目前停用
+        return report
 
     @api.post("/retrieval/search", response_model=schemas.SearchResponse)
     def search(req: schemas.SearchRequest):

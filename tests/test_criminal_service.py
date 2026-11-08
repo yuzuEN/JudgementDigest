@@ -1,16 +1,19 @@
 # -*- coding: utf-8 -*-
-"""criminal/models/service.py：刑度區間、罪名對法條、用合成資料訓練後 predict 的輸出格式。"""
+"""criminal/models/service.py：刑度區間、罪名對法條、用合成資料訓練後 predict 的輸出格式。
+下半部：backend/criminal_service.py 的 ELECTRA 刑期模型（目前停用），用很小的隨機 ELECTRA 測；沒裝 torch 時略過。"""
 
 import json
 import sys
 import tempfile
 import unittest
+import unittest.mock
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from criminal.models import service  # noqa: E402
 from retrieval import criminal as retrieval_criminal  # noqa: E402
+from backend.criminal_service import TERM_BUCKETS, CriminalTermService, to_training_style  # noqa: E402
 
 DRUNK = "被告飲用啤酒後，吐氣所含酒精濃度達每公升零點四毫克，仍騎乘機車上路，為警攔查。"
 THEFT = "被告徒手竊取店內商品，得手後離去，經店員報警查獲。"
@@ -145,6 +148,87 @@ class TestTrainedModel(unittest.TestCase):
 
     def test_meta(self):
         self.assertEqual((self.meta["name"], self.meta["charges"], self.meta["n_train"]), ("criminal_v1", 2, 60))
+
+
+# ── ELECTRA 刑期（目前停用） ──
+try:
+    import torch
+    from torch import nn
+    from transformers import BertTokenizerFast, ElectraConfig, ElectraModel
+except ImportError:          # 本機開發環境可能沒裝 torch；Docker 映像檔有
+    torch = None
+
+
+def save_tiny_checkpoint(folder: Path, beta: float = 0.0, drop: str = "") -> None:
+    """和訓練程式存的一樣：tokenizer/、encoder_config/、best.pt（含用不到的罪名／法條分支權重）。"""
+    vocab = ["[PAD]", "[UNK]", "[CLS]", "[SEP]", "[MASK]"] + list("被告打人受傷甲○")
+    (folder / "tokenizer").mkdir(parents=True)
+    (folder / "vocab.txt").write_text("\n".join(vocab), encoding="utf-8")
+    BertTokenizerFast(vocab_file=str(folder / "vocab.txt")).save_pretrained(folder / "tokenizer")
+    config = ElectraConfig(vocab_size=len(vocab), embedding_size=16, hidden_size=16, num_hidden_layers=1,
+                           num_attention_heads=2, intermediate_size=32, max_position_embeddings=64)
+    config.save_pretrained(folder / "encoder_config")
+    torch.manual_seed(0)
+    state = {f"encoder.{k}": v for k, v in ElectraModel(config).state_dict().items()}
+    head = nn.Sequential(nn.Linear(16, 512), nn.ReLU(), nn.Dropout(), nn.Linear(512, 256))
+    state.update({f"head.mlp.{k}": v for k, v in head.state_dict().items()})
+    state.update({"head.bin.weight": torch.randn(7, 256), "head.bin.bias": torch.zeros(7),
+                  "head.reg.weight": torch.randn(1, 256), "head.reg.bias": torch.zeros(1),
+                  "beta": torch.tensor(beta), "query.weight": torch.randn(4, 16)})
+    state.pop(drop, None)
+    torch.save(state, folder / "best.pt")
+    (folder / "metrics.json").write_text(json.dumps({"selected_epoch": 5}), encoding="utf-8")
+
+
+class TestTermTrainingStyle(unittest.TestCase):
+    def test_mask_tags_become_training_style(self):
+        self.assertEqual(to_training_style("【姓名】打【被告】，住【地址】"), "甲○○打甲○○，住○○市○○區○○路000號")
+
+
+class TestTermWithoutModel(unittest.TestCase):
+    def test_missing_files_fall_back(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            s = CriminalTermService(Path(tmp))
+            self.assertFalse(s.available)
+            self.assertIsNone(s.sentence("他打我"))
+
+
+@unittest.skipIf(torch is None, "沒有裝 torch")
+class TestTermTinyModel(unittest.TestCase):
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmp.cleanup)
+        self.root = Path(self.tmp.name)
+
+    def test_predicts_six_buckets(self):
+        save_tiny_checkpoint(self.root / "criminal_term")
+        s = CriminalTermService(self.root)
+        self.assertTrue(s.available)
+        r = s.sentence("被告打人，【姓名】受傷")
+        self.assertFalse(r["mock"])
+        self.assertEqual([b["label"] for b in r["buckets"]], TERM_BUCKETS)
+        self.assertAlmostEqual(sum(b["share"] for b in r["buckets"]), 1.0, places=3)
+        self.assertEqual(s.meta["selected_epoch"], 5)
+
+    def test_long_text_is_truncated(self):
+        save_tiny_checkpoint(self.root / "criminal_term")
+        s = CriminalTermService(self.root)
+        with unittest.mock.patch("backend.criminal_service.TERM_MAX_LEN", 64):
+            self.assertEqual(len(s.predict_buckets("打" * 5000)), 6)
+
+    def test_force_mock(self):
+        save_tiny_checkpoint(self.root / "criminal_term")
+        self.assertFalse(CriminalTermService(self.root, force_mock=True).available)
+
+    def test_rejects_fusion_checkpoint(self):
+        save_tiny_checkpoint(self.root / "criminal_term", beta=0.2)
+        with self.assertRaisesRegex(ValueError, "beta"):
+            CriminalTermService(self.root)
+
+    def test_rejects_incomplete_checkpoint(self):
+        save_tiny_checkpoint(self.root / "criminal_term", drop="head.bin.weight")
+        with self.assertRaisesRegex(ValueError, "少了"):
+            CriminalTermService(self.root)
 
 
 if __name__ == "__main__":

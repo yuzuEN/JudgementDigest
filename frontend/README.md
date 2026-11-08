@@ -1,6 +1,6 @@
 # frontend/：網頁
 
-React＋Vite＋TypeScript。版面依設計原型：首頁、描述案情、確認與遮名、民事／刑事結果、判決導讀、說明頁。
+React 19＋Vite＋TypeScript，介面用 Tailwind CSS 4＋shadcn/ui（Base UI 版）元件與 lucide 圖示。版面依設計原型：首頁、描述案情、確認與遮名、民事／刑事結果、判決導讀、說明頁。
 
 ```bash
 cd frontend
@@ -19,12 +19,13 @@ npm run build      # 型別檢查＋建置到 dist/
 | `src/api/` | `types.ts`（和 `backend/schemas.py` 一一對應）、`client.ts`（呼叫 API） |
 | `src/state.tsx` | 使用者填的內容。只放在記憶體裡，重新整理就清空，不寫進瀏覽器儲存空間 |
 | `src/pages/` | `Home`、`Intake`（描述案情）、`Confirm`（追問、遮名預覽、敏感個人資料同意）、`CivilResult`、`CriminalResult`、`Reading`（判決導讀）、`Guide`（說明頁） |
-| `src/components/` | 頁首頁尾、結果頁外框（分頁、下載 PDF）、整理敘述（`RewriteCard`）、共用元件 |
+| `src/components/` | 頁首頁尾與步驟條（`Layout`）、結果頁外框（分頁、下載 PDF）、整理敘述（`RewriteCard`）、共用元件 |
+| `src/components/ui/` | shadcn/ui 元件（`npx shadcn add <元件>` 產生，可以直接改） |
 | `src/format.ts` | 金額、比例、判決結果的顯示；敏感個人資料的判斷 |
 | `src/mask.ts` | 瀏覽器內的遮名 |
 | `src/knowledge.ts` | 說明頁的內容：糾紛類型與名詞 |
-| `src/theme.ts` | 淺色、夜間模式 |
-| `src/styles.css` | 顏色與版面（和設計原型一致），含列印用的樣式 |
+| `src/theme.ts` | 夜間模式跟著系統設定 |
+| `src/index.css` | 顏色（shadcn 的 CSS 變數）、細捲軸、列印用的樣式 |
 | `src/test/` | 測試：各頁面的行為，以及從首頁走到判決導讀的完整流程 |
 
 ## 設計上的決定

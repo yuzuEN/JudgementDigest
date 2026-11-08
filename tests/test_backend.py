@@ -164,6 +164,7 @@ class TestCriminalWithModel(unittest.TestCase):
         shares = {b["label"]: b["share"] for b in drunk["similar_sentence"]}
         self.assertAlmostEqual(shares["拘役、罰金"] + shares["1～6 個月"], 1.0)
         self.assertEqual(r["model"]["name"], "criminal_v1")
+        self.assertIsNone(r["sentence"])          # ELECTRA 刑期停用
 
     def test_search(self):
         r = self.client.post("/api/retrieval/search", json={"type": "criminal", "text": CRIMINAL_DRUNK, "k": 3}).json()
@@ -234,6 +235,7 @@ class TestCommonEndpoints(_MockCase):
     def test_criminal_is_mock(self):
         r = self.client.post("/api/criminal/predict", json={"text": "開車撞到人"}).json()
         self.assertTrue(r["mock"])
+        self.assertIsNone(r["sentence"])
         self.assertEqual(len(r["charges"][0]["sentence"]), 6)
         self.assertAlmostEqual(sum(b["share"] for b in r["charges"][0]["sentence"]), 1.0, places=5)
         case_id = r["similar"][0]["case_id"]

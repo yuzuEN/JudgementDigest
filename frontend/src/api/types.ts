@@ -34,6 +34,7 @@ export interface FollowupResponse {
   questions: Question[];
   source: "rules" | "llm";
   llm_available?: boolean;
+  llm_vendor?: string | null;
   fallback?: "not_dispute" | "error" | "limited" | null;
 }
 
@@ -155,7 +156,14 @@ export interface CriminalModelInfo {
   bucket_within_one?: number | null;
 }
 
+export interface SentenceDistribution {
+  buckets: { label: string; share: number }[];
+  mock: boolean;
+  model: { name: string; description: string };
+}
+
 export interface CriminalReport {
+  sentence?: SentenceDistribution | null;   // ELECTRA 刑期，後端目前停用
   charges: Charge[];
   similar: SimilarCase[];
   model?: CriminalModelInfo | null;

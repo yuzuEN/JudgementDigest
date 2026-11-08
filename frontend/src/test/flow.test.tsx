@@ -1,4 +1,4 @@
-import { screen, waitFor } from "@testing-library/react";
+import { fireEvent, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it } from "vitest";
 import { CIVIL_REPORT, CRIMINAL_REPORT, GUIDE, mockApi, OPTIONS, renderApp } from "./helpers";
@@ -16,9 +16,11 @@ describe("完整流程", () => {
     renderApp("/");
 
     await user.click(screen.getByRole("link", { name: "開始描述案情" }));
-    await user.click(screen.getByRole("button", { name: /不確定/ }));
+    await user.click(screen.getByRole("radio", { name: "不確定" }));
     await user.type(screen.getByLabelText("發生了什麼事？"), "朋友向我借了五十萬一直不還，他的電話0912345678");
-    await user.selectOptions(await screen.findByLabelText("糾紛類型"), "民間借貸");
+    await user.click(await screen.findByLabelText("糾紛類型"));
+    fireEvent.click(await screen.findByRole("option", { name: "民間借貸" }));   // Base UI 的選項在 jsdom 裡要用 fireEvent
+    await user.keyboard("{Escape}");
     await user.type(screen.getByLabelText("想請求的金額（新臺幣）"), "50萬");
     await user.click(screen.getByRole("radio", { name: "還沒有" }));
     await user.click(screen.getByRole("button", { name: "下一步：確認內容" }));
@@ -35,7 +37,7 @@ describe("完整流程", () => {
     expect(JSON.stringify(report)).not.toContain("0912345678");
 
     await user.click(screen.getByRole("link", { name: "刑事" }));
-    expect(await screen.findByRole("heading", { name: "刑期範圍：過失傷害罪" })).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "可能的罪名" })).toBeInTheDocument();
     expect(calls.find((c) => c.key === "POST /criminal/predict")!.body).toEqual({ text: expect.stringContaining("【電話】") });
 
     await user.click(screen.getByRole("link", { name: "民事" }));
