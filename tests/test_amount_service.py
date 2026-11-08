@@ -97,6 +97,36 @@ class TestRange(unittest.TestCase):
         self.assertAlmostEqual(m["coverage"] + m["below"] + m["above"], 1.0, places=6)
 
 
+class TestPairedBootstrap(unittest.TestCase):
+    def setUp(self):
+        rng = np.random.default_rng(2)
+        self.truth = rng.uniform(0.05, 1, 3000)
+        self.good = np.column_stack([self.truth - 0.2, self.truth, self.truth + 0.2])          # 中位數就是答案、全部涵蓋
+        self.bad = np.column_stack([self.truth + 0.1, self.truth + 0.2, self.truth + 0.3])     # 偏高 0.2、全部沒涵蓋
+
+    def test_same_method_has_zero_difference(self):
+        r = A.paired_bootstrap(self.truth, self.good, self.good, n=200)
+        for key in ("mae", "coverage", "width"):
+            self.assertEqual((r[key]["diff"], r[key]["low"], r[key]["high"]), (0.0, 0.0, 0.0))
+
+    def test_signs_and_intervals(self):
+        r = A.paired_bootstrap(self.truth, self.good, self.bad, n=200)
+        self.assertAlmostEqual(r["mae"]["diff"], -0.2, places=6)          # 前者比較準 → 負的
+        self.assertLess(r["mae"]["high"], 0)                              # 區間不含 0
+        self.assertAlmostEqual(r["coverage"]["diff"], 1.0, places=6)      # 前者全部涵蓋、後者全部沒有
+        self.assertAlmostEqual(r["width"]["diff"], 0.2, places=6)         # 前者寬 0.4、後者寬 0.2
+        self.assertLessEqual(r["mae"]["low"], r["mae"]["diff"] + 1e-9)
+        self.assertLessEqual(r["mae"]["diff"], r["mae"]["high"] + 1e-9)
+
+    def test_report_includes_the_comparison_table(self):
+        r = A.paired_bootstrap(self.truth, self.good, self.bad, n=50)
+        m = A.metrics(self.truth, self.good)
+        text = A.report({"甲": m, "_baseline_mae_global_median": 0.28, "_bootstrap": {"甲 − 乙": r}},
+                        "test", [("全部", 3000)], "2.5.1")
+        self.assertIn("金額欄位規則 2.5.1", text)
+        self.assertIn("| 甲 − 乙 | -0.2000", text)
+
+
 class TestBaselines(unittest.TestCase):
     def test_knn_quantiles_uses_same_mid_then_top_k(self):
         mids_tr = np.array(["甲"] * 12 + ["乙"] * 12)
