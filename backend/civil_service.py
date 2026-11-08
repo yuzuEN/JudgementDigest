@@ -3,8 +3,12 @@
 
 模型（artifacts/civil_winloss_v1）與檢索資料（artifacts/retrieval_civil_v3）在啟動時讀進記憶體；
 任一個不存在時整個民事改回傳示例資料（mock = true），伺服器照樣能啟動，前端照樣能走完流程。
+
+獲償比例模型（artifacts/civil_amount_v1）是選用的：有的話金額範圍用模型推估（若為一部勝訴），
+沒有或讀不出來時退回相似判決的分位數（和沒有這個模型之前相同）。
 """
 import json
+import logging
 import sqlite3
 from contextlib import closing
 from pathlib import Path
@@ -15,11 +19,14 @@ import numpy as np
 from backend import mock
 from backend.quality import looks_like_dispute, win_signal
 from civil.dataset.text import prepare_input
-from civil.insights import (EVIDENCE, QUESTIONNAIRE_EVIDENCE, amount_range, outcome_counts, user_evidence, without_questions, defense_table, evidence_table,
+from civil.insights import (EVIDENCE, QUESTIONNAIRE_EVIDENCE, amount_fields, amount_range, outcome_counts, user_evidence, without_questions, defense_table, evidence_table,
                             guide_paragraphs, GUIDE_LABELER)
+from civil.models import amount_service
 from civil.models import service as model_service
 from retrieval import build as retrieval_build
 from retrieval.engine import TfidfIndex
+
+logger = logging.getLogger(__name__)
 
 SHORT_TEXT = 150          # 描述少於這個字數時提醒：測試資料只給前 150 字時，勝訴 recall 從 0.81 降到 0.64
 N_NEIGHBORS = 30          # 相似判決統計（證據、抗辯、金額）用的件數，只算對審
@@ -34,6 +41,7 @@ MIN_SAME_MID = 10         # 同案由的判決少於這個數時，改在全部�
 class CivilService:
     def __init__(self, artifacts_dir: Path, force_mock: bool = False):
         self.model = self.meta = self.index = None
+        self.amount_model = self.amount_meta = None
         self.db_path: Optional[Path] = None
         if force_mock:
             return
@@ -54,6 +62,18 @@ class CivilService:
             self.in_stats = np.array([bool(r[5]) for r in rows])
             self.default = np.array([bool(r[6]) for r in rows])
             self.outcomes = [r[7] for r in rows]
+            self._load_amount_model(artifacts_dir)
+
+    def _load_amount_model(self, artifacts_dir: Path) -> None:
+        """獲償比例模型是選用的：沒有、或讀不出來（例如 scikit-learn 版本不同）都退回相似判決，不影響其他功能。"""
+        path = amount_service.artifact_dir(artifacts_dir)
+        if not (path / "model.joblib").exists():
+            return
+        try:
+            self.amount_model, self.amount_meta = amount_service.load(path)
+        except Exception:
+            logger.warning("獲償比例模型 %s 讀取失敗，金額範圍改用相似判決的分位數", path, exc_info=True)
+            self.amount_model = self.amount_meta = None
 
     @property
     def mock(self) -> bool:
@@ -202,9 +222,10 @@ class CivilService:
         mid, _ = self._resolve_mid(req, sim)
         rows, _ = self.index.top(sim, N_NEIGHBORS, self._allowed(mid, self.in_stats))
         winners = [r for r in rows if self.y[r] == 1]
+        similar_range = amount_range(self.grant_ratio[winners], req.claimed_amount)
         return {
             "prediction": prediction,
-            "amount_range": amount_range(self.grant_ratio[winners], req.claimed_amount),
+            "amount_range": self._amount_range(req, mid, similar_range),
             "similar": self._listed(sim, mid, N_SHOWN),
             "evidence": evidence_table([self.case_evidence[r] for r in winners], user_evidence(req.text, req.evidence)),
             "defenses": defense_table([self.case_defenses[r] for r in rows]),
@@ -214,6 +235,22 @@ class CivilService:
             "n_compared": int(len(rows)),
             "mock": False,
         }
+
+    def _amount_range(self, req, mid: Optional[str], similar: Optional[Dict]) -> Optional[Dict]:
+        """
+        有獲償比例模型：範圍是「若為一部勝訴」的模型推估；相似判決的分布（件數與 buckets）留著當佐證，
+        但不是這個範圍的依據。沒有模型：就是相似的勝訴判決的分位數。
+        """
+        if self.amount_model is None:
+            return similar
+        r = self.amount_model.predict_one(without_questions(req.text), {**self.answers(req), "mid": mid},
+                                          req.claimed_amount)
+        return {"source": "model", "scope": "partial_win",
+                "n_cases": similar["n_cases"] if similar else None,
+                "ratio_low": r["ratio_low"], "ratio_median": r["ratio_median"], "ratio_high": r["ratio_high"],
+                "coverage": r["coverage"],
+                **amount_fields(r["ratio_low"], r["ratio_median"], r["ratio_high"], req.claimed_amount),
+                "buckets": similar["buckets"] if similar else []}
 
     # ── 判決導讀 ──
     def guide(self, case_id: int) -> Optional[Dict]:

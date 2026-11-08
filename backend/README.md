@@ -44,8 +44,11 @@ API 文件（可以直接在網頁上試）：http://127.0.0.1:8000/docs
 
 - `civil_winloss_v1/`：`python -m civil.models.service train` 產生
 - `retrieval_civil_v3/`：`python -m retrieval.build` 產生
+- `civil_amount_v1/`（選用）：`python -m civil.models.amount_service train` 產生
 
-任一個不存在時，民事改回傳示例資料，伺服器照樣能啟動。`JD_BACKEND_MODE=mock` 可以強制使用示例資料。
+前兩個任一個不存在時，民事改回傳示例資料，伺服器照樣能啟動。`JD_BACKEND_MODE=mock` 可以強制使用示例資料。
+
+`civil_amount_v1/` 是獲償比例模型：有的話，結果頁的金額範圍是模型推估的「若為一部勝訴」（`amount_range.source` 是 `model`，`scope` 是 `partial_win`），相似判決的分布留著當對照；沒有、或讀不出來（例如 `scikit-learn` 版本不同，會在記錄裡留下警告）時，退回相似的勝訴判決的 10%–90% 分位數（`source` 是 `similar`）。
 
 ## 相似判決的兩層
 

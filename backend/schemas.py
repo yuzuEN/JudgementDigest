@@ -124,7 +124,11 @@ class AmountBucket(BaseModel):
 
 
 class AmountRange(BaseModel):
-    n_cases: int
+    source: Literal["model", "similar"] = Field(
+        default="similar", description="model＝獲償比例模型推估；similar＝相似判決的分位數（沒有模型檔時）")
+    scope: Literal["win", "partial_win"] = Field(
+        default="win", description="partial_win＝只針對「一部勝訴」；win＝勝訴與一部勝訴")
+    n_cases: Optional[int] = Field(default=None, description="buckets 背後的相似判決件數；沒有相似判決時是 null")
     ratio_low: float
     ratio_median: float
     ratio_high: float

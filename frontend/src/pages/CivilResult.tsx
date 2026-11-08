@@ -177,7 +177,10 @@ function AmountDetail({ range }: { range: AmountRange }) {
           </li>
         ))}
       </ul>
-      <p className="hint" style={{ fontSize: 13 }}>相似的勝訴判決判准了請求金額的幾成，換算成你的金額。不是每件都和你的案情一樣。</p>
+      <p className="hint" style={{ fontSize: 13 }}>
+        {range.source === "model" ? "上面的範圍是模型推估的；這裡是相似的勝訴判決實際" : "相似的勝訴判決"}
+        判准了請求金額的幾成，換算成你的金額。不是每件都和你的案情一樣。
+      </p>
     </details>
   );
 }
@@ -191,11 +194,17 @@ function Amount({ range }: { range: AmountRange | null }) {
       </section>
     );
   }
-  const pct = `相似案件中，10 件有 ${Math.round(range.coverage * 10)} 件落在這個範圍`;
+  // 模型推估的是「若為一部勝訴」：全部勝訴通常就是請求的全部金額，不在這個範圍裡
+  const isModel = range.source === "model";
+  const when = isModel ? "如果判決是「一部勝訴」，" : "如果勝訴，";
+  const hits = Math.round(range.coverage * 10);
+  const pct = isModel
+    ? `用過去的一部勝訴判決測試，10 件約有 ${hits} 件落在這個範圍。範圍很寬，因為同樣的案情，法院判准的比例落差很大；如果判決是全部勝訴，通常就是請求的全部金額`
+    : `相似案件中，10 件有 ${hits} 件落在這個範圍`;
   if (!range.claimed) {
     return (
       <section className="card" aria-labelledby="a-title">
-        <h2 id="a-title">如果勝訴，可能拿到請求金額的</h2>
+        <h2 id="a-title">{when}可能拿到請求金額的</h2>
         <span className="mid-number">{percent(range.ratio_low)}～{percent(range.ratio_high)}</span>
         <p className="hint" style={{ fontSize: 15 }}>{pct}。回上一步填寫想請求的金額，就會換算成金額。</p>
         <AmountDetail range={range} />
@@ -204,7 +213,7 @@ function Amount({ range }: { range: AmountRange | null }) {
   }
   return (
     <section className="card" aria-labelledby="a-title">
-      <h2 id="a-title">如果勝訴，可能判准的金額</h2>
+      <h2 id="a-title">{when}可能判准的金額</h2>
       <div style={{ display: "flex", alignItems: "baseline", gap: 8, flexWrap: "wrap" }}>
         <span className="mid-number">{money(range.amount_low)}～{money(range.amount_high)}</span>
         <span className="hint">你請求 {money(range.claimed)}</span>
@@ -215,7 +224,9 @@ function Amount({ range }: { range: AmountRange | null }) {
         <span className="tick" style={{ left: 0 }}>0</span>
         <span className="tick" style={{ right: 0 }}>請求 {money(range.claimed)}</span>
       </div>
-      <p className="hint" style={{ fontSize: 15 }}>{pct}（依 {range.n_cases} 件相似的勝訴判決）。金額只能給範圍，不能給單一數字。</p>
+      <p className="hint" style={{ fontSize: 15 }}>
+        {isModel ? `${pct}。` : `${pct}（依 ${range.n_cases} 件相似的勝訴判決）。`}金額只能給範圍，不能給單一數字。
+      </p>
       <AmountDetail range={range} />
     </section>
   );

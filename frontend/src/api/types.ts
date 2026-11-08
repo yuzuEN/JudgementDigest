@@ -67,7 +67,12 @@ export interface CivilPrediction {
 }
 
 export interface AmountRange {
-  n_cases: number;
+  /** model＝獲償比例模型推估；similar＝相似判決的分位數（沒有模型檔時）。舊版後端沒有這個欄位，視為 similar */
+  source?: "model" | "similar";
+  /** partial_win＝只針對「一部勝訴」；win＝勝訴與一部勝訴 */
+  scope?: "win" | "partial_win";
+  /** buckets 背後的相似判決件數；沒有相似判決時是 null */
+  n_cases?: number | null;
   ratio_low: number;
   ratio_median: number;
   ratio_high: number;

@@ -690,6 +690,60 @@ describe("民事結果", () => {
     expect(await screen.findByText("36%～84%")).toBeInTheDocument();
   });
 
+  describe("金額範圍的來源", () => {
+    type Range = NonNullable<typeof CIVIL_REPORT.amount_range>;
+    const model: Range = { ...CIVIL_REPORT.amount_range!, source: "model", scope: "partial_win",
+                           buckets: [{ low: 0, high: 0.2, count: 3 }] };
+    const show = async (range: Range | null) => {
+      mockApi({ "POST /civil/report": () => ({ ...CIVIL_REPORT, amount_range: range }) });
+      renderAt("/result/civil", <CivilResult />, "/result/civil", intake);
+      await screen.findByText("62%");
+    };
+
+    it("沒有模型：照舊寫「如果勝訴」與相似判決的件數", async () => {
+      await show({ ...model, source: "similar", scope: "win" });
+      expect(screen.getByRole("heading", { name: "如果勝訴，可能判准的金額" })).toBeInTheDocument();
+      expect(screen.getByText(/依 18 件相似的勝訴判決/)).toBeInTheDocument();
+      expect(screen.queryByText(/一部勝訴/, { selector: "h2" })).not.toBeInTheDocument();
+    });
+
+    it("舊版後端沒有 source 欄位時視為相似判決", async () => {
+      mockApi({ "POST /civil/report": () => CIVIL_REPORT });
+      renderAt("/result/civil", <CivilResult />, "/result/civil", intake);
+      expect(await screen.findByRole("heading", { name: "如果勝訴，可能判准的金額" })).toBeInTheDocument();
+    });
+
+    it("模型：標明「若為一部勝訴」，不再說依幾件相似判決，並提醒範圍很寬", async () => {
+      await show(model);
+      expect(screen.getByRole("heading", { name: "如果判決是「一部勝訴」，可能判准的金額" })).toBeInTheDocument();
+      expect(screen.getByText("18 萬～42 萬")).toBeInTheDocument();
+      expect(screen.getByText(/用過去的一部勝訴判決測試，10 件約有 8 件落在這個範圍/)).toBeInTheDocument();
+      expect(screen.getByText(/範圍很寬/)).toBeInTheDocument();
+      expect(screen.getByText(/如果判決是全部勝訴，通常就是請求的全部金額/)).toBeInTheDocument();
+      expect(screen.queryByText(/件相似的勝訴判決）/)).not.toBeInTheDocument();
+    });
+
+    it("模型：沒填請求金額時只給比例", async () => {
+      await show({ ...model, claimed: null, amount_low: null, amount_median: null, amount_high: null });
+      expect(screen.getByRole("heading", { name: "如果判決是「一部勝訴」，可能拿到請求金額的" })).toBeInTheDocument();
+      expect(screen.getByText("36%～84%")).toBeInTheDocument();
+      expect(screen.getByText(/回上一步填寫想請求的金額/)).toBeInTheDocument();
+    });
+
+    it("模型：相似判決的分布留著當對照，並說明它不是範圍的依據", async () => {
+      await show(model);
+      expect(screen.getByText("看各金額範圍有幾件")).toBeInTheDocument();
+      expect(screen.getByText(/上面的範圍是模型推估的/)).toBeInTheDocument();
+    });
+
+    it("模型：相似的勝訴判決不夠時仍給範圍，只是沒有分布可看", async () => {
+      await show({ ...model, n_cases: null, buckets: [] });
+      expect(screen.getByText("18 萬～42 萬")).toBeInTheDocument();
+      expect(screen.queryByText("看各金額範圍有幾件")).not.toBeInTheDocument();
+      expect(screen.queryByText(/無法估出金額範圍/)).not.toBeInTheDocument();
+    });
+  });
+
   it("相似的勝訴判決不夠時不給金額", async () => {
     mockApi({ "POST /civil/report": () => ({ ...CIVIL_REPORT, amount_range: null }) });
     renderAt("/result/civil", <CivilResult />, "/result/civil", intake);
