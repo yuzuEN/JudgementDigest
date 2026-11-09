@@ -34,7 +34,7 @@ JudgementDigest/
 │   ├── build.py           建立上線用的檢索資料（索引、遮名後的案件清單）
 │   ├── masking.py         遮名：判決的當事人姓名、使用者輸入的個資
 │   ├── evaluate.py        民事檢索的評估
-│   └── criminal.py        刑事設定（刑事組，尚未加入）
+│   └── criminal.py        刑事設定：用犯罪事實建索引、限定同罪名、顯示宣告刑
 │
 ├── annotation/            ── 段落功能標註（判決導讀、法官論理傾向分析的基礎）
 │
@@ -60,7 +60,7 @@ JudgementDigest/
 └── tests/                 ── 測試
 ```
 
-`criminal/`、`annotation/` 目前只有一份 README，程式之後依上面的分法放進去。其餘資料夾都已經有程式（`retrieval/criminal.py` 待刑事組加入）。每個資料夾的 README 寫明內容、怎麼執行、負責人。
+各資料夾都已經有程式；`criminal/dataset/` 產生 CAIL 格式資料集的程式整理後放入。每個資料夾的 README 寫明內容、怎麼執行、負責人。
 
 ## `data_pipeline/` 為什麼不再分子資料夾
 
@@ -101,8 +101,8 @@ python -m unittest discover -s tests -t .
 | 路徑 | 做什麼 | 負責 | 目前 |
 |---|---|---|---|
 | `POST /api/civil/report` | 民事結果頁：勝訴機率、金額範圍、相似判決、證據對照、常見抗辯 | 民事 | 模型 |
-| `POST /api/criminal/predict` | 罪名、法條、刑期分布、相似判決 | 刑事 | 示例資料 |
-| `POST /api/retrieval/search` | 相似判決；`type` 為 `civil`、`criminal` 或 `both` | 檢索 | 民事真的、刑事示例 |
+| `POST /api/criminal/predict` | 罪名、法條、刑期分布、相似判決 | 刑事 | 模型（沒有模型檔時為示例） |
+| `POST /api/retrieval/search` | 相似判決；`type` 為 `civil`、`criminal` 或 `both` | 檢索 | 民事、刑事都是真的（沒有檢索資料時為示例） |
 | `POST /api/intake/mask`、`/api/intake/followup` | 遮名、追問 | 平台 | 規則；固定題庫，使用者同意後可用 LLM |
 | `GET /api/judgments/{source}/{case_id}/guide` | 判決導讀 | 段落標註 | 規則（rule-v0） |
 
@@ -113,9 +113,9 @@ python -m unittest discover -s tests -t .
 | 資料夾 | 負責 |
 |---|---|
 | `data_pipeline/`（爬蟲、民事結構化） | （待填） |
-| `data_pipeline/`（開放資料、刑事結構化） | （待填） |
+| `data_pipeline/`（開放資料、刑事結構化） | 開放資料：丁瑞萱；刑事結構化：張芸菲 |
 | `civil/` | （待填） |
-| `criminal/` | （待填） |
+| `criminal/` | 資料集、事實遮蔽、基準模型、平台模型：丁瑞萱；ELECTRA 罪名／法條、模型融合：張芸菲 |
 | `retrieval/` | `engine.py`：（待填）；`civil.py`、`criminal.py`：各領域負責人 |
 | `annotation/` | （待填） |
 | `backend/`、`frontend/` | （待填） |
@@ -124,7 +124,8 @@ python -m unittest discover -s tests -t .
 
 | 來源 | 檔案 | 搬到 |
 |---|---|---|
-| PR #14 | `facts.py` | `criminal/dataset/` |
-| PR #15、#16 | `model/` | `criminal/models/` |
+| PR #14 | `facts.py` | `criminal/dataset/`（PR 裡已搬好） |
+| PR #15、#16 | `model/` | `criminal/models/`（#16 已搬好；#15 待搬） |
+| 本機 | CAIL 格式資料集程式（`cail_v2b.py`、`refold_v2.py`、`threshold150_fix.py`） | `criminal/dataset/`（先拿掉寫死的路徑） |
 
-PR #14–16 照現在的位置合併即可，合併後再另外搬。民事的資料集、模型與檢索程式已經搬進 `civil/`、`retrieval/`；實驗輸出、資料、單次比較用的程式不進 repo。資料庫與模型檔的路徑寫在 `config.py`。
+民事的資料集、模型與檢索程式已經搬進 `civil/`、`retrieval/`；實驗輸出、資料、單次比較用的程式不進 repo。資料庫與模型檔的路徑寫在 `config.py`。
