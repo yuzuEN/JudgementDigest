@@ -15,7 +15,8 @@
     python -m annotation.sample --cases civil_sample_3000.sqlite  # 讀抽出來的小檔案
     python -m annotation.sample --n-random 200 --n-enriched 30
 
-輸出：artifacts/annotation_civil_v1/annotation.sqlite 的 paragraphs 表，以及 meta.json。
+輸出：artifacts/annotation_civil_v2/annotation.sqlite 的 paragraphs 表，以及 meta.json。
+預設排除先前各輪（annotation_civil_v1）用過的判決，確保新版手冊以新段落驗證。
 重跑會清空 paragraphs 表重抽，但不動 annotations 表，請確認沒有已標註的資料再重跑。
 """
 import argparse
@@ -34,8 +35,9 @@ import config  # noqa: E402
 from annotation.cues import CUES  # noqa: E402
 from civil.insights import _paragraphs  # noqa: E402
 
-OUT_NAME = "annotation_civil_v1"
-FIRST_ID = 1001          # 與舊的 samples（1–528）分開，避免混淆
+OUT_NAME = "annotation_civil_v2"     # v0.4 起；v0.3 的結果在 annotation_civil_v1
+PREV_NAMES = ("annotation_civil_v1",)  # 先前各輪：抽樣時排除這些輪用過的判決
+FIRST_ID = 2001          # v0.3 為 1001 起、更早的 samples 為 1–528，避免混淆
 MIN_LEN = 20             # 少於 20 字不標（手冊規則）
 ENRICH_LABELS = ("DAM", "SUB", "SERVICE")
 
@@ -91,10 +93,21 @@ def split_case(case_id: int, category: str, court: str) -> list:
     return out
 
 
-def build_sample(cases_db: Path, out_db: Path, n_random: int, n_enriched: int, seed: int) -> dict:
+def used_case_ids(dbs) -> set:
+    """先前各輪抽過的判決 id。新一輪的手冊由先前的抽查結果導出，驗證不能再用同一批判決。"""
+    used = set()
+    for db in dbs:
+        if Path(db).exists():
+            with closing(sqlite3.connect(db)) as con:
+                used |= {r[0] for r in con.execute("SELECT DISTINCT case_id FROM paragraphs")}
+    return used
+
+
+def build_sample(cases_db: Path, out_db: Path, n_random: int, n_enriched: int, seed: int,
+                 exclude_cases: set = frozenset(), first_id: int = FIRST_ID) -> dict:
     # 連線用完一定要關：Windows 不能刪除或覆蓋還開著的資料庫檔
     with closing(sqlite3.connect(cases_db)) as src:
-        got_pos, got_enr, n_source = _draw(src, n_random, n_enriched, seed)
+        got_pos, got_enr, n_source = _draw(src, n_random, n_enriched, seed, exclude_cases)
     per_pos_keys = list(got_pos)
 
     rows = [dict(p, batch="random") for k in per_pos_keys for p in got_pos[k]]
@@ -106,7 +119,7 @@ def build_sample(cases_db: Path, out_db: Path, n_random: int, n_enriched: int, s
         out.execute("DELETE FROM paragraphs")
         out.executemany(
             "INSERT INTO paragraphs VALUES (?,?,?,?,?,?,?,?,?,?)",
-            [(FIRST_ID + i, r["case_id"], r["para_idx"], r["n_paras"], r["position"], r["batch"],
+            [(first_id + i, r["case_id"], r["para_idx"], r["n_paras"], r["position"], r["batch"],
               r["category"], r["prev_text"], r["para_text"], r["next_text"]) for i, r in enumerate(rows)])
         out.commit()
 
@@ -119,18 +132,21 @@ def build_sample(cases_db: Path, out_db: Path, n_random: int, n_enriched: int, s
         commit = ""
     meta = {"name": OUT_NAME, "built_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
             "source": str(cases_db), "n_source_cases": n_source, "seed": seed,
-            "splitter": "civil.insights._paragraphs", "min_len": MIN_LEN, "first_sample_id": FIRST_ID,
+            "splitter": "civil.insights._paragraphs", "min_len": MIN_LEN, "first_sample_id": first_id,
+            "n_excluded_cases": len(exclude_cases),
             "counts": counts, "git_commit": commit}
     (out_db.parent / "meta.json").write_text(json.dumps(meta, ensure_ascii=False, indent=2), encoding="utf-8")
     return counts
 
 
-def _draw(src: sqlite3.Connection, n_random: int, n_enriched: int, seed: int) -> tuple:
+def _draw(src: sqlite3.Connection, n_random: int, n_enriched: int, seed: int,
+          exclude_cases: set = frozenset()) -> tuple:
     """依打亂後的順序逐件讀判決，先抽滿隨機樣本，再做線索加抽。回傳 (隨機, 加抽, 來源件數)。"""
     ids = [r[0] for r in src.execute(
         "SELECT s.id FROM sections s WHERE length(s.court) > 0 ORDER BY s.id")]
     rng = random.Random(seed)
     rng.shuffle(ids)
+    ids = [i for i in ids if i not in exclude_cases]
 
     per_pos = {"前段": n_random // 3, "中段": n_random // 3, "後段": n_random - 2 * (n_random // 3)}
     got_pos = {k: [] for k in per_pos}
@@ -187,9 +203,14 @@ def main():
     ap.add_argument("--out", type=Path, default=config.ARTIFACTS_DIR / OUT_NAME / "annotation.sqlite")
     ap.add_argument("--n-random", type=int, default=200)
     ap.add_argument("--n-enriched", type=int, default=30, help="每個加抽類別的段數")
-    ap.add_argument("--seed", type=int, default=20261106)
+    ap.add_argument("--seed", type=int, default=20261110)
+    ap.add_argument("--exclude", type=Path, nargs="*",
+                    default=[config.ARTIFACTS_DIR / n / "annotation.sqlite" for n in PREV_NAMES],
+                    help="排除這些資料庫用過的判決（預設：先前各輪）")
     args = ap.parse_args()
-    counts = build_sample(args.cases, args.out, args.n_random, args.n_enriched, args.seed)
+    exclude = used_case_ids(args.exclude)
+    print(f"排除先前各輪用過的判決：{len(exclude)} 件")
+    counts = build_sample(args.cases, args.out, args.n_random, args.n_enriched, args.seed, exclude)
     print("隨機樣本：", counts["random"])
     print("線索加抽：", counts["enriched"])
     print("輸出：", args.out)

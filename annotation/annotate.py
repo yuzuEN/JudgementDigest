@@ -1,5 +1,5 @@
 """
-以 Claude API 標註 sample.py 抽出的段落（手冊 v0.3、prompt p3.0，民事），寫入 annotations 表。
+以 Claude API 標註 sample.py 抽出的段落（手冊 v0.4、prompt p4.0，民事），寫入 annotations 表。
 
 改寫自階段一、二的 annotate.py，保留：
   - 可中斷續跑：同一段、同一個 run_no、同一個 prompt 版本已標過就跳過，不會重複付費
@@ -31,7 +31,8 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 import config  # noqa: E402
-from annotation.prompts_v3 import (LABELS_CIVIL, MANUAL_VERSION, POLARITY_CIVIL, PROMPT_VERSION,  # noqa: E402
+from annotation.sample import OUT_NAME  # noqa: E402
+from annotation.prompts_v4 import (LABELS_CIVIL, MANUAL_VERSION, POLARITY_CIVIL, PROMPT_VERSION,  # noqa: E402
                                    SYSTEM_CIVIL, USER_TEMPLATE)
 
 MODEL = "claude-sonnet-5-5"
@@ -119,7 +120,7 @@ def reparse(db: Path) -> tuple:
 
 def main():
     ap = argparse.ArgumentParser(description="以 Claude API 標註段落")
-    ap.add_argument("--db", type=Path, default=config.ARTIFACTS_DIR / "annotation_civil_v1" / "annotation.sqlite")
+    ap.add_argument("--db", type=Path, default=config.ARTIFACTS_DIR / OUT_NAME / "annotation.sqlite")
     ap.add_argument("--run-no", type=int, default=1)
     ap.add_argument("--limit", type=int, default=None, help="只標前 N 段（試跑用）")
     ap.add_argument("--dry-run", action="store_true", help="只印出第一段的 prompt，不呼叫 API")

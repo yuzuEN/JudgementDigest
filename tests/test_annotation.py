@@ -13,12 +13,12 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from annotation import prompts_v3  # noqa: E402
+from annotation import prompts_v4  # noqa: E402
 from annotation.annotate import parse_response, reparse  # noqa: E402
 from annotation.sample import SCHEMA  # noqa: E402
-from annotation.cues import CUES, INTEREST_SERVICE, cue_hits  # noqa: E402
-from annotation.sample import build_sample  # noqa: E402
-from annotation.spot_check import majority, wilson  # noqa: E402
+from annotation.cues import CUES, INTEREST_SERVICE, cue_hits, quote_anchored  # noqa: E402
+from annotation.sample import build_sample, used_case_ids  # noqa: E402
+from annotation.spot_check import export, majority, score, wilson  # noqa: E402
 from civil.insights import _paragraphs  # noqa: E402
 
 COURT = (
@@ -77,6 +77,19 @@ class TestSample(unittest.TestCase):
         # 加抽的段落一定含有該類線索
         for batch, text in read(self.out, "SELECT batch, para_text FROM paragraphs WHERE batch LIKE 'enriched:%'"):
             self.assertRegex(text, CUES[batch.split(":")[1]])
+
+    def test_exclude_previous_rounds(self):
+        """新一輪不能再抽到先前各輪用過的判決。"""
+        build_sample(self.cases, self.out, n_random=6, n_enriched=2, seed=1)
+        used = used_case_ids([self.out])
+        self.assertTrue(used)
+        out2 = Path(self.tmp.name) / "out2" / "annotation.sqlite"
+        build_sample(self.cases, out2, n_random=6, n_enriched=2, seed=1, exclude_cases=used, first_id=2001)
+        new = {r[0] for r in read(out2, "SELECT case_id FROM paragraphs")}
+        self.assertTrue(new)
+        self.assertFalse(new & used)
+        self.assertEqual(min(r[0] for r in read(out2, "SELECT sample_id FROM paragraphs")), 2001)
+        self.assertEqual(used_case_ids([Path(self.tmp.name) / "不存在.sqlite"]), set())
 
     def test_same_seed_same_sample(self):
         build_sample(self.cases, self.out, n_random=6, n_enriched=2, seed=7)
@@ -152,6 +165,38 @@ class TestSpotCheck(unittest.TestCase):
         self.assertEqual(majority(rr), {"EV"})
         self.assertEqual(majority({1: {"NONE": 0}, 2: {"DAM": 0}, 3: {"EV": 0}}), {"NONE"})
 
+    def test_export_and_score(self):
+        """抽查表從輸出到計分：精確度與引文正確率。"""
+        from openpyxl import load_workbook
+        with tempfile.TemporaryDirectory() as tmp:
+            cases = Path(tmp) / "cases.sqlite"
+            db = Path(tmp) / "annotation.sqlite"
+            sheet = Path(tmp) / "check.xlsx"
+            make_cases_db(cases, n=40)
+            build_sample(cases, db, n_random=12, n_enriched=2, seed=3)
+            cols = ("sample_id, annotator, run_no, label, polarity, quote, confidence, quote_valid, "
+                    "manual_version, prompt_version, raw_response, created_at")
+            with closing(sqlite3.connect(db)) as con:
+                for sid, text in con.execute("SELECT sample_id, para_text FROM paragraphs").fetchall():
+                    label, quote = ("EV", "核與證人所述相符，堪信為真實") if "堪信" in text else ("NONE", "")
+                    for run in (1, 2, 3):
+                        con.execute(f"INSERT INTO annotations ({cols}) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)",
+                                    (sid, "m", run, label, None, quote, "high", 1, "v0.4",
+                                     prompts_v4.PROMPT_VERSION, "{}", "t"))
+                con.commit()
+            export(db, sheet, n_per_label=5, seed=1)
+            wb = load_workbook(sheet)
+            ws = wb["EV"]
+            n_rows = ws.max_row - 1
+            self.assertGreater(n_rows, 0)
+            self.assertEqual(ws.cell(2, 8).value, "是")          # 引文錨定（自動）
+            for i in range(2, ws.max_row + 1):
+                ws.cell(i, 9, "符合")
+                ws.cell(i, 10, "正確" if i % 2 == 0 else "錯誤")
+            wb.save(sheet)
+            wb.close()
+            score(sheet)   # 不應拋出錯誤；檔案要能關閉，暫存資料夾才刪得掉（Windows）
+
     def test_wilson(self):
         lo, hi = wilson(20, 25)
         self.assertAlmostEqual(lo, 0.6087, places=4)
@@ -169,11 +214,28 @@ class TestCuesAndPrompts(unittest.TestCase):
         self.assertFalse(INTEREST_SERVICE.search("該訴狀繕本於114年3月12日寄存送達於被告"))
 
     def test_every_label_is_defined_in_prompt(self):
-        for label in prompts_v3.LABELS_CIVIL[:-1]:
-            self.assertIn(f"【{label}", prompts_v3.SYSTEM_CIVIL)
-        for label in prompts_v3.LABELS_CRIMINAL[:-1]:
-            self.assertIn(f"【{label}", prompts_v3.SYSTEM_CRIMINAL)
-        self.assertEqual(prompts_v3.MANUAL_VERSION, "v0.3")
+        for label in prompts_v4.LABELS_CIVIL[:-1]:
+            self.assertIn(f"【{label}", prompts_v4.SYSTEM_CIVIL)
+        for label in prompts_v4.LABELS_CRIMINAL[:-1]:
+            self.assertIn(f"【{label}", prompts_v4.SYSTEM_CRIMINAL)
+        self.assertEqual(prompts_v4.MANUAL_VERSION, "v0.4")
+        self.assertIn("RULE", prompts_v4.LABELS_CIVIL)
+
+    def test_quote_anchored(self):
+        """規則 10：EV 只引到列舉證據、SUB 只引到大前提，自動檢查要能抓出來（v0.3 抽查 1051、1249）。"""
+        self.assertFalse(quote_anchored("EV", "業據提出與其所述相符之授信約定書、連帶保證書、借據"))
+        self.assertTrue(quote_anchored("EV", "堪信原告之主張為真實"))
+        self.assertTrue(quote_anchored("EV", "足見兩造確係約定以農會貸款撥放日為給付尾款之日"))
+        self.assertFalse(quote_anchored("SUB", "仍須符合附表項次1各項要件，始有附表項次1各等級之適用"))
+        self.assertFalse(quote_anchored("SUB", "比對其是否與法規範構成要件之連絡對象相符"))
+        self.assertTrue(quote_anchored("SUB", "被告無法律上原因而獲債務減免之利益，核屬給付型不當得利"))
+        self.assertTrue(quote_anchored("RULE", "按損害之發生或擴大，被害人與有過失者，法院得減輕賠償金額"))
+        self.assertIsNone(quote_anchored("CL", "最高法院52年台上字第1240號判例參照"))
+
+    def test_rule_cue(self):
+        self.assertIn("RULE", cue_hits("四、另按損害之發生或擴大，被害人與有過失者"))
+        self.assertIn("RULE", cue_hits("所謂即受確認判決之法律上利益，係指因法律關係之存否不明確"))
+        self.assertNotIn("RULE", cue_hits("本院審酌兩造身分地位，認慰撫金以20萬元為適當"))
 
 
 if __name__ == "__main__":
