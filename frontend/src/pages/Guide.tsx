@@ -6,7 +6,7 @@ import { cn } from "@/lib/utils";
 import { LinkButton } from "../components/LinkButton";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { LAF_URL, PageTitle } from "../components/Common";
-import { Layout, PAGE, SiteNav } from "../components/Layout";
+import { Layout, PAGE } from "../components/Layout";
 import { scrollToSection } from "../scroll";
 import { DISPUTE_GROUPS, LEGAL_TERMS, RESULT_TERMS, type Term } from "../knowledge";
 
@@ -60,7 +60,7 @@ export default function Guide() {
   }, [hash]);
 
   return (
-    <Layout nav={<SiteNav />}>
+    <Layout>
       <main className={cn(PAGE, "grid gap-6 py-8 pb-16 lg:grid-cols-[220px_minmax(0,1fr)] lg:gap-8")}>
         <nav aria-label="本頁目錄" className="lg:sticky lg:top-24 lg:self-start">
           <p className="mb-2 text-sm font-semibold text-muted-foreground">本頁目錄</p>

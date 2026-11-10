@@ -1,133 +1,198 @@
-import { ArrowRightIcon, DatabaseIcon, FileSearchIcon, ListChecksIcon, ScaleIcon, ShieldCheckIcon, TriangleAlertIcon } from "lucide-react";
+import { ArrowRightIcon, CheckIcon, ChevronDownIcon, DatabaseIcon, ExternalLinkIcon, FileTextIcon, InfoIcon, LockIcon, ScaleIcon, ShieldCheckIcon } from "lucide-react";
 import { useEffect, type ReactNode } from "react";
 import { useLocation } from "react-router-dom";
 import { cn } from "@/lib/utils";
-import { LinkButton } from "../components/LinkButton";
-import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card } from "@/components/ui/card";
+import { OutcomeBar } from "../components/casey/OutcomeBar";
 import { LAF_URL } from "../components/Common";
-import { Layout, PAGE, SiteNav } from "../components/Layout";
+import { Layout, PAGE } from "../components/Layout";
+import { LinkButton } from "../components/LinkButton";
+
+const CIVIL_GETS = ["相似判決裡，原告贏的比例", "可能判准的金額範圍", "相似的真實判決", "勝訴的案子通常拿出哪些證據", "對方常見的說法（抗辯）"];
+const CRIMINAL_GETS = ["可能的罪名與法條", "刑期落在哪個範圍", "相似的真實判決"];
+
+const CHAPTERS = [
+  { n: "第一章", title: "描述案情", keys: "類型、案情、資料", text: "選案件類型，用白話說發生了什麼事，再補金額、對方和手上的證物。" },
+  { n: "第二章", title: "確認內容", keys: "遮名、補充、改寫", text: "送出前先遮掉姓名、身分證字號、電話，可以補充細節，也可以看判決書寫法。" },
+  { n: "第三章", title: "參考結果", keys: "", text: "解說員用分頁說明相似判決的結果。可以下載 PDF，帶去給律師、法扶或家人看。" },
+];
+
+const PRIVACY = [
+  ["不用註冊", "不需要帳號，也不用留下聯絡方式。"],
+  ["先預覽、先遮名", "姓名、身分證字號、電話、email、地址會在送出前遮掉。你看過、確認過才會送出。"],
+  ["敏感資料要你同意", "如果描述裡有病歷、前科這類內容，會先問你同意，不同意就回去刪掉。"],
+  ["AI 只在你選擇時才用", "補充細節有兩種：固定題目不會傳給 AI；選「請 AI 幫我看還缺什麼」才會用到 AI。"],
+];
 
 const FAQ = [
-  ["我的描述會被保存嗎？", "不會。結果只在你的瀏覽器裡顯示，重新整理就會清空；要留存可以下載成 PDF。我們只記錄你何時同意了哪一版資料使用說明。"],
-  ["和直接問 AI 聊天機器人有什麼不同？", "聊天機器人可能編造不存在的判決。這裡的每一件相似判決都是真的、附字號；機率是從真實判決統計出來的。"],
-  ["結果有多準？", "勝敗的推估在測試資料上明顯優於隨機猜測，但仍會出錯；金額只能給範圍。描述越完整，結果越可靠。"],
+  ["要付費嗎？", "不用。免註冊、免費。"],
+  ["結果準不準？", "它告訴你「過去類似的案件」怎麼判，不是你這件會怎麼判。數字越極端或相似判決越少，越要保守看待。"],
+  ["我分不清楚是民事還是刑事", "選「不確定」。結果頁會有民事、刑事兩個分頁，你可以都看。"],
+  ["我的名字會被別人看到嗎？", "送出前會先遮掉姓名、身分證字號、電話、email 和地址，而且你可以先預覽。"],
+  ["看完結果之後可以做什麼？", "可以下載 PDF，帶去給律師、法扶或家人討論。「說明與法律小知識」也整理了下一步可以怎麼做。"],
 ];
 
-const GET = [
-  { icon: FileSearchIcon, title: "相似的真實判決", text: "每一件都附字號，可以到司法院網站查證，不會是編造的判決。" },
-  { icon: ScaleIcon, title: "可能的結果範圍", text: "民事：贏的機會有多大、大概能拿回多少錢。刑事：可能的罪名、法條、刑期範圍。" },
-  { icon: ListChecksIcon, title: "準備的方向", text: "類似案件常用到哪些證據、對方常怎麼反駁，以及標好重點的判決導讀。" },
-];
+function Section({ id, alt, children, className }: { id?: string; alt?: boolean; children: ReactNode; className?: string }) {
+  return (
+    <section id={id} className={cn("scroll-mt-4 py-9 sm:py-14", alt && "border-y bg-muted")}>
+      <div className={cn(PAGE, className)}>{children}</div>
+    </section>
+  );
+}
 
-const HOW = [
-  { title: "描述案情", text: "用自己的話寫下經過，回答幾個基本問題。" },
-  { title: "確認與遮名", text: "補充細節，先看過遮掉姓名後要送出的內容。" },
-  { title: "看參考結果", text: "可以下載成 PDF，帶去和律師或家人討論。" },
-];
+function H2({ icon, children, id }: { icon?: ReactNode; children: ReactNode; id?: string }) {
+  return (
+    <h2 id={id} className="flex items-center gap-3 text-[22px] leading-[1.45] font-extrabold text-balance sm:text-[26px]">
+      {icon}{children}
+    </h2>
+  );
+}
 
-function SectionTitle({ id, children }: { id?: string; children: ReactNode }) {
-  return <h2 id={id} className="text-center text-3xl font-bold tracking-tight">{children}</h2>;
+function Checks({ items }: { items: string[] }) {
+  return (
+    <ul className="m-0 grid list-none gap-2 p-0">
+      {items.map((t) => (
+        <li key={t} className="flex items-start gap-3"><CheckIcon className="mt-1 size-5 flex-none text-primary" aria-hidden="true" />{t}</li>
+      ))}
+    </ul>
+  );
+}
+
+function StartButton({ center = false }: { center?: boolean }) {
+  return (
+    <div className={cn("flex flex-col gap-2", center ? "items-center text-center max-sm:w-full" : "items-start")}>
+      <LinkButton size="lg" to="/start" className="max-sm:w-full">開始查詢<ArrowRightIcon data-icon="inline-end" /></LinkButton>
+      <p className="text-[15px] text-muted-foreground">免註冊，5 分鐘免費查詢</p>
+    </div>
+  );
+}
+
+/** 「結果大概長這樣」：示例資料，用紫灰色虛線框標示。 */
+function SampleCard() {
+  return (
+    <Card aria-label="結果預覽（示例）" className="gap-4 px-6.5 ring-0 border-[1.5px] border-dashed border-sample-line">
+      <div className="flex items-center justify-between gap-3">
+        <p className="font-bold">結果大概長這樣</p>
+        <span className="rounded-full border-[1.5px] border-dashed border-sample-line bg-sample px-2.5 text-sm leading-[1.7] font-bold text-sample-fg">示例</span>
+      </div>
+      <p className="text-[15px] text-muted-foreground">民事 · 交通事故 · 比對了 30 件相似判決</p>
+      <OutcomeBar counts={{ win: 0, partial: 30, lose: 0 }} legend={false} />
+      <p className="text-[15px]">30 件裡：<b>全部勝訴 0 件、一部勝訴 30 件、敗訴 0 件</b></p>
+      <hr className="m-0 h-px border-0 bg-border" />
+      <p className="text-[15px] text-muted-foreground">如果判決是「一部勝訴」，可能判准的金額</p>
+      <p className="text-[30px] leading-tight font-extrabold tabular-nums">約 2 萬～58 萬元</p>
+      <p className="text-[15px] text-muted-foreground">10 件約有 8 件落在這個範圍。範圍很寬，請當作粗略參考。</p>
+    </Card>
+  );
 }
 
 export default function Home() {
   const { hash } = useLocation();
-  // 從其他頁的導覽列點「常見問題」等回到首頁時，捲到那一段
+  // 從其他頁的連結回到首頁的某一段時，捲到那一段
   useEffect(() => {
     if (hash) document.getElementById(decodeURIComponent(hash.slice(1)))?.scrollIntoView?.();
   }, [hash]);
 
   return (
-    <Layout nav={<SiteNav />}>
+    <Layout scene={{ who: "organizer", note: true, line: "你好，我是 CasEY 的整理員。遇到糾紛，先看看類似的案件通常怎麼判。我會一關一關帶你把事情整理好，再由解說員告訴你過去的判決怎麼說。" }}>
       <main>
-        <section className="border-b bg-card">
-          <div className={cn(PAGE, "flex flex-col items-center gap-6 py-20 text-center sm:py-24")}>
-            <h1 className="text-4xl leading-tight font-bold tracking-tight text-balance sm:text-5xl">
-              遇到法律糾紛，<br />先看看類似的案子法院怎麼判
-            </h1>
-            <p className="max-w-2xl text-lg text-pretty text-muted-foreground">
-              用自己的話說說發生了什麼事，我們會從法院真正判過的案子裡，找出跟你最像的幾件，讓你知道這類案子通常會怎麼收場、可以先準備什麼。
+        <Section className="grid items-center gap-12 md:grid-cols-[minmax(0,1.15fr)_minmax(0,.85fr)]">
+          <div className="flex flex-col gap-6">
+            <p className="text-[15px] font-bold tracking-[.04em] text-secondary-foreground">免註冊 · 免費 · 用真實判決回答</p>
+            <h1 className="text-[30px] leading-[1.3] font-extrabold text-balance sm:text-[44px]">遇到糾紛，先看看<br />類似的案件通常怎麼判</h1>
+            <p className="text-lg leading-[1.8] text-muted-foreground">用白話描述你遇到的事，CasEY 從全國地方法院的真實判決裡，找出情況相近的案件，讓你知道過去大多是怎麼收場的。</p>
+            <StartButton />
+            <p className="flex max-w-[520px] items-start gap-1.5 text-[15px] text-muted-foreground">
+              <InfoIcon className="mt-1 size-4 flex-none" aria-hidden="true" />結果是統計上的參考，不是法律意見，也不是對你案子的預測。
             </p>
-            <div className="flex flex-col items-center gap-3">
-              <LinkButton size="lg" to="/start">
-                開始描述案情<ArrowRightIcon data-icon="inline-end" />
-              </LinkButton>
-              <span className="text-sm text-muted-foreground">免註冊，5 分鐘免費查詢</span>
-            </div>
           </div>
-        </section>
+          <SampleCard />
+        </Section>
 
-        <div className={cn(PAGE, "flex flex-col gap-20 py-16")}>
-          <section className="flex flex-col gap-8" aria-labelledby="get-title">
-            <SectionTitle id="get-title">你會得到什麼</SectionTitle>
-            <div className="grid gap-5 md:grid-cols-3">
-              {GET.map(({ icon: Icon, title, text }) => (
-                <Card key={title}>
-                  <CardHeader className="gap-3">
-                    <span className="flex size-10 items-center justify-center rounded-lg bg-accent text-accent-foreground"><Icon className="size-5" aria-hidden="true" /></span>
-                    <CardTitle className="text-lg font-bold">{title}</CardTitle>
-                    <CardDescription className="text-[15px] leading-relaxed">{text}</CardDescription>
-                  </CardHeader>
-                </Card>
-              ))}
-            </div>
-          </section>
-
-          <section id="how" className="flex scroll-mt-20 flex-col gap-8" aria-labelledby="how-title">
-            <SectionTitle id="how-title">怎麼使用</SectionTitle>
-            <ol className="grid gap-6 md:grid-cols-3">
-              {HOW.map(({ title, text }, i) => (
-                <li key={title} className="flex items-start gap-4">
-                  <span className="flex size-10 flex-none items-center justify-center rounded-full bg-primary font-bold text-primary-foreground">{i + 1}</span>
-                  <span className="flex flex-col gap-0.5"><strong className="text-base">{title}</strong><span className="text-sm text-muted-foreground">{text}</span></span>
-                </li>
-              ))}
-            </ol>
-            <div id="data" className="grid scroll-mt-20 gap-5 lg:grid-cols-3">
-              <Card>
-                <CardHeader className="gap-3">
-                  <DatabaseIcon className="size-5 text-primary" aria-hidden="true" />
-                  <CardTitle className="text-lg font-bold">資料來源</CardTitle>
-                </CardHeader>
-                <CardContent className="text-[15px] leading-relaxed text-muted-foreground">
-                  司法院公開的全國地方法院判決。以規則切分段落、擷取事實與判決結果，建立結構化資料集；判決書中的人名在顯示時會自動遮掉，但可能有遺漏。
-                </CardContent>
-              </Card>
-              <Card className="bg-warn text-warn-foreground ring-warn-border">
-                <CardHeader className="gap-3">
-                  <TriangleAlertIcon className="size-5 text-warn-title" aria-hidden="true" />
-                  <CardTitle className="text-lg font-bold text-warn-title">這不是法律意見</CardTitle>
-                </CardHeader>
-                <CardContent className="text-[15px] leading-relaxed">
-                  結果是統計參考，不預測你的案件一定會怎麼判。和解、撤回的案件沒有判決書，不在資料裡。重要決定請諮詢律師或<a href={LAF_URL}>法律扶助基金會</a>。
-                </CardContent>
-              </Card>
-              <Card>
-                <CardHeader className="gap-3">
-                  <ShieldCheckIcon className="size-5 text-success" aria-hidden="true" />
-                  <CardTitle className="text-lg font-bold">你的資料怎麼處理</CardTitle>
-                </CardHeader>
-                <CardContent className="text-[15px] leading-relaxed text-muted-foreground">
-                  不上傳文件、不保存你的描述。送出前會遮名並讓你預覽；需要用到敏感個人資料時，會另外請你同意。
-                </CardContent>
-              </Card>
-            </div>
-          </section>
-
-          <section id="faq" className="flex scroll-mt-20 flex-col gap-8" aria-labelledby="faq-title">
-            <SectionTitle id="faq-title">常見問題</SectionTitle>
-            <Card className="mx-auto w-full max-w-3xl py-0">
-              <Accordion className="px-5">
-                {FAQ.map(([q, a]) => (
-                  <AccordionItem key={q} value={q}>
-                    <AccordionTrigger className="py-4 text-base hover:no-underline">{q}</AccordionTrigger>
-                    <AccordionContent className="pb-4 text-[15px] leading-relaxed text-muted-foreground">{a}</AccordionContent>
-                  </AccordionItem>
-                ))}
-              </Accordion>
+        <Section alt className="flex flex-col gap-6">
+          <div className="flex flex-col gap-2">
+            <H2>你會得到什麼</H2>
+            <p className="text-muted-foreground">依案件類型，給你不同的參考資料。每一項都附上真實判決，可以點進去看。</p>
+          </div>
+          <div className="grid gap-4 md:grid-cols-2">
+            <Card className="gap-4 px-6.5">
+              <h3 className="flex items-center gap-3 text-xl font-bold">
+                <span className="grid size-11 place-items-center rounded-[11px] bg-primary text-primary-foreground"><FileTextIcon className="size-6" aria-hidden="true" /></span>
+                民事：要錢、還錢、履行契約
+              </h3>
+              <Checks items={CIVIL_GETS} />
             </Card>
-          </section>
-        </div>
+            <Card className="gap-4 px-6.5">
+              <h3 className="flex items-center gap-3 text-xl font-bold">
+                <span className="grid size-11 place-items-center rounded-[11px] bg-primary text-primary-foreground"><ScaleIcon className="size-6" aria-hidden="true" /></span>
+                刑事：被調查，或想告對方
+              </h3>
+              <Checks items={CRIMINAL_GETS} />
+              <p className="text-[15px] text-muted-foreground">分不清楚是民事還是刑事？選「不確定」，兩邊都幫你看。</p>
+            </Card>
+          </div>
+        </Section>
+
+        <Section id="how" className="flex flex-col gap-6">
+          <div className="flex flex-col gap-2">
+            <H2>怎麼使用：三章、七關</H2>
+            <p className="text-muted-foreground">一次只做一件事。每一關都看得到進度，可以隨時回上一關，資料會保留。</p>
+          </div>
+          <ol className="m-0 grid list-none gap-4 p-0 md:grid-cols-3">
+            {CHAPTERS.map((c) => (
+              <li key={c.n}>
+                <Card className="h-full gap-2 px-6.5">
+                  <span className="w-fit rounded-full border-[1.5px] border-outcome-part bg-outcome-part-bg px-3 text-sm leading-[1.9] font-bold text-outcome-part-fg">{c.n}</span>
+                  <h3 className="text-xl font-bold">{c.title}</h3>
+                  <p className="text-[15px] text-muted-foreground">{c.keys && <b>{c.keys}。</b>}{c.text}</p>
+                </Card>
+              </li>
+            ))}
+          </ol>
+        </Section>
+
+        <Section id="data" alt className="grid items-start gap-6 md:grid-cols-2">
+          <div className="flex flex-col gap-4">
+            <H2 icon={<DatabaseIcon className="size-7 text-primary" aria-hidden="true" />}>資料來源</H2>
+            <p>全國地方法院公開的真實判決。我們把每一件判決的案由、結果、金額、證據與雙方說法整理起來，再找出和你的情況相近的案件。</p>
+            <p className="text-[15px] text-muted-foreground">不起訴、撤回，或和解後沒有判決的案件，不在資料裡，所以統計不代表所有紛爭的結果。</p>
+          </div>
+          <Card className="gap-4 px-6.5 ring-primary">
+            <H2 icon={<ShieldCheckIcon className="size-7 text-primary" aria-hidden="true" />}>這不是法律意見</H2>
+            <p>結果是過去判決的統計整理，不是對你案子的預測，也不能取代律師。每個案子的細節都不一樣。</p>
+            <p>需要專業協助，可以洽詢
+              <a href={LAF_URL} target="_blank" rel="noreferrer" className="inline-flex items-center gap-0.5">法律扶助基金會<ExternalLinkIcon className="size-4" aria-hidden="true" /></a>。
+            </p>
+          </Card>
+        </Section>
+
+        <Section className="flex flex-col gap-6">
+          <H2 icon={<LockIcon className="size-7 text-primary" aria-hidden="true" />}>你的資料怎麼處理</H2>
+          <div className="grid gap-4 md:grid-cols-2">
+            {PRIVACY.map(([title, text]) => (
+              <div key={title} className="flex flex-col gap-2">
+                <h3 className="text-xl font-bold">{title}</h3>
+                <p className="text-[15px] text-muted-foreground">{text}</p>
+              </div>
+            ))}
+          </div>
+        </Section>
+
+        <Section id="faq" alt className="flex max-w-[820px] flex-col gap-6">
+          <H2>常見問題</H2>
+          <div className="flex flex-col gap-2">
+            {FAQ.map(([q, a], i) => (
+              <details key={q} open={i === 0} className="group rounded-[12px] border bg-card">
+                <summary className="flex min-h-12 cursor-pointer list-none items-center gap-2 px-4 py-2 font-bold [&::-webkit-details-marker]:hidden">
+                  {q}
+                  <ChevronDownIcon aria-hidden="true" className="ml-auto size-5 transition-transform group-open:rotate-180 motion-reduce:transition-none" />
+                </summary>
+                <p className="px-4 pt-1 pb-4 text-muted-foreground">{a}</p>
+              </details>
+            ))}
+          </div>
+          <div className="flex justify-center pt-2"><StartButton center /></div>
+        </Section>
       </main>
     </Layout>
   );

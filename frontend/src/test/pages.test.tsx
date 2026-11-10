@@ -1,119 +1,178 @@
-import { fireEvent, screen, waitFor, within } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { MemoryRouter } from "react-router-dom";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
+import App from "../App";
 import CivilResult from "../pages/CivilResult";
 import Confirm from "../pages/Confirm";
 import CriminalResult from "../pages/CriminalResult";
-import Intake from "../pages/Intake";
 import Reading from "../pages/Reading";
+import { IntakeProvider, STORAGE_KEY } from "../state";
 import { CIVIL_REPORT, CRIMINAL_REPORT, GUIDE, mockApi, OPTIONS, renderApp, renderAt, TRAFFIC } from "./helpers";
 
 describe("首頁", () => {
-  it("有開始的按鈕與免責說明", () => {
+  it("有開始的按鈕、示例結果與免責說明", () => {
     renderApp("/");
-    expect(screen.getByRole("link", { name: "開始描述案情" })).toHaveAttribute("href", "/start");
-    expect(screen.getByText("這不是法律意見")).toBeInTheDocument();
+    const starts = screen.getAllByRole("link", { name: "開始查詢" });
+    expect(starts.length).toBeGreaterThan(0);
+    starts.forEach((a) => expect(a).toHaveAttribute("href", "/start"));
+    expect(screen.getByRole("heading", { name: "這不是法律意見" })).toBeInTheDocument();
+    expect(screen.getByLabelText("結果預覽（示例）")).toHaveTextContent("示例");
+    // 角色說明只在首頁和關卡 1：不是律師或法官
+    expect(screen.getByRole("region", { name: "CasEY 角色說明" })).toHaveTextContent("不是律師或法官");
+    expect(screen.queryByRole("navigation", { name: "進度" })).not.toBeInTheDocument();
   });
 });
 
-describe("描述案情", () => {
-  it("選項從 API 來，選刑事時不問民事的問題", async () => {
+describe("描述案情（關卡 1–3）", () => {
+  const current = () => within(screen.getByRole("navigation", { name: "進度" })).getByRole("listitem", { current: "step" });
+
+  it("一次只顯示一關，進度圖標出目前的關卡", async () => {
     mockApi({ "GET /meta/options": () => OPTIONS });
     const user = userEvent.setup();
-    renderAt("/start", <Intake />);
-    expect(await screen.findByRole("checkbox", { name: "診斷證明、病歷" })).toBeInTheDocument();
-    await user.click(screen.getByLabelText("糾紛類型"));
-    expect(await screen.findByRole("option", { name: "侵權：交通事故" })).toBeInTheDocument();
-    await user.keyboard("{Escape}");
-    await user.click(screen.getByLabelText("打算在哪個法院（可不選）"));
-    expect(await screen.findByRole("option", { name: "臺北地方法院" })).toBeInTheDocument();
-    await user.keyboard("{Escape}");
-    expect(screen.getByText("被警察、檢察官調查，或想告對方犯罪")).toBeInTheDocument();
+    renderApp("/start");
+    expect(screen.getByRole("heading", { name: /第 1 關/ })).toBeInTheDocument();
+    expect(current()).toHaveTextContent("類型");
+    expect(screen.getByRole("radio", { name: "民事" })).toBeChecked();
+    expect(screen.getByText("可能判准的金額範圍")).toBeInTheDocument();
 
     await user.click(screen.getByRole("radio", { name: "刑事" }));
-    expect(screen.getByRole("radio", { name: "刑事" })).toBeChecked();
-    expect(screen.queryByText("幾個基本問題")).not.toBeInTheDocument();
-    // 刑事不問基本問題，只問手上的證據；也會說明選刑事會得到什麼
-    expect(screen.getByRole("heading", { name: "你手上有哪些證據？" })).toBeInTheDocument();
-    expect(screen.getByText("可能涉及的罪名與法條")).toBeInTheDocument();
+    expect(screen.getByText("可能的罪名與法條")).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "下一關" }));
+    expect(screen.getByRole("heading", { name: /第 2 關/ })).toHaveFocus();
+    expect(screen.queryByRole("heading", { name: /第 1 關/ })).not.toBeInTheDocument();
+    expect(current()).toHaveTextContent("案情");
+    // 刑事不選糾紛類型，改顯示怎麼寫
     expect(screen.getByRole("heading", { name: "刑事案件怎麼寫" })).toBeInTheDocument();
+    expect(screen.queryByRole("heading", { name: /糾紛類型/ })).not.toBeInTheDocument();
+    // 角色說明只在關卡 1
+    expect(screen.getByRole("region", { name: "CasEY 角色說明" })).not.toHaveTextContent("不是律師或法官");
   });
 
-  it("選了類型會顯示對應的「你會得到」", async () => {
+  it("案情不到 30 字不能下一關，寫作提示寫到就亮起來", async () => {
     mockApi({ "GET /meta/options": () => OPTIONS });
     const user = userEvent.setup();
-    renderAt("/start", <Intake />);
-    expect(screen.getByText("類似案件原告贏的比例，以及可能判准的金額範圍")).toBeInTheDocument();
-    await user.click(screen.getByRole("radio", { name: "不確定" }));
-    expect(screen.getByText("民事、刑事兩種結果都會查，分開顯示")).toBeInTheDocument();
-  });
-
-  it("糾紛類型可以多選，也可以刪掉", async () => {
-    mockApi({ "GET /meta/options": () => OPTIONS });
-    const user = userEvent.setup();
-    renderAt("/start", <Intake />);
-    await screen.findByRole("checkbox", { name: "診斷證明、病歷" });
-    await user.click(screen.getByLabelText("糾紛類型"));
-    // Base UI 的選項在 jsdom 裡要用 fireEvent 點（user-event 的 pointerdown 被選單擋掉預設行為）
-    fireEvent.click(await screen.findByRole("option", { name: "侵權：交通事故" }));
-    fireEvent.click(await screen.findByRole("option", { name: "民間借貸" }));
-    await user.keyboard("{Escape}");
-    const chips = document.querySelectorAll("[data-slot=combobox-chip]");
-    expect(Array.from(chips).map((c) => c.textContent)).toEqual(["侵權：交通事故", "民間借貸"]);
-    // 右側說明會標出選到的類型
-    expect(document.getElementById("dt-民間借貸")?.className).toContain("bg-accent");
-    await user.click(within(chips[0] as HTMLElement).getByRole("button"));
-    expect(document.querySelectorAll("[data-slot=combobox-chip]")).toHaveLength(1);
-  });
-
-  it("刑事勾選的證據會加在描述後面送出", async () => {
-    mockApi({ "GET /meta/options": () => OPTIONS });
-    const user = userEvent.setup();
-    renderApp("/start", { caseType: "criminal" });
-    await user.type(screen.getByLabelText("發生了什麼事？"), "被鄰居打傷");
-    await user.click(screen.getByRole("checkbox", { name: "驗傷單、診斷證明" }));
-    await user.click(screen.getByRole("button", { name: "下一步：確認內容" }));
-    expect(await screen.findByText(/手上的證據：驗傷單、診斷證明/)).toBeInTheDocument();
-  });
-
-  it("字數提示與送出條件", async () => {
-    mockApi({ "GET /meta/options": () => OPTIONS });
-    const user = userEvent.setup();
-    renderAt("/start", <Intake />);
-    const next = screen.getByRole("button", { name: "下一步：確認內容" });
+    renderApp("/start?stage=2");
+    const next = screen.getByRole("button", { name: "下一關" });
+    await user.type(screen.getByLabelText("用自己的話寫就好"), "今年7月在路口被汽車撞");
     expect(next).toBeDisabled();
-    await user.type(screen.getByLabelText("發生了什麼事？"), "被車撞了");
-    expect(screen.getByText("再多寫一些，結果會比較準")).toBeInTheDocument();
-    expect(next).toBeEnabled();
+    expect(screen.getByText("案情至少要 30 字。")).toBeInTheDocument();
+    expect(screen.getByText(/再多寫一點：至少 30 字/)).toBeInTheDocument();
+    expect(screen.getByText("時間").closest("li")).toHaveTextContent("已寫到");
+    expect(screen.getByText("損失（金額或傷勢）").closest("li")).toHaveTextContent("還沒寫到");
 
-    await user.type(screen.getByLabelText("想請求的金額（新臺幣）"), "五十萬");
+    await user.type(screen.getByLabelText("用自己的話寫就好"), "，右腿骨折住院兩週，醫藥費和薪水損失加起來約64萬元。");
+    expect(next).toBeEnabled();
+    expect(screen.getByText("字數夠了，可以進下一關。")).toBeInTheDocument();
+    expect(screen.getByText("損失（金額或傷勢）").closest("li")).toHaveTextContent("已寫到");
+  });
+
+  it("糾紛類型可以搜尋、多選、取消，右邊顯示已選類型的說明", async () => {
+    mockApi({ "GET /meta/options": () => OPTIONS });
+    const user = userEvent.setup();
+    renderApp("/start?stage=2");
+    const traffic = await screen.findByRole("button", { name: "侵權：交通事故" });
+    const help = screen.getByRole("complementary", { name: "已選類型的說明" });
+    expect(help).toHaveTextContent("還沒選");
+    await user.click(traffic);
+    expect(traffic).toHaveAttribute("aria-pressed", "true");
+    expect(help).toHaveTextContent("因車禍造成受傷或財物損失");
+
+    await user.type(screen.getByLabelText("搜尋糾紛類型"), "借");
+    expect(screen.queryByRole("button", { name: "侵權：交通事故" })).not.toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "民間借貸" }));
+    await user.clear(screen.getByLabelText("搜尋糾紛類型"));
+    await user.click(screen.getByRole("button", { name: "侵權：交通事故" }));
+    expect(help).not.toHaveTextContent("因車禍造成受傷或財物損失");
+    expect(help).toHaveTextContent("民間借貸");
+  });
+
+  it("金額告訴使用者讀成多少，看不懂就擋下一章", async () => {
+    mockApi({ "GET /meta/options": () => OPTIONS });
+    const user = userEvent.setup();
+    renderApp("/start?stage=3", { text: TRAFFIC });
+    const amount = screen.getByLabelText("想請求的金額");
+    const next = screen.getByRole("button", { name: "下一章：確認內容" });
+    expect(screen.getByText(/沒填也可以/)).toBeInTheDocument();
+    await user.type(amount, "64萬8千");
+    expect(screen.getByText("我讀成：648,000 元")).toBeInTheDocument();
+    await user.clear(amount);
+    await user.type(amount, "五十萬");
     expect(screen.getByText(/看不懂這個金額/)).toBeInTheDocument();
     expect(next).toBeDisabled();
+    expect(screen.getByText("金額格式不對，請修改。")).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "50 萬" }));
+    expect(screen.getByText("我讀成：500,000 元")).toBeInTheDocument();
+    expect(next).toBeEnabled();
+
+    // 法院可以不選，選項從 API 來
+    await user.click(screen.getByLabelText(/打算在哪個法院/));
+    expect(await screen.findByRole("option", { name: "臺北地方法院" })).toBeInTheDocument();
+    await user.keyboard("{Escape}");
+    // 對方三選一，再點一次取消
+    const company = screen.getByRole("button", { name: "公司" });
+    await user.click(company);
+    expect(company).toHaveAttribute("aria-pressed", "true");
+    expect(screen.getByRole("complementary", { name: "你填的資料" })).toHaveTextContent("公司");
+  });
+
+  it("刑事只問律師和證物，答案接在描述後面送出", async () => {
+    mockApi({ "GET /meta/options": () => OPTIONS, "POST /intake/followup": () => ({ questions: [], source: "rules" }) });
+    const user = userEvent.setup();
+    renderApp("/start?stage=3", { caseType: "criminal", text: "上個月我在超商拿了兩瓶酒沒有結帳就走出去，被店員攔下來報警。" });
+    expect(screen.queryByText("對方是")).not.toBeInTheDocument();
+    expect(screen.queryByLabelText("想請求的金額")).not.toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "有" }));
+    const slot = screen.getByRole("button", { name: "驗傷單、診斷證明" });
+    await user.click(slot);
+    expect(slot).toHaveAttribute("aria-pressed", "true");
+    await user.click(screen.getByRole("button", { name: "下一章：確認內容" }));
+    expect(await screen.findByText(/有沒有請律師：有/)).toBeInTheDocument();
+    expect(screen.getByText(/手上的證據：驗傷單、診斷證明/)).toBeInTheDocument();
+  });
+
+  it("填的內容存在這個分頁，重新整理後還在", async () => {
+    mockApi({ "GET /meta/options": () => OPTIONS });
+    const user = userEvent.setup();
+    const page = () => render(<MemoryRouter initialEntries={["/start?stage=2"]}><IntakeProvider><App /></IntakeProvider></MemoryRouter>);
+    const first = page();
+    await user.type(screen.getByLabelText("用自己的話寫就好"), "被車撞");
+    expect(JSON.parse(window.sessionStorage.getItem(STORAGE_KEY)!)).toMatchObject({ text: "被車撞" });
+    first.unmount();
+    page();
+    expect(screen.getByLabelText("用自己的話寫就好")).toHaveValue("被車撞");
+  });
+
+  it("直接開第 3 關、案情還不夠時回到第 2 關", () => {
+    mockApi({ "GET /meta/options": () => OPTIONS });
+    renderApp("/start?stage=3", { text: "太短" });
+    expect(screen.getByRole("heading", { name: /第 2 關/ })).toBeInTheDocument();
   });
 
   it("選項載入失敗可以重試", async () => {
     mockApi({ "GET /meta/options": { status: 500 } });
-    renderAt("/start", <Intake />);
+    renderApp("/start?stage=2");
     expect(await screen.findByRole("alert")).toHaveTextContent("選項載入失敗");
     expect(screen.getByRole("button", { name: "再試一次" })).toBeInTheDocument();
   });
 });
 
-describe("頁首的步驟", () => {
-  it("可以點回之前的步驟，還沒到的步驟不能點", async () => {
+describe("進度圖", () => {
+  it("已完成的關卡可以點回去，還沒到的不能點", async () => {
     mockApi({ "POST /intake/followup": () => ({ questions: [], source: "rules" }) });
     renderAt("/confirm", <Confirm />, "/confirm", { text: "朋友借錢沒還" });
-    expect(await screen.findByRole("link", { name: "第 1 步 描述案情" })).toHaveAttribute("href", "/start");
-    expect(screen.queryByRole("link", { name: /確認與遮名/ })).not.toBeInTheDocument();
-    expect(screen.queryByRole("link", { name: /參考結果/ })).not.toBeInTheDocument();
-    expect(screen.getByText("確認與遮名").closest("li")).toHaveAttribute("aria-current", "step");
+    expect(await screen.findByRole("link", { name: "第 1 關 類型（已完成）" })).toHaveAttribute("href", "/start?stage=1");
+    expect(screen.getByRole("link", { name: "第 3 關 資料（已完成）" })).toHaveAttribute("href", "/start?stage=3");
+    expect(screen.queryByRole("link", { name: /遮名/ })).not.toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: /結果/ })).not.toBeInTheDocument();
+    expect(screen.getByText("遮名").closest("li")).toHaveAttribute("aria-current", "step");
   });
 
-  it("結果頁可以回到前兩步", async () => {
+  it("結果頁可以回到前面的關卡", async () => {
     mockApi({ "POST /civil/report": () => CIVIL_REPORT });
     renderAt("/result/civil", <CivilResult />, "/result/civil", { text: "內容", maskedText: "內容" });
-    expect(await screen.findByRole("link", { name: "第 2 步 確認與遮名" })).toHaveAttribute("href", "/confirm");
-    expect(screen.getByRole("link", { name: "第 1 步 描述案情" })).toHaveAttribute("href", "/start");
+    expect(await screen.findByRole("link", { name: "第 4 關 遮名（已完成）" })).toHaveAttribute("href", "/confirm");
+    expect(screen.getByRole("link", { name: "第 2 關 案情（已完成）" })).toHaveAttribute("href", "/start?stage=2");
   });
 });
 
@@ -396,7 +455,9 @@ describe("金額明細", () => {
 describe("說明與知識", () => {
   it("每個頁面都能到說明頁", () => {
     renderApp("/");
-    expect(screen.getByRole("link", { name: "說明" })).toHaveAttribute("href", "/guide");
+    // 頁首和頁尾各一個
+    screen.getAllByRole("link", { name: "說明與法律小知識" }).forEach((a) => expect(a).toHaveAttribute("href", "/guide"));
+    expect(screen.getByRole("banner")).toContainElement(screen.getAllByRole("link", { name: "說明與法律小知識" })[0]);
   });
 
   it("說明頁有糾紛類型和名詞", () => {
@@ -406,14 +467,6 @@ describe("說明與知識", () => {
     expect(screen.getByRole("heading", { name: /受傷、損害賠償（侵權）/ })).toBeInTheDocument();
     expect(screen.getByText("被告未到庭（一造辯論）")).toBeInTheDocument();
     expect(document.getElementById("民間借貸")).not.toBeNull();
-  });
-
-  it("說明頁有導覽列，目前頁面標出來", () => {
-    renderApp("/guide");
-    const nav = screen.getByRole("navigation", { name: "主選單" });
-    expect(within(nav).getByRole("link", { name: "說明" })).toHaveAttribute("aria-current", "page");
-    expect(within(nav).getByRole("link", { name: "常見問題" })).toHaveAttribute("href", "/#faq");
-    expect(within(nav).getByRole("link", { name: /開始查詢/ })).toHaveAttribute("href", "/start");
   });
 
   it("點目錄平滑捲到該段，不直接跳轉", async () => {
@@ -426,13 +479,6 @@ describe("說明與知識", () => {
     expect(window.location.hash).toBe("#terms");
   });
 
-  it("描述案情時，旁邊直接顯示糾紛類型說明", async () => {
-    mockApi({ "GET /meta/options": () => OPTIONS });
-    renderAt("/start", <Intake />);
-    expect(screen.getByRole("heading", { name: "糾紛類型說明" })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "糾紛類型說明" })).toBeInTheDocument();
-    expect(document.getElementById("dt-侵權：交通事故")).toHaveTextContent("因車禍造成受傷或財物損失");
-  });
 });
 
 describe("確認與遮名：敏感個人資料", () => {
@@ -831,7 +877,7 @@ describe("民事結果", () => {
 
   it("沒有內容就回到第一步", () => {
     renderApp("/result/civil");
-    expect(screen.getByRole("heading", { name: "描述你遇到的糾紛" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: /這是哪一類的事情/ })).toBeInTheDocument();
   });
 });
 
