@@ -309,28 +309,26 @@ describe("第 6 關：整理成判決書的寫法", () => {
   it("結果頁送出確認過的文字", async () => {
     const { calls } = mockApi({ "POST /civil/report": () => CIVIL_REPORT });
     renderAt("/result/civil", <CivilResult />, "/result/civil", { text: "內容", maskedText: "內容", searchText: "原告主張" });
-    expect(await screen.findByText("用你確認過的整理文字搜尋。")).toBeInTheDocument();
+    expect(await screen.findByText(/用你確認過的整理文字搜尋。/)).toBeInTheDocument();
     expect(calls[0].body).toMatchObject({ text: "內容", search_text: "原告主張" });
   });
 });
 
-describe("結果頁的民事、刑事分頁", () => {
+describe("結果頁的民事、刑事切換", () => {
   const intake = { text: "內容", maskedText: "內容" };
 
-  it("選民事時不能切到刑事", async () => {
+  it("選民事時只有民事，沒有切換", async () => {
     mockApi({ "POST /civil/report": () => CIVIL_REPORT });
     renderAt("/result/civil", <CivilResult />, "/result/civil", { ...intake, caseType: "civil" });
     await screen.findByText("62%");
-    expect(screen.queryByRole("link", { name: "刑事" })).not.toBeInTheDocument();
-    expect(screen.getByText("刑事")).toHaveAttribute("aria-disabled", "true");
+    expect(screen.queryByRole("navigation", { name: "結果類型" })).not.toBeInTheDocument();
   });
 
-  it("選刑事時不能切到民事", async () => {
+  it("選刑事時只有刑事，沒有切換", async () => {
     mockApi({ "POST /criminal/predict": () => CRIMINAL_REPORT });
     renderAt("/result/criminal", <CriminalResult />, "/result/criminal", { ...intake, caseType: "criminal" });
     await screen.findByRole("heading", { name: "可能的罪名" });
-    expect(screen.queryByRole("link", { name: "民事" })).not.toBeInTheDocument();
-    expect(screen.getByText("民事")).toHaveAttribute("aria-disabled", "true");
+    expect(screen.queryByRole("navigation", { name: "結果類型" })).not.toBeInTheDocument();
   });
 
   it("選刑事時，直接開民事網址會回到刑事，也不查民事", async () => {
@@ -340,11 +338,14 @@ describe("結果頁的民事、刑事分頁", () => {
     expect(calls.map((c) => c.key)).not.toContain("POST /civil/report");
   });
 
-  it("不確定時可以切到刑事", async () => {
+  it("不確定時可以切到刑事，並說明兩邊都看", async () => {
     mockApi({ "POST /civil/report": () => CIVIL_REPORT });
     renderAt("/result/civil", <CivilResult />, "/result/civil", { ...intake, caseType: "unsure" });
     await screen.findByText("62%");
-    expect(screen.getByRole("link", { name: "刑事" })).toHaveAttribute("href", "/result/criminal");
+    const nav = screen.getByRole("navigation", { name: "結果類型" });
+    expect(within(nav).getByRole("link", { name: "刑事" })).toHaveAttribute("href", "/result/criminal");
+    expect(within(nav).getByText("民事")).toHaveAttribute("aria-current", "page");
+    expect(nav).toHaveTextContent("你選了「不確定」，兩邊都幫你看。");
   });
 
   it("選民事時，直接開刑事網址會回到民事，也不查刑事", async () => {
@@ -355,115 +356,7 @@ describe("結果頁的民事、刑事分頁", () => {
   });
 });
 
-describe("相似判決的結果", () => {
-  const show = (over: Partial<typeof CIVIL_REPORT>) => {
-    mockApi({ "POST /civil/report": () => ({ ...CIVIL_REPORT, ...over }) });
-    renderAt("/result/civil", <CivilResult />, "/result/civil", { text: "內容", maskedText: "內容" });
-  };
-  const prediction = (signal: "strong" | "weak" | "insufficient") => ({ ...CIVIL_REPORT.prediction, signal });
-
-  it("主畫面是判決件數，機率放在模型細節", async () => {
-    show({});
-    expect(await screen.findByRole("img", { name: "全部勝訴 8 件、部分勝訴 13 件、敗訴 9 件" })).toBeInTheDocument();
-    expect(screen.getByText("62%").closest("details")).not.toBeNull();
-  });
-
-  it("被告未到庭的件數另外說明", async () => {
-    show({ default_cases: 12 });
-    expect(await screen.findByText(/有 12 件被告未到庭/)).toBeInTheDocument();
-  });
-
-  it("沒有被告未到庭時不顯示", async () => {
-    show({});
-    await screen.findByText("62%");
-    expect(screen.queryByText(/件被告未到庭/)).not.toBeInTheDocument();
-  });
-
-  it("模型參考依訊號顯示固定文字", async () => {
-    show({ prediction: prediction("weak") });
-    expect(await screen.findByText(/勝訴訊號較弱/)).toBeInTheDocument();
-  });
-
-  it("資訊不足時不說強弱", async () => {
-    show({ prediction: prediction("insufficient") });
-    expect(await screen.findByText(/資訊不足/)).toBeInTheDocument();
-    expect(screen.queryByText(/勝訴訊號/)).not.toBeInTheDocument();
-  });
-
-  it("相似判決太少時不畫比例", async () => {
-    show({ outcomes: { total: 6, win: 3, partial: 2, lose: 1 } });
-    expect(await screen.findByText(/這次不顯示比例/)).toBeInTheDocument();
-    expect(screen.queryByRole("img", { name: /全部勝訴/ })).not.toBeInTheDocument();
-  });
-
-  it("相似判決和模型不一致時提醒看判決", async () => {
-    show({ prediction: prediction("weak"), outcomes: { total: 30, win: 15, partial: 9, lose: 6 } });
-    expect(await screen.findByText(/不完全一致/)).toBeInTheDocument();
-  });
-
-  it("一致時不提醒", async () => {
-    show({});
-    await screen.findByText("62%");
-    expect(screen.queryByText(/不完全一致/)).not.toBeInTheDocument();
-  });
-});
-
-describe("模型表現", () => {
-  it("用 precision、recall 說明，不顯示 AUC", async () => {
-    mockApi({ "POST /civil/report": () => CIVIL_REPORT });
-    renderAt("/result/civil", <CivilResult />, "/result/civil", { text: "內容", maskedText: "內容" });
-    expect(await screen.findByText(/判勝訴的案件有 73% 真的勝訴/)).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: /Precision、Recall 說明/ })).toBeInTheDocument();
-    expect(screen.queryByText(/AUC/)).not.toBeInTheDocument();
-  });
-
-  it("舊的模型檔沒有這些數字時不顯示", async () => {
-    const { win_precision: _, ...model } = CIVIL_REPORT.prediction.model;
-    mockApi({ "POST /civil/report": () => ({ ...CIVIL_REPORT, prediction: { ...CIVIL_REPORT.prediction, model } }) });
-    renderAt("/result/civil", <CivilResult />, "/result/civil", { text: "內容", maskedText: "內容" });
-    await screen.findByText("62%");
-    expect(screen.queryByText(/真的勝訴/)).not.toBeInTheDocument();
-  });
-});
-
-describe("列印", () => {
-  const withBuckets = {
-    ...CIVIL_REPORT,
-    amount_range: { ...CIVIL_REPORT.amount_range!, buckets: [{ low: 0, high: 0.2, count: 3 }] },
-  };
-
-  it("列印時展開金額明細，印完恢復", async () => {
-    mockApi({ "POST /civil/report": () => withBuckets });
-    renderAt("/result/civil", <CivilResult />, "/result/civil", { text: "內容", maskedText: "內容" });
-    const details = (await screen.findByText("看各金額範圍有幾件")).closest("details") as HTMLDetailsElement;
-    expect(details.open).toBe(false);
-    window.dispatchEvent(new Event("beforeprint"));
-    window.dispatchEvent(new Event("beforeprint"));   // 有些瀏覽器會觸發兩次
-    expect(details.open).toBe(true);
-    window.dispatchEvent(new Event("afterprint"));
-    expect(details.open).toBe(false);
-  });
-
-  it("使用者自己打開的明細，印完不會被關掉", async () => {
-    mockApi({ "POST /civil/report": () => withBuckets });
-    renderAt("/result/civil", <CivilResult />, "/result/civil", { text: "內容", maskedText: "內容" });
-    const details = (await screen.findByText("看各金額範圍有幾件")).closest("details") as HTMLDetailsElement;
-    details.open = true;
-    window.dispatchEvent(new Event("beforeprint"));
-    window.dispatchEvent(new Event("afterprint"));
-    expect(details.open).toBe(true);
-  });
-});
-
 describe("相似度說明", () => {
-  it("表格旁有 i 和文字說明，不會讓人以為是百分比", async () => {
-    mockApi({ "POST /civil/report": () => CIVIL_REPORT });
-    renderAt("/result/civil", <CivilResult />, "/result/civil", { text: "內容", maskedText: "內容" });
-    const info = await screen.findByRole("link", { name: /相似度說明/ });
-    expect(info.getAttribute("href")).toBe(`/guide#${encodeURIComponent("相似度")}`);
-    expect(screen.getByText(/只用來排列結果，不是百分比/)).toBeInTheDocument();
-  });
-
   it("說明頁有對應的位置", () => {
     renderApp("/guide");
     expect(document.getElementById("相似度")).not.toBeNull();
@@ -485,25 +378,6 @@ describe("相似度說明", () => {
   it("直接打開說明頁時不標任何東西", () => {
     renderApp("/guide");
     expect(document.querySelector(".jump-target")).toBeNull();
-  });
-});
-
-describe("金額明細", () => {
-  it("展開後看到各範圍的件數", async () => {
-    const buckets = [{ low: 0, high: 0.2, count: 3 }, { low: 0.2, high: 0.4, count: 7 }];
-    const range = { ...CIVIL_REPORT.amount_range!, buckets };
-    mockApi({ "POST /civil/report": () => ({ ...CIVIL_REPORT, amount_range: range }) });
-    renderAt("/result/civil", <CivilResult />, "/result/civil", { text: "內容", maskedText: "內容" });
-    expect(await screen.findByText("看各金額範圍有幾件")).toBeInTheDocument();
-    expect(screen.getByText("10 萬～20 萬")).toBeInTheDocument();
-    expect(screen.getByText("7 件")).toBeInTheDocument();
-  });
-
-  it("沒有明細時不顯示", async () => {
-    mockApi({ "POST /civil/report": () => CIVIL_REPORT });
-    renderAt("/result/civil", <CivilResult />, "/result/civil", { text: "內容", maskedText: "內容" });
-    await screen.findByText("62%");
-    expect(screen.queryByText("看各金額範圍有幾件")).not.toBeInTheDocument();
   });
 });
 
@@ -745,134 +619,268 @@ describe("第 5 關：補充細節", () => {
 
 describe("民事結果", () => {
   const intake = { text: TRAFFIC, maskedText: TRAFFIC, mids: ["侵權：交通事故"], claimedAmount: "50萬", evidence: ["medical"] };
+  type Report = typeof CIVIL_REPORT;
+  type Range = NonNullable<Report["amount_range"]>;
+  const show = async (over: Partial<Report> = {}, route = "/result/civil") => {
+    const api = mockApi({ "POST /civil/report": () => ({ ...CIVIL_REPORT, ...over }) });
+    renderAt("/result/civil", <CivilResult />, route, intake);
+    await screen.findByRole("tab", { name: "整體結果" });
+    return api;
+  };
+  const user = () => userEvent.setup();
+  const openTab = async (name: string) => {
+    await user().click(screen.getByRole("tab", { name }));
+    return screen.getByRole("tabpanel");
+  };
+  const prediction = (signal: "strong" | "weak" | "insufficient") => ({ ...CIVIL_REPORT.prediction, signal });
 
-  it("顯示機率、金額、相似判決、證據與抗辯", async () => {
-    const { calls } = mockApi({ "POST /civil/report": () => CIVIL_REPORT });
-    renderAt("/result/civil", <CivilResult />, "/result/civil", intake);
-    expect(await screen.findByText("62%")).toBeInTheDocument();
-    expect(screen.getByText("18 萬～42 萬")).toBeInTheDocument();
-    expect(screen.getByText(/比對了 30 件/)).toBeInTheDocument();
-    expect(screen.getByText(/口語描述算出來的機率常常偏低/)).toBeInTheDocument();
-    expect(screen.getByText("臺灣臺北地方法院 113 年度訴字第 1 號")).toBeInTheDocument();
-    expect(screen.getByText("31 萬／48 萬")).toBeInTheDocument();
-    expect(screen.getByText("你有提到")).toBeInTheDocument();
-    expect(screen.getByText("沒有提到")).toBeInTheDocument();
-    expect(screen.getByText("你也有過失（與有過失）")).toBeInTheDocument();
-    expect(screen.queryByText(/示例資料/)).not.toBeInTheDocument();
-    expect(calls[0].body).toMatchObject({ text: TRAFFIC, mid: "侵權：交通事故", claimed_amount: 500000, evidence: ["medical"] });
+  describe("分頁", () => {
+    it("五個分頁，預設整體結果；換分頁時解說員的話也換", async () => {
+      const { calls } = await show();
+      expect(screen.getAllByRole("tab").map((t) => t.textContent)).toEqual(["整體結果", "可能的金額", "證據對照", "對方的說法", "相似判決"]);
+      expect(screen.getByRole("tab", { name: "整體結果" })).toHaveAttribute("aria-selected", "true");
+      const scene = screen.getByRole("region", { name: "CasEY 角色說明" });
+      expect(scene).toHaveTextContent("解說員");
+      expect(scene).toHaveTextContent("不會預測你這件的結果");
+      await openTab("對方的說法");
+      expect(scene).toHaveTextContent("先看過，到時比較不會慌");
+      expect(screen.getByText(/比對了 30 件案由相同的真實判決/)).toBeInTheDocument();
+      expect(calls[0].body).toMatchObject({ text: TRAFFIC, mid: "侵權：交通事故", claimed_amount: 500000, evidence: ["medical"] });
+    });
+
+    it("網址可以直接開某個分頁", async () => {
+      await show({}, "/result/civil?tab=amount");
+      expect(screen.getByRole("tab", { name: "可能的金額" })).toHaveAttribute("aria-selected", "true");
+      expect(screen.getByRole("tabpanel")).toHaveTextContent("可能判准的金額");
+    });
+
+    it("沒看的分頁也在頁面上，列印時全部印出來", async () => {
+      await show();
+      expect(screen.getAllByRole("tabpanel", { hidden: true })).toHaveLength(5);
+      expect(screen.getByRole("tablist")).toHaveClass("no-print");
+    });
   });
 
-  it("只看勝訴的判決", async () => {
-    mockApi({ "POST /civil/report": () => CIVIL_REPORT });
-    const user = userEvent.setup();
-    renderAt("/result/civil", <CivilResult />, "/result/civil", intake);
-    const table = await screen.findByRole("table");
-    expect(within(table).getAllByRole("row")).toHaveLength(3);
-    await user.click(screen.getByRole("checkbox", { name: "只看原告勝訴的" }));
-    // 畫面上收起來，但還留在頁面上，列印時才印得出來
-    expect(table.querySelectorAll("tbody tr.screen-hidden")).toHaveLength(1);
+  describe("整體結果", () => {
+    it("主畫面是判決件數，機率放在模型細節，而且說明不是你會贏的機率", async () => {
+      await show();
+      expect(screen.getByRole("img", { name: "全部勝訴 8 件、一部勝訴 13 件、敗訴 9 件" })).toBeInTheDocument();
+      const detail = screen.getByText("62%").closest("details")!;
+      expect(detail).toHaveTextContent("不是你會贏的機率");
+      expect(detail).toHaveTextContent("口語描述算出來的機率常常偏低");
+    });
+
+    it.each([
+      ["strong", "參考訊號：較強", "勝訴訊號較強"],
+      ["weak", "參考訊號：較弱", "勝訴訊號較弱"],
+      ["insufficient", "參考訊號：資訊不足", "描述太短"],
+    ] as const)("參考訊號 %s 用固定文字", async (signal, title, text) => {
+      await show({ prediction: prediction(signal) });
+      expect(screen.getByText(title)).toBeInTheDocument();
+      expect(screen.getByText(new RegExp(text))).toBeInTheDocument();
+    });
+
+    it("資訊不足時不說強弱", async () => {
+      await show({ prediction: prediction("insufficient") });
+      expect(screen.queryByText(/勝訴訊號較(強|弱)/)).not.toBeInTheDocument();
+    });
+
+    it("相似判決太少時不畫比例，說明原因", async () => {
+      await show({ outcomes: { total: 6, win: 3, partial: 2, lose: 1 } });
+      expect(screen.getByText("有被告答辯的相似判決不多（只找到 6 件）")).toBeInTheDocument();
+      expect(screen.queryByRole("img", { name: /全部勝訴/ })).not.toBeInTheDocument();
+    });
+
+    it("0 件的結果不畫，但圖例還在", async () => {
+      await show({ outcomes: { total: 30, win: 0, partial: 30, lose: 0 } });
+      expect(screen.getByRole("img", { name: "全部勝訴 0 件、一部勝訴 30 件、敗訴 0 件" })).toBeInTheDocument();
+      expect(screen.getByText("全部勝訴").parentElement).toHaveTextContent("0 件");
+    });
+
+    it("相似判決和模型不一致時提醒看判決；一致時不提醒", async () => {
+      await show({ prediction: prediction("weak"), outcomes: { total: 30, win: 15, partial: 9, lose: 6 } });
+      expect(screen.getByText(/不完全一致/)).toBeInTheDocument();
+    });
+
+    it("一致時不提醒", async () => {
+      await show();
+      expect(screen.queryByText(/不完全一致/)).not.toBeInTheDocument();
+    });
+
+    it("被告未到庭的件數另外說明；沒有就不顯示", async () => {
+      await show({ default_cases: 12 });
+      expect(screen.getByText(/有 12 件被告沒有到庭/)).toBeInTheDocument();
+    });
+
+    it("沒有被告未到庭時不顯示", async () => {
+      await show();
+      expect(screen.queryByText(/件被告沒有到庭/)).not.toBeInTheDocument();
+    });
+
+    it("模型表現用 precision、recall 說明，不顯示 AUC", async () => {
+      await show();
+      expect(screen.getByText(/判勝訴的案件有 73% 真的勝訴/)).toBeInTheDocument();
+      expect(screen.getByRole("link", { name: /Precision、Recall 說明/, hidden: true })).toBeInTheDocument();
+      expect(screen.queryByText(/AUC/)).not.toBeInTheDocument();
+    });
+
+    it("舊的模型檔沒有這些數字時不顯示", async () => {
+      const { win_precision: _, ...model } = CIVIL_REPORT.prediction.model;
+      await show({ prediction: { ...CIVIL_REPORT.prediction, model } });
+      expect(screen.queryByText(/真的勝訴/)).not.toBeInTheDocument();
+    });
   });
 
-  it("一造辯論的判決標示被告未到庭，並說明不計入統計", async () => {
-    const [first, ...rest] = CIVIL_REPORT.similar;
-    mockApi({ "POST /civil/report": () => ({ ...CIVIL_REPORT, similar: [{ ...first, default_judgment: true }, ...rest] }) });
-    renderAt("/result/civil", <CivilResult />, "/result/civil", intake);
-    const table = await screen.findByRole("table");
-    expect(within(table).getAllByText("被告未到庭")).toHaveLength(1);
-    expect(within(within(table).getAllByRole("row")[1]).getByText("被告未到庭")).toBeInTheDocument();
-    expect(screen.getByText(/統計不包含這些判決/)).toBeInTheDocument();
-  });
-
-  it("沒有一造辯論的判決就不顯示說明", async () => {
-    mockApi({ "POST /civil/report": () => CIVIL_REPORT });
-    renderAt("/result/civil", <CivilResult />, "/result/civil", intake);
-    await screen.findByRole("table");
-    expect(screen.queryByText("被告未到庭")).not.toBeInTheDocument();
-    expect(screen.queryByText(/統計不包含這些判決/)).not.toBeInTheDocument();
-  });
-
-  it("示例資料要標示；下載 PDF 會開啟列印", async () => {
-    mockApi({ "POST /civil/report": () => ({ ...CIVIL_REPORT, mock: true }) });
-    const print = vi.spyOn(window, "print").mockImplementation(() => {});
-    const user = userEvent.setup();
-    renderAt("/result/civil", <CivilResult />, "/result/civil", intake);
-    expect(await screen.findByText("示例資料：數字與判決都不是真的")).toBeInTheDocument();
-    await user.click(screen.getByRole("button", { name: "下載 PDF" }));
-    expect(print).toHaveBeenCalledOnce();
-    expect(screen.getByText(/本報告是示例資料/).closest(".print-only")).not.toBeNull();   // PDF 上也要標示
-  });
-
-  it("金額範圍：沒填請求金額、件數不足", async () => {
-    const range = { ...CIVIL_REPORT.amount_range!, claimed: null, amount_low: null, amount_high: null, amount_median: null };
-    mockApi({ "POST /civil/report": () => ({ ...CIVIL_REPORT, amount_range: range }) });
-    renderAt("/result/civil", <CivilResult />, "/result/civil", intake);
-    expect(await screen.findByText("36%～84%")).toBeInTheDocument();
-  });
-
-  describe("金額範圍的來源", () => {
-    type Range = NonNullable<typeof CIVIL_REPORT.amount_range>;
-    const model: Range = { ...CIVIL_REPORT.amount_range!, source: "model", scope: "partial_win",
-                           buckets: [{ low: 0, high: 0.2, count: 3 }] };
-    const show = async (range: Range | null) => {
-      mockApi({ "POST /civil/report": () => ({ ...CIVIL_REPORT, amount_range: range }) });
-      renderAt("/result/civil", <CivilResult />, "/result/civil", intake);
-      await screen.findByText("62%");
+  describe("可能的金額", () => {
+    const model: Range = { ...CIVIL_REPORT.amount_range!, source: "model", scope: "partial_win", buckets: [{ low: 0, high: 0.2, count: 3 }] };
+    const amount = async (range: Range | null) => {
+      await show({ amount_range: range });
+      return openTab("可能的金額");
     };
 
-    it("沒有模型：照舊寫「如果勝訴」與相似判決的件數", async () => {
-      await show({ ...model, source: "similar", scope: "win" });
-      expect(screen.getByRole("heading", { name: "如果勝訴，可能判准的金額" })).toBeInTheDocument();
-      expect(screen.getByText(/依 18 件相似的勝訴判決/)).toBeInTheDocument();
-      expect(screen.queryByText(/一部勝訴/, { selector: "h2" })).not.toBeInTheDocument();
+    it("相似判決（舊版後端沒有 source 也一樣）：寫「如果勝訴」與件數，實線範圍條", async () => {
+      const panel = await amount(CIVIL_REPORT.amount_range);
+      expect(within(panel).getByRole("heading", { name: "如果勝訴，可能判准的金額" })).toBeInTheDocument();
+      expect(panel).toHaveTextContent("來源：相似判決");
+      expect(panel).toHaveTextContent("180,000 ～ 420,000 元");
+      expect(panel).toHaveTextContent("你請求 500,000 元");
+      expect(panel).toHaveTextContent("依 18 件相似的勝訴判決");
+      expect(within(panel).getByRole("group", { name: /金額範圍：180,000 元到 420,000 元，中位數 300,000 元/ })).toBeInTheDocument();
     });
 
-    it("舊版後端沒有 source 欄位時視為相似判決", async () => {
-      mockApi({ "POST /civil/report": () => CIVIL_REPORT });
-      renderAt("/result/civil", <CivilResult />, "/result/civil", intake);
-      expect(await screen.findByRole("heading", { name: "如果勝訴，可能判准的金額" })).toBeInTheDocument();
+    it("模型：標明「若為一部勝訴」，不說依幾件相似判決，並提醒範圍很寬", async () => {
+      const panel = await amount(model);
+      expect(within(panel).getByRole("heading", { name: "如果判決是「一部勝訴」，可能判准的金額" })).toBeInTheDocument();
+      expect(panel).toHaveTextContent("來源：模型推估");
+      expect(panel).toHaveTextContent("用過去的一部勝訴判決測試，10 件約有 8 件落在這個範圍");
+      expect(panel).toHaveTextContent("很寬");
+      expect(panel).toHaveTextContent("如果判決是全部勝訴，通常就是請求的全部金額");
+      expect(panel).not.toHaveTextContent("件相似的勝訴判決）");
     });
 
-    it("模型：標明「若為一部勝訴」，不再說依幾件相似判決，並提醒範圍很寬", async () => {
-      await show(model);
-      expect(screen.getByRole("heading", { name: "如果判決是「一部勝訴」，可能判准的金額" })).toBeInTheDocument();
-      expect(screen.getByText("18 萬～42 萬")).toBeInTheDocument();
-      expect(screen.getByText(/用過去的一部勝訴判決測試，10 件約有 8 件落在這個範圍/)).toBeInTheDocument();
-      expect(screen.getByText(/範圍很寬/)).toBeInTheDocument();
-      expect(screen.getByText(/如果判決是全部勝訴，通常就是請求的全部金額/)).toBeInTheDocument();
-      expect(screen.queryByText(/件相似的勝訴判決）/)).not.toBeInTheDocument();
+    it("沒填請求金額時只給比例，並說明可以回去填", async () => {
+      const panel = await amount({ ...model, claimed: null, amount_low: null, amount_median: null, amount_high: null });
+      expect(within(panel).getByRole("heading", { name: "如果判決是「一部勝訴」，可能判准的比例" })).toBeInTheDocument();
+      expect(panel).toHaveTextContent("沒有填請求金額");
+      expect(panel).toHaveTextContent("請求金額的 36%～84%");
+      expect(within(panel).getByRole("link", { name: "回上一步填寫想請求的金額" })).toHaveAttribute("href", "/start?stage=3");
     });
 
-    it("模型：沒填請求金額時只給比例", async () => {
-      await show({ ...model, claimed: null, amount_low: null, amount_median: null, amount_high: null });
-      expect(screen.getByRole("heading", { name: "如果判決是「一部勝訴」，可能拿到請求金額的" })).toBeInTheDocument();
-      expect(screen.getByText("36%～84%")).toBeInTheDocument();
-      expect(screen.getByText(/回上一步填寫想請求的金額/)).toBeInTheDocument();
+    it("相似的勝訴判決不夠時不給金額", async () => {
+      const panel = await amount(null);
+      expect(panel).toHaveTextContent("無法估出金額範圍");
     });
 
-    it("模型：相似判決的分布留著當對照，並說明它不是範圍的依據", async () => {
-      await show(model);
-      expect(screen.getByText("看各金額範圍有幾件")).toBeInTheDocument();
-      expect(screen.getByText(/上面的範圍是模型推估的/)).toBeInTheDocument();
+    it("各範圍的件數；模型時說明那是對照", async () => {
+      const panel = await amount({ ...model, buckets: [{ low: 0, high: 0.2, count: 3 }, { low: 0.2, high: 0.4, count: 7 }] });
+      expect(within(panel).getByText("看各金額範圍有幾件")).toBeInTheDocument();
+      expect(within(panel).getByText("20–40%")).toBeInTheDocument();
+      expect(within(panel).getByText("7 件")).toBeInTheDocument();
+      expect(panel).toHaveTextContent("上面的範圍是模型推估的");
     });
 
     it("模型：相似的勝訴判決不夠時仍給範圍，只是沒有分布可看", async () => {
-      await show({ ...model, n_cases: null, buckets: [] });
-      expect(screen.getByText("18 萬～42 萬")).toBeInTheDocument();
-      expect(screen.queryByText("看各金額範圍有幾件")).not.toBeInTheDocument();
-      expect(screen.queryByText(/無法估出金額範圍/)).not.toBeInTheDocument();
+      const panel = await amount({ ...model, n_cases: null, buckets: [] });
+      expect(panel).toHaveTextContent("180,000 ～ 420,000 元");
+      expect(within(panel).queryByText("看各金額範圍有幾件")).not.toBeInTheDocument();
+      expect(panel).not.toHaveTextContent("無法估出金額範圍");
     });
   });
 
-  it("相似的勝訴判決不夠時不給金額", async () => {
-    mockApi({ "POST /civil/report": () => ({ ...CIVIL_REPORT, amount_range: null }) });
-    renderAt("/result/civil", <CivilResult />, "/result/civil", intake);
-    expect(await screen.findByText(/無法估出金額範圍/)).toBeInTheDocument();
+  it("證據對照：比例與你有沒有提到", async () => {
+    await show();
+    const panel = await openTab("證據對照");
+    expect(within(panel).getByText("你有提到")).toBeInTheDocument();
+    expect(within(panel).getByText("你沒有提到")).toBeInTheDocument();
+    expect(within(panel).getByRole("img", { name: "診斷證明、病歷：82% 的相似勝訴判決有提到" })).toBeInTheDocument();
   });
 
-  it("錯誤可以重試", async () => {
+  it("沒有證據資料時說明原因", async () => {
+    await show({ evidence: [] });
+    expect(await openTab("證據對照")).toHaveTextContent("沒有可以對照的證據資料");
+  });
+
+  it("對方的說法：名稱與出現比例", async () => {
+    await show();
+    const panel = await openTab("對方的說法");
+    expect(within(panel).getByText("你也有過失（與有過失）")).toBeInTheDocument();
+    expect(within(panel).getByText("46%")).toBeInTheDocument();
+  });
+
+  describe("相似判決", () => {
+    it("表格、相似度說明與判決導讀", async () => {
+      await show();
+      const panel = await openTab("相似判決");
+      const table = within(panel).getByRole("table");
+      expect(within(table).getByText("臺灣臺北地方法院 113 年度訴字第 1 號")).toBeInTheDocument();
+      expect(within(table).getByText("310,000")).toBeInTheDocument();
+      expect(within(table).getAllByRole("link", { name: "判決導讀" })[0]).toHaveAttribute("href", "/judgment/civil/11");
+      expect(within(panel).getByRole("link", { name: /相似度說明/ }).getAttribute("href")).toBe(`/guide#${encodeURIComponent("相似度")}`);
+      expect(within(panel).getByText(/只用來排列結果，不是百分比/)).toBeInTheDocument();
+    });
+
+    it("只看原告勝訴的：畫面上收起來，但列印時還印得出來", async () => {
+      await show();
+      const panel = await openTab("相似判決");
+      const table = within(panel).getByRole("table");
+      expect(within(table).getAllByRole("row")).toHaveLength(3);
+      await user().click(within(panel).getByRole("switch", { name: "只看原告勝訴的" }));
+      expect(table.querySelectorAll("tbody tr.screen-hidden")).toHaveLength(1);
+    });
+
+    it("一造辯論的判決標示被告未到庭，並說明不計入統計", async () => {
+      const [first, ...rest] = CIVIL_REPORT.similar;
+      await show({ similar: [{ ...first, default_judgment: true }, ...rest] });
+      const panel = await openTab("相似判決");
+      expect(within(within(panel).getAllByRole("row")[1]).getByText("被告未到庭")).toBeInTheDocument();
+      expect(within(panel).getByText(/統計不包含這些判決/)).toBeInTheDocument();
+    });
+
+    it("沒有一造辯論的判決就不顯示說明", async () => {
+      await show();
+      const panel = await openTab("相似判決");
+      expect(within(panel).queryByText("被告未到庭")).not.toBeInTheDocument();
+      expect(within(panel).queryByText(/統計不包含這些判決/)).not.toBeInTheDocument();
+    });
+  });
+
+  it("示例資料：頁面上方、每個分頁、PDF 頁尾都標；下載 PDF 會開啟列印", async () => {
+    const print = vi.spyOn(window, "print").mockImplementation(() => {});
+    await show({ mock: true });
+    expect(screen.getByText("這一頁是示例資料")).toBeInTheDocument();
+    expect(screen.getAllByText("示例資料").length).toBeGreaterThanOrEqual(5);
+    expect(screen.getByText("※ 示例資料，不是真實的查詢結果。").closest(".print-only")).not.toBeNull();
+    expect(screen.getByText(/本報告是示例資料/).closest(".print-only")).not.toBeNull();
+    await user().click(screen.getByRole("button", { name: "下載 PDF" }));
+    expect(print).toHaveBeenCalledOnce();
+  });
+
+  it("不是示例資料時不標", async () => {
+    await show();
+    expect(screen.queryByText(/示例資料/)).not.toBeInTheDocument();
+  });
+
+  it("頁尾有「請注意」，列印時直接印出條列", async () => {
+    await show();
+    expect(screen.getByRole("button", { name: "請注意" })).toBeInTheDocument();
+    const printed = screen.getByRole("heading", { name: "請注意" }).closest(".print-only")!;
+    expect(printed).toHaveTextContent("不是法律意見");
+    expect(printed).toHaveTextContent("和解、撤回");
+  });
+
+  it("錯誤時說不是你填錯，可以重試", async () => {
     mockApi({ "POST /civil/report": { status: 500 } });
     renderAt("/result/civil", <CivilResult />, "/result/civil", intake);
-    expect(await screen.findByRole("alert")).toHaveTextContent("伺服器發生錯誤");
+    const alert = await screen.findByRole("alert");
+    expect(alert).toHaveTextContent("伺服器發生錯誤");
+    expect(alert).toHaveTextContent("不是你填錯了什麼");
+    expect(within(alert).getByRole("button", { name: "再試一次" })).toBeInTheDocument();
+  });
+
+  it("載入中顯示骨架和說明", () => {
+    mockApi({ "POST /civil/report": () => new Promise(() => {}) });
+    renderAt("/result/civil", <CivilResult />, "/result/civil", intake);
+    expect(screen.getByText("正在比對相似判決…")).toBeInTheDocument();
   });
 
   it("沒有內容就回到第一步", () => {

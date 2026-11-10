@@ -314,6 +314,28 @@
   [data-slot="collapsible-content"][hidden] {
     display: block !important;
   }
+  /* 結果頁的分頁：列印時每個分頁都印出來 */
+  [data-slot="tabs-content"][hidden] {
+    display: flex !important;
+  }
+  [data-slot="tabs-content"] {
+    break-before: auto;
+    margin-bottom: 8mm;
+  }
+  /* 每一頁底部的頁尾（position: fixed 在列印時會出現在每一頁） */
+  .print-page-footer {
+    position: fixed;
+    right: 0;
+    bottom: 0;
+    left: 0;
+    border-top: 1px solid #b9b3a3;
+    padding-top: 2mm;
+    background: #fff;
+    color: #46515c;
+  }
+  main {
+    padding-bottom: 14mm !important;
+  }
   [data-print-grid="2"] {
     grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
   }

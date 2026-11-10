@@ -1,7 +1,6 @@
-import { AlertCircleIcon, InfoIcon, Loader2Icon, RotateCwIcon } from "lucide-react";
+import { InfoIcon, Loader2Icon, RotateCwIcon, TriangleAlertIcon } from "lucide-react";
 import type { ReactNode } from "react";
 import { cn } from "@/lib/utils";
-import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -32,16 +31,27 @@ export function Loading({ children = "載入中……" }: { children?: ReactNode
   );
 }
 
-export function ErrorBox({ message, onRetry }: { message: string; onRetry?: () => void }) {
+/** 出錯時：說清楚不是使用者填錯，給重試。只影響出錯的那一個區塊。 */
+export function ErrorBox({ message, onRetry, hint = "暫時沒有載入成功，不是你填錯了什麼。", children }: {
+  message: string;
+  onRetry?: () => void;
+  hint?: string;
+  children?: ReactNode;
+}) {
   return (
-    <Alert variant="destructive" role="alert">
-      <AlertCircleIcon />
-      <AlertTitle>出了點問題</AlertTitle>
-      <AlertDescription>
-        <p>{message}</p>
-        {onRetry && <Button variant="outline" size="sm" className="mt-2" onClick={onRetry}><RotateCwIcon />再試一次</Button>}
-      </AlertDescription>
-    </Alert>
+    <div role="alert" className="flex flex-col gap-3 rounded-[18px] border-[1.5px] border-input bg-card p-5">
+      <p className="flex items-center gap-3 text-xl font-bold">
+        <TriangleAlertIcon className="size-7 flex-none text-secondary-foreground" aria-hidden="true" />出了點問題
+      </p>
+      <p className="text-[15px] text-muted-foreground">{hint}</p>
+      <p className="text-sm text-muted-foreground">（{message}）</p>
+      {(onRetry || children) && (
+        <div className="flex flex-wrap gap-2.5">
+          {onRetry && <Button onClick={onRetry}><RotateCwIcon data-icon="inline-start" />再試一次</Button>}
+          {children}
+        </div>
+      )}
+    </div>
   );
 }
 

@@ -27,11 +27,11 @@ function Brand() {
   );
 }
 
-function SiteFooter() {
+function SiteFooter({ note }: { note?: ReactNode }) {
   return (
     <footer data-slot="site-footer" className="mt-auto border-t bg-muted pt-8 pb-10 text-[15px] text-muted-foreground">
       <div className={cn(PAGE, "flex flex-col gap-2")}>
-        <p>本服務提供的是過去判決的統計參考，不是法律意見。</p>
+        {note ?? <p>本服務提供的是過去判決的統計參考，不是法律意見。</p>}
         <p className="flex flex-wrap gap-x-4 gap-y-1">
           <a href={LAF_URL} target="_blank" rel="noreferrer">法律扶助基金會</a>
           <Link to="/guide" className="text-link underline underline-offset-3">說明與法律小知識</Link>
@@ -53,9 +53,11 @@ export interface SceneProps {
 
 /**
  * stage：目前在第幾關（1–7），內容上方顯示進度圖；step 是改版前的三步驟，會換算成關卡。
- * scene：頁首的角色場景。nav：頁首右側另外放的連結或按鈕。
+ * scene：頁首的角色場景。nav：頁首右側另外放的連結或按鈕。footer：換掉頁尾第一行（結果頁放「請注意」）。
  */
-export function Layout({ stage, step, scene, nav, children }: { stage?: number; step?: 1 | 2 | 3; scene?: SceneProps; nav?: ReactNode; children: ReactNode }) {
+export function Layout({ stage, step, scene, nav, footer, children }: {
+  stage?: number; step?: 1 | 2 | 3; scene?: SceneProps; nav?: ReactNode; footer?: ReactNode; children: ReactNode;
+}) {
   const at = stage ?? (step ? STEP_TO_STAGE[step] : 0);
   return (
     <div className="flex min-h-svh flex-col">
@@ -79,7 +81,7 @@ export function Layout({ stage, step, scene, nav, children }: { stage?: number; 
         </div>
       )}
       {children}
-      <SiteFooter />
+      <SiteFooter note={footer} />
     </div>
   );
 }

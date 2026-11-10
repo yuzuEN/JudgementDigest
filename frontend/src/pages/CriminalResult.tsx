@@ -1,14 +1,14 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useState, type ReactNode } from "react";
 import { Link, Navigate } from "react-router-dom";
 import { cn } from "@/lib/utils";
 import { Card, CardAction, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { api } from "../api/client";
 import type { CriminalModelInfo, CriminalReport, SentenceDistribution } from "../api/types";
-import { ErrorBox, InfoLink, LAF_URL, Loading, MockBadge, ResultNotes } from "../components/Common";
+import { ErrorBox, InfoLink, LAF_URL, Loading, MockBadge } from "../components/Common";
 import { ResultFrame } from "../components/ResultFrame";
 import { percent } from "../format";
-import { Bar } from "./CivilResult";
+import { Bar } from "../components/casey/Bars";
 import { useIntake } from "../state";
 
 type Bucket = { label: string; share: number };
@@ -57,6 +57,14 @@ function ModelScore({ model }: { model: CriminalModelInfo }) {
   );
 }
 
+/** 頁尾「請注意」的條列（設計稿 C2-Criminal）。 */
+const NOTICE: ReactNode[] = [
+  <>這份結果<b>不是法律意見</b>，也不是對你案子的預測。</>,
+  "檢察官不起訴、告訴人撤回的案件，不在資料裡。",
+  "告訴乃論的案件（例如過失傷害），雙方和解後通常就沒有判決，所以看不到這類結果。",
+  <>需要專業協助，可以洽詢<a href={LAF_URL} target="_blank" rel="noreferrer">法律扶助基金會</a>或律師。</>,
+];
+
 export default function CriminalResult() {
   const { intake } = useIntake();
   const [report, setReport] = useState<CriminalReport | null>(null);
@@ -79,6 +87,7 @@ export default function CriminalResult() {
 
   return (
     <ResultFrame active="criminal" title="刑事參考結果" mock={report?.mock ?? false} maskedText={intake.maskedText} searchText={intake.searchText}
+      sceneLine="資料整理好了。我是解說員，只負責說明過去類似判決的統計，不會預測你這件的結果。" notice={NOTICE}
       lead="依你描述的事實，推估可能涉及的罪名、法條與刑期範圍。">
       {report?.mock && <p className="no-print text-sm text-muted-foreground">刑事模型由刑事組開發中，目前顯示的是示例資料。</p>}
       {error && <ErrorBox message={error} onRetry={load} />}
@@ -168,11 +177,6 @@ export default function CriminalResult() {
             </CardContent>
           </Card>
           {report.model && <ModelScore model={report.model} />}
-          <ResultNotes items={[
-            "結果只代表「有判決書的案件」的統計；不起訴、撤回告訴的案件不在資料裡。",
-            "告訴乃論之罪（例如過失傷害）和解並撤回告訴後，通常不會有判決。",
-            <>不是法律意見；被提告或想提告，請諮詢律師或<a href={LAF_URL}>法律扶助基金會</a>。</>,
-          ]} />
         </>
       )}
     </ResultFrame>

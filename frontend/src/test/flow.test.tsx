@@ -45,6 +45,7 @@ describe("完整流程", () => {
     expect(calls.find((c) => c.key === "POST /criminal/predict")!.body).toEqual({ text: expect.stringContaining("【電話】") });
 
     await user.click(screen.getByRole("link", { name: "民事" }));
+    await user.click(await screen.findByRole("tab", { name: "相似判決" }));
     await user.click((await screen.findAllByRole("link", { name: "判決導讀" }))[0]);
     expect(await screen.findByText("本件爭點為被告有無過失。")).toBeInTheDocument();
   });
