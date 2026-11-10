@@ -1,0 +1,4 @@
+numpy>=1.24
+scipy>=1.10
+scikit-learn>=1.3
+# fasttext_gpu.py 另需 PyTorch（依 GPU 環境安裝；Kaggle 已內建）

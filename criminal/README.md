@@ -7,8 +7,8 @@
 | `models/service.py` | 平台模型：TF-IDF（字元 1–2 gram）＋LinearSVC＋機率校正，預測罪名、法條與 6 個刑度區間。後端 `backend/criminal_service.py` 讀它的模型檔 |
 | `models/lay_terms.py` | 把口語換成判決書用語（偷→竊取、打→毆打…）；模型與檢索的輸入都先經過這一步 |
 | `models/electra_bucket_gpu.py` | 刑度 ELECTRA（6 區間）的 Kaggle 訓練與 ONNX 匯出；後端程式已寫好，目前停用 |
-| `dataset/facts.py` | 犯罪事實取得與本案罪名、法條遮蔽（PR #14） |
-| `models/` 基準模型 | SVM、fastText、TextCNN、ELECTRA 與共用評估 `evaluate.py`（PR #16）；內外層 K-fold 選模（PR #15） |
+| `dataset/facts.py` | 犯罪事實取得與本案罪名、法條遮蔽 |
+| `models/` 基準模型 | `svm_shared.py`、`fasttext_gpu.py`、`textcnn_gpu.py`、`electra_term_gpu.py` 與共用評估 `evaluate.py`，用法見 [models/BASELINES.md](models/BASELINES.md)；內外層 K-fold 選模待 PR #15 |
 
 產生 CAIL 格式資料集的程式還有寫死的路徑，整理後放進 `dataset/`。資料集檔案、模型檔不進 repo。
 

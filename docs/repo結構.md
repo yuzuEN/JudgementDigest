@@ -124,8 +124,7 @@ python -m unittest discover -s tests -t .
 
 | 來源 | 檔案 | 搬到 |
 |---|---|---|
-| PR #14 | `facts.py` | `criminal/dataset/`（PR 裡已搬好） |
-| PR #15、#16 | `model/` | `criminal/models/`（#16 已搬好；#15 待搬） |
+| PR #15 | `model/` | `criminal/models/` |
 | 本機 | CAIL 格式資料集程式（`cail_v2b.py`、`refold_v2.py`、`threshold150_fix.py`） | `criminal/dataset/`（先拿掉寫死的路徑） |
 
 民事的資料集、模型與檢索程式已經搬進 `civil/`、`retrieval/`；實驗輸出、資料、單次比較用的程式不進 repo。資料庫與模型檔的路徑寫在 `config.py`。
