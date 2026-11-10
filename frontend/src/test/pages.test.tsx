@@ -171,84 +171,123 @@ describe("進度圖", () => {
   it("結果頁可以回到前面的關卡", async () => {
     mockApi({ "POST /civil/report": () => CIVIL_REPORT });
     renderAt("/result/civil", <CivilResult />, "/result/civil", { text: "內容", maskedText: "內容" });
-    expect(await screen.findByRole("link", { name: "第 4 關 遮名（已完成）" })).toHaveAttribute("href", "/confirm");
+    expect(await screen.findByRole("link", { name: "第 4 關 遮名（已完成）" })).toHaveAttribute("href", "/confirm?stage=4");
     expect(screen.getByRole("link", { name: "第 2 關 案情（已完成）" })).toHaveAttribute("href", "/start?stage=2");
   });
 });
 
-describe("整理成判決書的寫法", () => {
+describe("第 6 關：整理成判決書的寫法", () => {
   const BUTTON = "請 AI 整理敘述";
   const rules = { questions: [], source: "rules", llm_available: true };
-  const setup = (reply: unknown) => {
-    const sent: { text: string }[] = [];
-    mockApi({
+  const setup = (reply: unknown, extra: Record<string, (b: never) => unknown> = {}) => {
+    const sent: { text: string; case_type: string }[] = [];
+    const api = mockApi({
       "POST /intake/followup": () => rules,
-      "POST /intake/rewrite": (b: { text: string }) => { sent.push(b); return reply; },
+      "POST /intake/rewrite": (b: { text: string; case_type: string }) => { sent.push(b); return reply; },
+      ...extra,
     });
-    return sent;
+    return { sent, calls: api.calls };
   };
   const llm = { text: "原告主張被告未還款。", source: "llm", added_numbers: [] };
+  const at6 = "/confirm?stage=6";
 
-  it("沒有設定 LLM 時不顯示", async () => {
+  it("沒有設定 LLM 時不顯示，直接最後確認", async () => {
     mockApi({ "POST /intake/followup": () => ({ ...rules, llm_available: false }) });
-    renderAt("/confirm", <Confirm />, "/confirm", { text: "他欠我錢" });
+    renderAt("/confirm", <Confirm />, at6, { text: "他欠我錢" });
+    expect(await screen.findByRole("heading", { name: "第 6 關　最後確認" })).toBeInTheDocument();
     await waitFor(() => expect(screen.getByRole("button", { name: "看參考結果" })).toBeEnabled());
     expect(screen.queryByRole("button", { name: BUTTON })).not.toBeInTheDocument();
   });
 
   it("刑事也可以整理，送出案件類型", async () => {
-    const sent = setup(llm);
+    const { sent } = setup(llm);
     const user = userEvent.setup();
-    renderAt("/confirm", <Confirm />, "/confirm", { text: "他打我", caseType: "criminal" });
+    renderAt("/confirm", <Confirm />, at6, { text: "他打我", caseType: "criminal" });
     await user.click(await screen.findByRole("button", { name: BUTTON }));
-    expect(await screen.findByText(/這段只用來估計刑期/)).toBeInTheDocument();
+    expect(await screen.findByText(/這段只用來推估罪名與刑期/)).toBeInTheDocument();
     expect(sent[0]).toMatchObject({ case_type: "criminal" });
   });
 
   it("按下按鈕才傳，送的是遮名後的文字", async () => {
-    const sent = setup(llm);
+    const { sent } = setup(llm);
     const user = userEvent.setup();
-    renderAt("/confirm", <Confirm />, "/confirm", { text: "王小明的電話是0912345678，他欠我錢", names: ["王小明"] });
+    renderAt("/confirm", <Confirm />, at6, { text: "王小明的電話是0912345678，他欠我錢", names: ["王小明"] });
     const button = await screen.findByRole("button", { name: BUTTON });
     expect(sent).toHaveLength(0);
     await user.click(button);
-    await screen.findByRole("textbox", { name: /請確認整理後的內容/ });
+    await screen.findByLabelText("整理後的寫法（可以直接修改）");
     expect(sent).toHaveLength(1);
     expect(sent[0].text).not.toContain("王小明");
     expect(sent[0].text).not.toContain("0912345678");
   });
 
-  it("確認前不能看結果，改過的文字會再遮一次", async () => {
-    setup(llm);
+  it("改過的整理會再遮一次；選原文就不送整理", async () => {
+    const { calls } = setup(llm, { "POST /civil/report": () => CIVIL_REPORT, "GET /meta/options": () => OPTIONS });
     const user = userEvent.setup();
-    renderAt("/confirm", <Confirm />, "/confirm", { text: "他欠我錢", names: ["王小明"] });
+    renderApp(at6, { text: "他欠我錢", names: ["王小明"] });
     await user.click(await screen.findByRole("button", { name: BUTTON }));
-    const box = await screen.findByRole("textbox", { name: /請確認整理後的內容/ });
-    expect(screen.getByRole("button", { name: "看參考結果" })).toBeDisabled();
+    const box = await screen.findByLabelText("整理後的寫法（可以直接修改）");
+    expect(screen.getByRole("radio", { name: "使用整理後的寫法" })).toBeChecked();
     await user.clear(box);
     await user.type(box, "原告王小明主張被告未還款");
-    await user.click(screen.getByRole("button", { name: "確認用這段搜尋" }));
-    expect(await screen.findByText(/已確認/)).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "看參考結果" })).toBeEnabled();
-    const previews = document.querySelectorAll(".masked-preview");
-    expect(previews[previews.length - 1].textContent).toBe("原告【姓名】主張被告未還款");
+    await user.click(screen.getByRole("button", { name: "看參考結果" }));
+    await screen.findByText("62%");
+    expect(calls.find((c) => c.key === "POST /civil/report")!.body).toMatchObject({ search_text: "原告【姓名】主張被告未還款" });
   });
 
-  it("提醒描述裡沒有的數字", async () => {
+  it("選「改用我的原文」就不用整理的文字", async () => {
+    const { calls } = setup(llm, { "POST /civil/report": () => CIVIL_REPORT });
+    const user = userEvent.setup();
+    renderApp(at6, { text: "他欠我錢" });
+    await user.click(await screen.findByRole("button", { name: BUTTON }));
+    await user.click(await screen.findByRole("radio", { name: "改用我的原文" }));
+    await user.click(screen.getByRole("button", { name: "看參考結果" }));
+    await screen.findByText("62%");
+    expect(calls.find((c) => c.key === "POST /civil/report")!.body).toMatchObject({ search_text: null });
+  });
+
+  it("提醒描述裡沒有的數字；沒有時說明都對得上", async () => {
     setup({ ...llm, added_numbers: ["112"] });
     const user = userEvent.setup();
-    renderAt("/confirm", <Confirm />, "/confirm", { text: "他欠我錢" });
+    renderAt("/confirm", <Confirm />, at6, { text: "他欠我錢" });
     await user.click(await screen.findByRole("button", { name: BUTTON }));
-    expect(await screen.findByText(/這些數字沒有出現在你的描述裡.*112/)).toBeInTheDocument();
+    expect(await screen.findByRole("alert")).toHaveTextContent("整理後出現了原文沒有的數字：「112」");
+  });
+
+  it("數字都對得上時說明", async () => {
+    setup(llm);
+    const user = userEvent.setup();
+    renderAt("/confirm", <Confirm />, at6, { text: "他欠我錢" });
+    await user.click(await screen.findByRole("button", { name: BUTTON }));
+    expect(await screen.findByText("整理後的數字，都能在原文找到。")).toBeInTheDocument();
   });
 
   it("AI 不能用時改用原本的描述", async () => {
     setup({ source: "none", added_numbers: [], fallback: "error" });
     const user = userEvent.setup();
-    renderAt("/confirm", <Confirm />, "/confirm", { text: "他欠我錢" });
+    renderAt("/confirm", <Confirm />, at6, { text: "他欠我錢" });
     await user.click(await screen.findByRole("button", { name: BUTTON }));
     expect(await screen.findByText(/會改用你原本的描述/)).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "看參考結果" })).toBeEnabled();
+  });
+
+  it("整理過的草稿在關卡之間來回時保留，不會再傳一次", async () => {
+    const { sent } = setup(llm);
+    const user = userEvent.setup();
+    renderAt("/confirm", <Confirm />, at6, { text: "他欠我錢" });
+    await user.click(await screen.findByRole("button", { name: BUTTON }));
+    await screen.findByLabelText("整理後的寫法（可以直接修改）");
+    await user.click(screen.getByRole("button", { name: "上一關" }));
+    await user.click(screen.getByRole("button", { name: /下一關/ }));
+    expect(screen.getByLabelText("整理後的寫法（可以直接修改）")).toHaveValue("原告主張被告未還款。");
+    expect(sent).toHaveLength(1);
+  });
+
+  it("描述改了，之前的整理就作廢", async () => {
+    setup(llm);
+    renderAt("/confirm", <Confirm />, at6, { text: "他欠我錢", rewriteFor: "舊的描述", rewriteDraft: "舊的整理", searchText: "舊的整理" });
+    expect(await screen.findByRole("button", { name: BUTTON })).toBeInTheDocument();
+    expect(screen.queryByLabelText("整理後的寫法（可以直接修改）")).not.toBeInTheDocument();
   });
 
   it("結果頁送出確認過的文字", async () => {
@@ -481,210 +520,38 @@ describe("說明與知識", () => {
 
 });
 
-describe("確認與遮名：敏感個人資料", () => {
-  it("日常用語不需要同意，同意時會列出偵測到的類別", async () => {
-    mockApi({ "POST /intake/followup": () => ({ questions: [], source: "rules" }) });
-    renderAt("/confirm", <Confirm />, "/confirm", { text: "我受傷了，對方有前科，後來去住院" });
-    expect(await screen.findByText(/偵測到：病歷、醫療、犯罪前科/)).toBeInTheDocument();
-  });
+describe("第 4 關：確認遮名與敏感資料", () => {
+  const rulesApi = () => mockApi({ "POST /intake/followup": () => ({ questions: [], source: "rules" }) });
 
-  it("不同意時可以回上一步，同意後這個選項消失", async () => {
-    mockApi({ "POST /intake/followup": () => ({ questions: [], source: "rules" }) });
+  it("預覽遮名後的內容，可以加名字、再移除", async () => {
+    rulesApi();
     const user = userEvent.setup();
-    renderAt("/confirm", <Confirm />, "/confirm", { text: "我開刀後休養三個月" });
-    const decline = await screen.findByRole("link", { name: "不同意，回上一步刪掉這些描述" });
-    expect(decline).toHaveAttribute("href", "/start");
-    expect(screen.getByRole("button", { name: "看參考結果" })).toBeDisabled();
-    await user.click(screen.getByRole("checkbox", { name: /我同意/ }));
-    expect(screen.queryByRole("link", { name: "不同意，回上一步刪掉這些描述" })).not.toBeInTheDocument();
-  });
-
-  it("沒有敏感個資就不用選", async () => {
-    mockApi({ "POST /intake/followup": () => ({ questions: [], source: "rules" }) });
-    renderAt("/confirm", <Confirm />, "/confirm", { text: "朋友借錢沒還" });
-    await screen.findByText("朋友借錢沒還");
-    expect(screen.queryByRole("link", { name: /不同意/ })).not.toBeInTheDocument();
-  });
-});
-
-describe("確認與遮名：AI 追問", () => {
-  const AI_BUTTON = "請 AI 幫我看還缺什麼";
-  type Body = { text: string; allow_llm: boolean };
-  const setup = (reply: (b: Body) => unknown) => {
-    const sent: Body[] = [];
-    mockApi({
-      "POST /intake/followup": (b: Body) => { sent.push(b); return reply(b); },
-    });
-    return sent;
-  };
-  const rulesReply = { questions: [{ id: "when", text: "什麼時候發生的？", why: "時效" }], source: "rules", llm_available: true };
-  const aiReply = { questions: [{ id: "llm1", text: "對方怎麼說？", why: "爭點" }], source: "llm", llm_available: true };
-
-  it("打開頁面時不會把內容傳給 LLM", async () => {
-    const sent = setup(() => rulesReply);
-    renderAt("/confirm", <Confirm />, "/confirm", { text: "王小明的電話是0912345678" });
-    await screen.findByRole("button", { name: AI_BUTTON });
-    expect(screen.queryByText("什麼時候發生的？")).not.toBeInTheDocument();
-    expect(sent).toHaveLength(1);
-    expect(sent[0]).toMatchObject({ allow_llm: false, text: "" });
-  });
-
-  it("沒有設定 LLM 時不顯示按鈕", async () => {
-    setup(() => ({ ...rulesReply, llm_available: false }));
-    renderAt("/confirm", <Confirm />, "/confirm", { text: "內容" });
-    await screen.findByText("什麼時候發生的？");
-    expect(screen.getByText(/這類案件常缺的細節/)).toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: AI_BUTTON })).not.toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: "不用 AI，回答一般問題" })).not.toBeInTheDocument();
-    expect(screen.queryByText(/付費 API/)).not.toBeInTheDocument();
-  });
-
-  it("敏感個資沒有同意前不能傳給 LLM", async () => {
-    setup(() => rulesReply);
-    const user = userEvent.setup();
-    renderAt("/confirm", <Confirm />, "/confirm", { text: "我骨折住院" });
-    const button = await screen.findByRole("button", { name: AI_BUTTON });
-    await screen.findByText("我骨折住院");
-    expect(button).toBeDisabled();
-    await user.click(screen.getByRole("checkbox", { name: /我同意/ }));
-    await waitFor(() => expect(button).toBeEnabled());
-  });
-
-  it("按下按鈕才傳，而且加入的姓名已經遮掉", async () => {
-    const sent = setup((b) => (b.allow_llm ? aiReply : rulesReply));
-    const user = userEvent.setup();
-    renderAt("/confirm", <Confirm />, "/confirm", { text: "王小明的電話是0912345678" });
-    await screen.findByRole("button", { name: AI_BUTTON });
-    await user.type(screen.getByPlaceholderText("例如：王小明"), "王小明");
+    renderAt("/confirm", <Confirm />, "/confirm", { text: "王小明撞到我，他的電話0912345678" });
+    expect(await screen.findByRole("heading", { name: /第 4 關/ })).toBeInTheDocument();
+    expect(await screen.findByText("【電話】")).toBeInTheDocument();
+    await user.type(screen.getByLabelText("還有要遮的名字嗎？"), "王小明");
     await user.click(screen.getByRole("button", { name: "加入" }));
-    await screen.findByText("【姓名】");
-    await waitFor(() => expect(screen.getByRole("button", { name: AI_BUTTON })).toBeEnabled());
-    await user.click(screen.getByRole("button", { name: AI_BUTTON }));
-    expect(await screen.findByText("對方怎麼說？")).toBeInTheDocument();
-    expect(screen.getByText(/由 AI 依你的案情產生/)).toBeInTheDocument();
-    const toLlm = sent.filter((b) => b.allow_llm);
-    expect(toLlm).toHaveLength(1);
-    expect(toLlm[0].text).toBe("【姓名】的電話是【電話】");
-    expect(screen.queryByRole("button", { name: AI_BUTTON })).not.toBeInTheDocument();
+    await waitFor(() => expect(screen.getAllByText("【姓名】").length).toBeGreaterThan(0));
+    await user.click(screen.getByRole("button", { name: "不遮「王小明」" }));
+    expect(await screen.findByText(/王小明撞到我/)).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "修改描述" })).toHaveAttribute("href", "/start?stage=2");
   });
 
-  it("不用 AI 時顯示一般問題，而且不會傳給 LLM", async () => {
-    const sent = setup(() => rulesReply);
+  it("單一個字的名字也可以遮", async () => {
+    rulesApi();
     const user = userEvent.setup();
-    renderAt("/confirm", <Confirm />, "/confirm", { text: "我骨折住院" });
-    await user.click(await screen.findByRole("button", { name: "不用 AI，回答一般問題" }));
-    expect(screen.getByText("什麼時候發生的？")).toBeInTheDocument();
-    expect(screen.getByText(/不會傳給 AI/)).toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: AI_BUTTON })).not.toBeInTheDocument();
-    expect(sent.every((b) => !b.allow_llm)).toBe(true);
-  });
-
-  it("選了不用 AI 之後可以反悔", async () => {
-    const sent = setup((b) => (b.allow_llm ? aiReply : rulesReply));
-    const user = userEvent.setup();
-    renderAt("/confirm", <Confirm />, "/confirm", { text: "內容" });
-    await user.click(await screen.findByRole("button", { name: "不用 AI，回答一般問題" }));
-    await user.click(screen.getByRole("button", { name: "改請 AI 提問" }));
-    const button = screen.getByRole("button", { name: AI_BUTTON });
-    await waitFor(() => expect(button).toBeEnabled());
-    expect(sent.filter((b) => b.allow_llm)).toHaveLength(0);
-    await user.click(button);
-    expect(await screen.findByText("對方怎麼說？")).toBeInTheDocument();
-  });
-
-  it("AI 和一般問題可以來回切換，不會重複傳，回答也保留", async () => {
-    const sent = setup((b) => (b.allow_llm ? aiReply : rulesReply));
-    const user = userEvent.setup();
-    renderAt("/confirm", <Confirm />, "/confirm", { text: "內容" });
-    const button = await screen.findByRole("button", { name: AI_BUTTON });
-    await waitFor(() => expect(button).toBeEnabled());
-    await user.click(button);
-    await user.type(await screen.findByLabelText("對方怎麼說？"), "他不承認");
-    await user.click(screen.getByRole("button", { name: "改回答一般問題" }));
-    expect(screen.getByText("什麼時候發生的？")).toBeInTheDocument();
-    await user.click(screen.getByRole("button", { name: "改請 AI 提問" }));
-    expect(screen.getByLabelText("對方怎麼說？")).toHaveValue("他不承認");
-    expect(sent.filter((b) => b.allow_llm)).toHaveLength(1);
-  });
-
-  it("AI 失敗後可以重試", async () => {
-    let fail = true;
-    setup((b) => {
-      if (!b.allow_llm) return rulesReply;
-      if (fail) { fail = false; return { ...rulesReply, fallback: "error" }; }
-      return aiReply;
-    });
-    const user = userEvent.setup();
-    renderAt("/confirm", <Confirm />, "/confirm", { text: "內容" });
-    const first = await screen.findByRole("button", { name: AI_BUTTON });
-    await waitFor(() => expect(first).toBeEnabled());
-    await user.click(first);
-    await user.click(await screen.findByRole("button", { name: "再試一次 AI" }));
-    await user.click(await screen.findByRole("button", { name: AI_BUTTON }));
-    expect(await screen.findByText("對方怎麼說？")).toBeInTheDocument();
-  });
-
-  it("超過用量上限時說明原因", async () => {
-    setup((b) => (b.allow_llm ? { ...rulesReply, fallback: "limited" } : rulesReply));
-    const user = userEvent.setup();
-    renderAt("/confirm", <Confirm />, "/confirm", { text: "內容" });
-    const button = await screen.findByRole("button", { name: AI_BUTTON });
-    await waitFor(() => expect(button).toBeEnabled());
-    await user.click(button);
-    expect(await screen.findByText(/次數暫時用完了/)).toBeInTheDocument();
-    expect(screen.getByText("什麼時候發生的？")).toBeInTheDocument();
-  });
-
-  it("內容不像法律糾紛時說明原因，不說 AI 壞了", async () => {
-    setup((b) => (b.allow_llm ? { ...rulesReply, fallback: "not_dispute" } : rulesReply));
-    const user = userEvent.setup();
-    renderAt("/confirm", <Confirm />, "/confirm", { text: "今天天氣很好" });
-    const button = await screen.findByRole("button", { name: AI_BUTTON });
-    await waitFor(() => expect(button).toBeEnabled());
-    await user.click(button);
-    expect(await screen.findByText(/看起來不像法律糾紛/)).toBeInTheDocument();
-    expect(screen.queryByText(/AI 暫時無法使用/)).not.toBeInTheDocument();
-  });
-
-  it("同意文字說明會傳給哪一家 AI", async () => {
-    setup(() => ({ ...rulesReply, llm_vendor: "OpenAI" }));
-    renderAt("/confirm", <Confirm />, "/confirm", { text: "我骨折住院" });
-    expect(await screen.findByText(/這些內容也會傳給 OpenAI/)).toBeInTheDocument();
-    expect(screen.getByText(/才會傳給 OpenAI 的付費 API/)).toBeInTheDocument();
-  });
-
-  it("AI 失敗時說明，並保留固定題庫", async () => {
-    setup(() => rulesReply);
-    const user = userEvent.setup();
-    renderAt("/confirm", <Confirm />, "/confirm", { text: "內容" });
-    const button = await screen.findByRole("button", { name: AI_BUTTON });
-    await waitFor(() => expect(button).toBeEnabled());
-    await user.click(button);
-    expect(await screen.findByText(/AI 暫時無法使用/)).toBeInTheDocument();
-    expect(screen.getByText("什麼時候發生的？")).toBeInTheDocument();
-  });
-});
-
-describe("確認與遮名", () => {
-  const maskApi = () => mockApi({
-    "POST /intake/followup": () => ({ questions: [{ id: "signal", text: "當時是什麼燈？", why: "會影響過失比例。" }], source: "rules" }),
-  });
-
-  it("描述已經回答的問題不用問，最多 4 題", async () => {
-    const pool = ["a", "b", "c", "d", "e", "f"].map((id) => ({ id, text: `問題${id}`, why: "因為", skip_if: id === "a" ? "綠燈" : null }));
-    mockApi({ "POST /intake/followup": () => ({ questions: pool, source: "rules" }) });
-    renderAt("/confirm", <Confirm />, "/confirm", { text: "當時是綠燈" });
-    expect(await screen.findByText("問題b")).toBeInTheDocument();
-    expect(screen.queryByText("問題a")).not.toBeInTheDocument();
-    expect(screen.getByText("問題e")).toBeInTheDocument();
-    expect(screen.queryByText("問題f")).not.toBeInTheDocument();
+    renderAt("/confirm", <Confirm />, "/confirm", { text: "阿明說王打他" });
+    await user.type(await screen.findByLabelText("還有要遮的名字嗎？"), "王");
+    await user.click(screen.getByRole("button", { name: "加入" }));
+    expect(await screen.findByRole("button", { name: "不遮「王」" })).toBeInTheDocument();
+    expect(screen.getByText("【姓名】")).toBeInTheDocument();
   });
 
   it("原文和姓名不會出現在任何網路請求裡", async () => {
-    const { calls } = maskApi();
+    const { calls } = rulesApi();
     const user = userEvent.setup();
     renderAt("/confirm", <Confirm />, "/confirm", { text: "王小明撞到我，他的電話0912345678" });
-    await user.type(await screen.findByLabelText(/要遮掉的名字/), "王小明");
+    await user.type(await screen.findByLabelText("還有要遮的名字嗎？"), "王小明");
     await user.click(screen.getByRole("button", { name: "加入" }));
     await screen.findAllByText("【姓名】");
     const sent = JSON.stringify(calls);
@@ -694,52 +561,169 @@ describe("確認與遮名", () => {
     expect(calls.map((c) => c.key)).not.toContain("POST /intake/mask");
   });
 
-  it("預覽遮名後的內容，可以加名字", async () => {
-    maskApi();
+  it("有敏感個資時要先同意，列出偵測到的類別", async () => {
+    rulesApi();
     const user = userEvent.setup();
-    renderAt("/confirm", <Confirm />, "/confirm", { text: "王小明撞到我，他的電話0912345678" });
-    expect(await screen.findByText("【電話】")).toBeInTheDocument();
-    await user.type(screen.getByLabelText(/要遮掉的名字/), "王小明");
-    await user.click(screen.getByRole("button", { name: "加入" }));
-    await waitFor(() => expect(screen.getAllByText("【姓名】").length).toBeGreaterThan(0));
-    expect(screen.getByRole("button", { name: "不遮「王小明」" })).toBeInTheDocument();
+    renderAt("/confirm", <Confirm />, "/confirm", { text: "我受傷了，對方有前科，後來去住院" });
+    expect(await screen.findByText(/偵測到：病歷、醫療、犯罪前科/)).toBeInTheDocument();
+    const next = screen.getByRole("button", { name: "下一關" });
+    expect(next).toBeDisabled();
+    expect(screen.getByText(/請先選擇「我同意」/)).toBeInTheDocument();
+    await user.click(screen.getByRole("radio", { name: "我同意" }));
+    await waitFor(() => expect(next).toBeEnabled());
   });
 
-  it("單一個字的名字也可以遮", async () => {
-    maskApi();
+  it("不同意時說明要回去刪掉，不能往下", async () => {
+    rulesApi();
     const user = userEvent.setup();
-    renderAt("/confirm", <Confirm />, "/confirm", { text: "阿明說王打他" });
-    await user.type(await screen.findByLabelText(/要遮掉的名字/), "王");
-    await user.click(screen.getByRole("button", { name: "加入" }));
-    expect(await screen.findByRole("button", { name: "不遮「王」" })).toBeInTheDocument();
-    expect(screen.getByText("【姓名】")).toBeInTheDocument();
+    renderAt("/confirm", <Confirm />, "/confirm", { text: "我開刀後休養三個月" });
+    await user.click(await screen.findByRole("radio", { name: "不同意，回上一步刪掉" }));
+    expect(screen.getByRole("link", { name: "回描述案情" })).toHaveAttribute("href", "/start?stage=2");
+    expect(screen.getByRole("button", { name: "下一關" })).toBeDisabled();
   });
 
-  it("有敏感個資時要先同意", async () => {
-    maskApi();
-    const user = userEvent.setup();
-    renderAt("/confirm", <Confirm />, "/confirm", { text: TRAFFIC });
-    const go = screen.getByRole("button", { name: "看參考結果" });
-    await screen.findByText(/去年三月/);
-    expect(go).toBeDisabled();
-    expect(screen.getByText(/內容包含敏感個人資料/)).toBeInTheDocument();
-    await user.click(screen.getByRole("checkbox", { name: /我同意/ }));
-    await waitFor(() => expect(go).toBeEnabled());
-  });
-
-  it("沒有敏感個資就不必勾", async () => {
-    maskApi();
+  it("沒有敏感個資就不用選", async () => {
+    rulesApi();
     renderAt("/confirm", <Confirm />, "/confirm", { text: "朋友借了五十萬一直沒還" });
-    await waitFor(() => expect(screen.getByRole("button", { name: "看參考結果" })).toBeEnabled());
-    expect(screen.queryByRole("checkbox", { name: /我同意/ })).not.toBeInTheDocument();
+    await waitFor(() => expect(screen.getByRole("button", { name: "下一關" })).toBeEnabled());
+    expect(screen.queryByRole("radio", { name: "我同意" })).not.toBeInTheDocument();
   });
 
-  it("追問的回答會加進送出的內容", async () => {
-    maskApi();
-    const user = userEvent.setup();
+  it("還沒同意就直接開第 5 關，會回到第 4 關", async () => {
+    rulesApi();
+    renderAt("/confirm", <Confirm />, "/confirm?stage=5", { text: "我骨折住院" });
+    expect(await screen.findByRole("heading", { name: /第 4 關/ })).toBeInTheDocument();
+  });
+
+  it("回上一章是第 3 關", async () => {
+    rulesApi();
     renderAt("/confirm", <Confirm />, "/confirm", { text: "朋友借錢沒還" });
-    await user.type(await screen.findByLabelText("當時是什麼燈？"), "綠燈");
-    expect(await screen.findByText(/回答：綠燈/)).toBeInTheDocument();
+    expect(await screen.findByRole("link", { name: "回上一章" })).toHaveAttribute("href", "/start?stage=3");
+  });
+});
+
+describe("第 5 關：補充細節", () => {
+  const AI_TAB = "請 AI 幫我看還缺什麼";
+  const SEND = "傳給 AI，開始提問";
+  type Body = { text: string; allow_llm: boolean };
+  const setup = (reply: (b: Body) => unknown) => {
+    const sent: Body[] = [];
+    mockApi({ "POST /intake/followup": (b: Body) => { sent.push(b); return reply(b); } });
+    return sent;
+  };
+  const rulesReply = { questions: [{ id: "when", text: "什麼時候發生的？", why: "時效" }], source: "rules", llm_available: true };
+  const aiReply = { questions: [{ id: "llm1", text: "對方怎麼說？", why: "爭點" }], source: "llm", llm_available: true };
+  const at5 = "/confirm?stage=5";
+  const openAi = async (user: ReturnType<typeof userEvent.setup>) => {
+    await user.click(await screen.findByRole("tab", { name: AI_TAB }));
+    return screen.getByRole("button", { name: SEND });
+  };
+
+  it("打開頁面時不會把內容傳給 LLM", async () => {
+    const sent = setup(() => rulesReply);
+    renderAt("/confirm", <Confirm />, at5, { text: "王小明的電話是0912345678" });
+    await screen.findByRole("tab", { name: AI_TAB });
+    expect(sent).toHaveLength(1);
+    expect(sent[0]).toMatchObject({ allow_llm: false, text: "" });
+  });
+
+  it("沒有設定 LLM 時只有固定題目", async () => {
+    setup(() => ({ ...rulesReply, llm_available: false }));
+    renderAt("/confirm", <Confirm />, at5, { text: "內容" });
+    expect(await screen.findByLabelText("什麼時候發生的？")).toBeInTheDocument();
+    expect(screen.getByText("為什麼要問：時效")).toBeInTheDocument();
+    expect(screen.queryByRole("tab", { name: AI_TAB })).not.toBeInTheDocument();
+    expect(screen.queryByText(/付費 API/)).not.toBeInTheDocument();
+  });
+
+  it("描述已經回答的問題不用問，最多 4 題", async () => {
+    const pool = ["a", "b", "c", "d", "e", "f"].map((id) => ({ id, text: `問題${id}`, why: "因為", skip_if: id === "a" ? "綠燈" : null }));
+    mockApi({ "POST /intake/followup": () => ({ questions: pool, source: "rules" }) });
+    renderAt("/confirm", <Confirm />, at5, { text: "當時是綠燈" });
+    expect(await screen.findByText("問題b")).toBeInTheDocument();
+    expect(screen.queryByText("問題a")).not.toBeInTheDocument();
+    expect(screen.getByText("問題e")).toBeInTheDocument();
+    expect(screen.queryByText("問題f")).not.toBeInTheDocument();
+  });
+
+  it("回答會加進送出的內容，按鈕從「略過」變成「下一關」", async () => {
+    setup(() => rulesReply);
+    const user = userEvent.setup();
+    renderAt("/confirm", <Confirm />, at5, { text: "朋友借錢沒還" });
+    expect(screen.getByRole("button", { name: "略過，下一關" })).toBeInTheDocument();
+    await user.type(await screen.findByLabelText("什麼時候發生的？"), "去年");
+    expect(screen.getByRole("button", { name: "下一關" })).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "上一關" }));
+    expect(await screen.findByText(/回答：去年/)).toBeInTheDocument();
+  });
+
+  it("切到 AI 分頁還不會傳，按下按鈕才傳，而且姓名已經遮掉", async () => {
+    const sent = setup((b) => (b.allow_llm ? aiReply : rulesReply));
+    const user = userEvent.setup();
+    renderAt("/confirm", <Confirm />, at5, { text: "王小明的電話是0912345678", names: ["王小明"] });
+    const send = await openAi(user);
+    expect(sent.filter((b) => b.allow_llm)).toHaveLength(0);
+    await user.click(send);
+    expect(await screen.findByLabelText("對方怎麼說？")).toBeInTheDocument();
+    expect(screen.getByText(/由 AI 依你的案情產生/)).toBeInTheDocument();
+    const toLlm = sent.filter((b) => b.allow_llm);
+    expect(toLlm).toHaveLength(1);
+    expect(toLlm[0].text).toBe("【姓名】的電話是【電話】");
+  });
+
+  it("AI 和固定題目可以來回切換，不會重複傳，回答也保留", async () => {
+    const sent = setup((b) => (b.allow_llm ? aiReply : rulesReply));
+    const user = userEvent.setup();
+    renderAt("/confirm", <Confirm />, at5, { text: "內容" });
+    await user.click(await openAi(user));
+    await user.type(await screen.findByLabelText("對方怎麼說？"), "他不承認");
+    await user.click(screen.getByRole("tab", { name: "固定題目（不用 AI）" }));
+    expect(screen.getByLabelText("什麼時候發生的？")).toBeInTheDocument();
+    await user.click(screen.getByRole("tab", { name: AI_TAB }));
+    expect(screen.getByLabelText("對方怎麼說？")).toHaveValue("他不承認");
+    expect(sent.filter((b) => b.allow_llm)).toHaveLength(1);
+  });
+
+  it("AI 失敗時說不是你填錯，可以重試或改用固定題目", async () => {
+    let fail = true;
+    setup((b) => {
+      if (!b.allow_llm) return rulesReply;
+      if (fail) { fail = false; return { ...rulesReply, fallback: "error" }; }
+      return aiReply;
+    });
+    const user = userEvent.setup();
+    renderAt("/confirm", <Confirm />, at5, { text: "內容" });
+    await user.click(await openAi(user));
+    expect(await screen.findByText("這次沒有成功")).toBeInTheDocument();
+    expect(screen.getByText("出了點問題，不是你填錯。")).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "再試一次" }));
+    expect(await screen.findByLabelText("對方怎麼說？")).toBeInTheDocument();
+  });
+
+  it("超過用量上限時說明原因，可以改用固定題目", async () => {
+    setup((b) => (b.allow_llm ? { ...rulesReply, fallback: "limited" } : rulesReply));
+    const user = userEvent.setup();
+    renderAt("/confirm", <Confirm />, at5, { text: "內容" });
+    await user.click(await openAi(user));
+    expect(await screen.findByText("今天的 AI 次數用完了")).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "改用固定題目" }));
+    expect(screen.getByLabelText("什麼時候發生的？")).toBeInTheDocument();
+  });
+
+  it("內容不像法律糾紛時說明原因，不說 AI 壞了", async () => {
+    setup((b) => (b.allow_llm ? { ...rulesReply, fallback: "not_dispute" } : rulesReply));
+    const user = userEvent.setup();
+    renderAt("/confirm", <Confirm />, at5, { text: "今天天氣很好" });
+    await user.click(await openAi(user));
+    expect(await screen.findByText("這看起來不像法律糾紛")).toBeInTheDocument();
+    expect(screen.queryByText("這次沒有成功")).not.toBeInTheDocument();
+  });
+
+  it("同意文字與資料使用說明寫出會傳給哪一家 AI", async () => {
+    setup(() => ({ ...rulesReply, llm_vendor: "OpenAI" }));
+    renderAt("/confirm", <Confirm />, "/confirm", { text: "我骨折住院" });
+    expect(await screen.findByText(/這些內容也會傳給 OpenAI/)).toBeInTheDocument();
+    expect(screen.getByText(/才會傳給 OpenAI 的付費 API/)).toBeInTheDocument();
   });
 });
 

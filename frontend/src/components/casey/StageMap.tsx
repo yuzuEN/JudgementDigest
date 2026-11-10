@@ -11,10 +11,10 @@ const CHAPTERS = [
   { label: "參考結果", from: 7, to: 7 },
 ];
 
-/** 已完成的關卡可以點回去。第二章（確認頁）還是單頁，先都回到 /confirm。 */
+/** 已完成的關卡可以點回去。 */
 export function stageHref(n: number): string | null {
   if (n <= 3) return `/start?stage=${n}`;
-  if (n <= 6) return "/confirm";
+  if (n <= 6) return `/confirm?stage=${n}`;
   return null;
 }
 

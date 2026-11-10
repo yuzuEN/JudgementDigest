@@ -20,8 +20,11 @@ export interface Intake {
   names: string[];
   maskedText: string;
   sensitiveConsent: boolean;
-  searchText: string;    // 使用者確認過的改寫，只用來搜尋相似判決
+  searchText: string;    // 使用者選用的改寫（已遮名）；民事只用來搜尋相似判決，刑事也用來推估罪名
   rewriteFor: string;    // 改寫時的遮名描述；描述改了，改寫就不能再用
+  rewriteDraft: string;  // AI 整理的草稿（使用者可以直接改），在關卡之間來回時保留，不用重新呼叫 AI
+  rewriteAdded: string[];   // 草稿裡有、描述裡沒有的數字
+  useRewrite: "rewrite" | "original";
 }
 
 export const EMPTY_INTAKE: Intake = {
@@ -40,6 +43,9 @@ export const EMPTY_INTAKE: Intake = {
   sensitiveConsent: false,
   searchText: "",
   rewriteFor: "",
+  rewriteDraft: "",
+  rewriteAdded: [],
+  useRewrite: "rewrite",
 };
 
 /**
