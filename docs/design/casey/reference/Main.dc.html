@@ -1,0 +1,126 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<title>設計方向</title>
+<script src="./support.js"></script>
+<link rel="stylesheet" href="./jd.css">
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;700;800&display=swap" rel="stylesheet">
+<style>body{margin:0}</style>
+</helmet>
+<div class="jd" style="width:1280px;height:2000px;padding:64px;display:flex;flex-direction:column;gap:56px">
+
+  <header style="display:grid;gap:16px;max-width:900px">
+    <p class="kicker">設計方向</p>
+    <h1 class="display" style="font-size:48px">像一份整理好的諮詢報告，不像一個儀表板</h1>
+    <p class="lead">暖白紙底、深青藍主色、大字級。每個畫面只做一件事，數字一定和白話說明放在一起。使用者多半焦慮，介面要先讓人鬆一口氣，再讓人看懂。</p>
+  </header>
+
+  <section style="display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:16px">
+    <div class="card card-flat stack-s"><h3 class="h3">先說人話，再放數字</h3><p class="small muted">每個數字都接一句「這代表什麼」。範圍永遠搭配「10 件約有 8 件」。</p></div>
+    <div class="card card-flat stack-s"><h3 class="h3">不做成保證</h3><p class="small muted">不用儀表板指針、紅綠燈、「你會贏」。機率收在「模型細節」，主畫面看真實判決的件數。</p></div>
+    <div class="card card-flat stack-s"><h3 class="h3">顏色各有專屬用途</h3><p class="small muted">橘色只給「遮名」。紫灰只給「示例資料」。結果用深靛／淺藍／斜線，加文字，不靠紅綠。</p></div>
+  </section>
+
+  <section style="display:grid;gap:20px">
+    <h2 class="h2">色票（淺色／深色）</h2>
+    <div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:20px">
+      <div class="jd" style="border-radius:18px;border:1px solid #DCD6C8;padding:24px;display:grid;gap:8px">
+        <p class="b">淺色　<span class="muted small">:root</span></p>
+        <sc-for list="{{tokens}}" as="t" hint-placeholder-count="6">
+          <div style="display:flex;align-items:center;gap:12px">
+            <span style="width:44px;height:30px;border-radius:8px;border:1px solid var(--line2);flex:none;background:{{t.css}}"></span>
+            <span class="small" style="flex:1">{{t.name}}</span>
+            <code class="xs muted">{{t.l}}</code>
+          </div>
+        </sc-for>
+      </div>
+      <div class="jd dark" style="border-radius:18px;border:1px solid #2B3640;padding:24px;display:grid;gap:8px">
+        <p class="b">深色　<span class="muted small">.dark（跟系統設定切換）</span></p>
+        <sc-for list="{{tokens}}" as="t" hint-placeholder-count="6">
+          <div style="display:flex;align-items:center;gap:12px">
+            <span style="width:44px;height:30px;border-radius:8px;border:1px solid var(--line2);flex:none;background:{{t.css}}"></span>
+            <span class="small" style="flex:1">{{t.name}}</span>
+            <code class="xs muted">{{t.d}}</code>
+          </div>
+        </sc-for>
+      </div>
+    </div>
+    <p class="small muted">所有文字與底色組合 ≥ 4.5:1（大字 ≥ 3:1）。次要文字最淺用 ink-3，在白底約 5.9:1。</p>
+  </section>
+
+  <section style="display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:40px;align-items:start">
+    <div style="display:grid;gap:12px">
+      <h2 class="h2">字級</h2>
+      <p class="small muted">Noto Sans TC。內文 16px、行高 1.75；最小 14px（只給圖說）。手機標題縮一級。</p>
+      <div style="display:grid;gap:10px;border-top:1px solid var(--line);padding-top:12px">
+        <div class="row row-sb"><span class="display" style="font-size:44px;line-height:1.3">首頁大標</span><code class="xs muted">44 / 30 · 800</code></div>
+        <div class="row row-sb"><span class="h1">頁面標題</span><code class="xs muted">32 / 26 · 800</code></div>
+        <div class="row row-sb"><span class="h2">區塊標題</span><code class="xs muted">26 / 22 · 800</code></div>
+        <div class="row row-sb"><span class="h3">卡片標題</span><code class="xs muted">20 · 700</code></div>
+        <div class="row row-sb"><span class="lead" style="color:var(--ink)">導言、重點說明</span><code class="xs muted">18 · 400</code></div>
+        <div class="row row-sb"><span>內文，一般民眾看得舒服的大小</span><code class="xs muted">16 / 1.75</code></div>
+        <div class="row row-sb"><span class="small">次要說明</span><code class="xs muted">15</code></div>
+        <div class="row row-sb"><span class="xs">圖說、表頭</span><code class="xs muted">14（最小）</code></div>
+        <div class="row row-sb"><span class="amt" style="font-size:40px">21,087 元</span><code class="xs muted">金額 40 / 30 · 800</code></div>
+      </div>
+    </div>
+    <div style="display:grid;gap:12px">
+      <h2 class="h2">間距、形狀</h2>
+      <p class="small muted">4 的倍數：4 · 8 · 12 · 16 · 24 · 32 · 56。控件圓角 12，卡片 18，標籤全圓。點擊範圍至少 48px，鍵盤焦點為 3px 外框。</p>
+      <div style="display:flex;gap:12px;flex-wrap:wrap;align-items:center;padding-top:8px">
+        <a class="btn btn-p btn-lg" href="#">開始查詢<span class="ic ic-right"></span></a>
+        <a class="btn btn-s" href="#">回上一步</a>
+        <a class="btn btn-g" href="#">修改描述</a>
+        <button class="btn" disabled>看參考結果</button>
+      </div>
+      <div class="card" style="display:grid;gap:8px">
+        <p class="h3">卡片</p>
+        <p class="small muted">白底、1px 暖灰框、18px 圓角、極淺陰影；內距 26（手機 18）。不用左側色條。</p>
+      </div>
+      <div class="note"><span class="ic ic-info"></span><p class="small">提示框：藍灰底，圖示＋文字。不使用紅色警告，除非資料真的出錯。</p></div>
+      <div class="smp"><span class="ic ic-book"></span><p class="small"><b>示例資料。</b>這一頁的數字不是真實查詢結果。紫灰底只用於這個用途。</p></div>
+      <p class="small"><span class="mk">［電話已遮］</span>　橘色底＋底線，只用於自動遮名。</p>
+    </div>
+  </section>
+
+  <section style="display:grid;gap:16px;max-width:760px">
+    <h2 class="h2">結果的顏色語言</h2>
+    <p class="small muted">深靛、淺藍、斜線三種，靠明度與紋理分開，旁邊一定有文字。「敗訴」是中性的灰褐斜線，不是警告。</p>
+    <div class="row">
+      <span class="oc oc-full"><span class="ic ic-check"></span>全部勝訴</span>
+      <span class="oc oc-part">一部勝訴</span>
+      <span class="oc oc-lose">敗訴</span>
+    </div>
+    <div class="obar" role="img" aria-label="全部勝訴 4 件、一部勝訴 20 件、敗訴 6 件"><div class="seg-full" style="width:13.3%"></div><div class="seg-part" style="width:66.7%"></div><div class="seg-lose" style="width:20%"></div></div>
+    <p class="xs muted">版面示意（4／20／6）。真實範例資料是 0／30／0。</p>
+  </section>
+
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1280,"height":2000}}'>
+class Component extends DCLogic {
+  renderVals() {
+    return { tokens: [
+      { name: '頁面底', css: 'var(--bg)', l: '#FAF8F3', d: '#101519' },
+      { name: '卡片底', css: 'var(--surface)', l: '#FFFFFF', d: '#182027' },
+      { name: '文字', css: 'var(--ink)', l: '#1C2630', d: '#EAE8E1' },
+      { name: '次要文字', css: 'var(--ink2)', l: '#46515C', d: '#BCC3CA' },
+      { name: '主色（按鈕、連結）', css: 'var(--brand)', l: '#1B5B6E', d: '#8CCBDD' },
+      { name: '全部勝訴', css: 'var(--full)', l: '#25407B', d: '#9DB2EE' },
+      { name: '一部勝訴', css: 'var(--part)', l: '#4E8FA6', d: '#5FA9C0' },
+      { name: '敗訴（斜線）', css: 'var(--lose-pat)', l: '#B3AA94 / #E9E4D6', d: '#6E6958 / #2C2A22' },
+      { name: '遮名（橘）', css: 'var(--mask-bg)', l: '#FFE0BA · 字 #7A3200', d: '#4C2C0C · 字 #FFCB94' },
+      { name: '示例資料（紫灰）', css: 'var(--smp-bg)', l: '#ECE8F7 · 字 #362E63', d: '#26233F · 字 #DAD5FF' },
+      { name: '提示框', css: 'var(--info-bg)', l: '#EAF1F5', d: '#162630' },
+    ] };
+  }
+}
+</script>
+</body>
+</html>
