@@ -1,11 +1,9 @@
-import { CheckIcon, CircleMinusIcon, InfoIcon, LoaderCircleIcon } from "lucide-react";
+import { CheckIcon, CircleMinusIcon, InfoIcon } from "lucide-react";
 import { useCallback, useEffect, useState, type ReactNode } from "react";
-import { Link, Navigate, useSearchParams } from "react-router-dom";
+import { Link, Navigate } from "react-router-dom";
 import { cn } from "@/lib/utils";
-import { Skeleton } from "@/components/ui/skeleton";
 import { Switch } from "@/components/ui/switch";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Tabs } from "@base-ui/react/tabs";
 import { api } from "../api/client";
 import type { AmountRange, CivilReport, SimilarCase } from "../api/types";
 import { Bar, MiniBarRow } from "../components/casey/Bars";
@@ -14,7 +12,7 @@ import { EmptyState } from "../components/casey/EmptyState";
 import { OutcomeBar } from "../components/casey/OutcomeBar";
 import { OutcomeChip } from "../components/casey/OutcomeChip";
 import { RangeBar } from "../components/casey/RangeBar";
-import { SampleTag } from "../components/casey/Sample";
+import { InfoNote as Note, LoadingPanel, PanelTitle, ResultTabs, useResultTab } from "../components/casey/ResultTabs";
 import { ErrorBox, InfoLink, LAF_URL, SIMILARITY_NOTE } from "../components/Common";
 import { LinkButton } from "../components/LinkButton";
 import { ResultFrame } from "../components/ResultFrame";
@@ -48,9 +46,7 @@ export default function CivilResult() {
   const [report, setReport] = useState<CivilReport | null>(null);
   const [error, setError] = useState("");
   const [onlyWin, setOnlyWin] = useState(false);
-  const [params, setParams] = useSearchParams();
-  const raw = params.get("tab");
-  const tab: TabKey = TABS.some((t) => t.key === raw) ? (raw as TabKey) : "overview";
+  const [tab, setTab] = useResultTab<TabKey>(TABS.map((t) => t.key));
 
   const load = useCallback(() => {
     if (!intake.caseType || intake.caseType === "criminal") return;
@@ -80,67 +76,19 @@ export default function CivilResult() {
       )}
       {!report && !error && <LoadingPanel />}
       {report && (
-        // 用 Base UI 的分頁元件自己排：設計稿是資料夾式的頁籤，shadcn 的兩種樣式都不合
-        <Tabs.Root value={tab} onValueChange={(v) => setParams({ tab: String(v) }, { replace: true })} className="flex flex-col">
-          <Tabs.List aria-label="結果分頁" className="no-print relative z-10 -mb-0.5 flex gap-1.5 overflow-x-auto">
-            {TABS.map((t) => (
-              <Tabs.Tab key={t.key} value={t.key}
-                className="min-h-[50px] flex-none rounded-t-[12px] border-2 border-b-0 border-input bg-muted px-[18px] font-bold whitespace-nowrap text-muted-foreground hover:text-foreground data-active:border-foreground data-active:bg-card data-active:text-foreground">
-                {t.label}
-              </Tabs.Tab>
-            ))}
-          </Tabs.List>
-          {TABS.map((t, i) => (
-            <Tabs.Panel key={t.key} value={t.key} keepMounted data-slot="tabs-content"
-              className={cn("flex flex-col gap-4 rounded-[16px] border-2 bg-card p-[18px] outline-none sm:p-[22px] [&[hidden]]:hidden",
-                i === 0 && "rounded-tl-none", mock ? "border-dashed border-sample-line" : "border-foreground")}>
-              {t.key === "overview" && <Overview report={report} />}
-              {t.key === "amount" && <AmountPanel range={report.amount_range} mock={mock} />}
-              {t.key === "evidence" && <EvidencePanel report={report} />}
-              {t.key === "defense" && <DefensePanel report={report} />}
-              {t.key === "cases" && <CasesPanel report={report} onlyWin={onlyWin} setOnlyWin={setOnlyWin} rewritten={Boolean(intake.searchText)} />}
-            </Tabs.Panel>
-          ))}
-        </Tabs.Root>
+        <ResultTabs value={tab} onChange={setTab} mock={mock} tabs={TABS.map((t) => ({
+          key: t.key,
+          label: t.label,
+          content: {
+            overview: <Overview report={report} />,
+            amount: <AmountPanel range={report.amount_range} mock={mock} />,
+            evidence: <EvidencePanel report={report} />,
+            defense: <DefensePanel report={report} />,
+            cases: <CasesPanel report={report} onlyWin={onlyWin} setOnlyWin={setOnlyWin} rewritten={Boolean(intake.searchText)} />,
+          }[t.key],
+        }))} />
       )}
     </ResultFrame>
-  );
-}
-
-/** 整頁載入中：骨架維持最終版面的位置，同時說明正在做什麼。 */
-function LoadingPanel() {
-  return (
-    <div aria-busy="true" className="flex flex-col gap-3.5 rounded-[16px] border-2 border-input bg-card p-[22px]">
-      <p role="status" className="flex flex-wrap items-center gap-3">
-        <LoaderCircleIcon className="size-5 animate-spin text-primary motion-reduce:animate-none" aria-hidden="true" />
-        <b>正在比對相似判決…</b><span className="text-[15px] text-muted-foreground">大約需要幾秒</span>
-      </p>
-      <div className="flex flex-col gap-3" aria-hidden="true">
-        <Skeleton className="h-[22px] w-2/5" /><Skeleton className="h-[22px] rounded-[11px]" />
-        <Skeleton className="h-[18px] w-[70%]" /><Skeleton className="h-[18px] w-3/5" /><Skeleton className="h-24" />
-      </div>
-    </div>
-  );
-}
-
-function PanelTitle({ children, mock, action }: { children: ReactNode; mock?: boolean; action?: ReactNode }) {
-  return (
-    <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-2">
-      <h2 className="text-[22px] leading-[1.45] font-extrabold sm:text-[26px]">{children}</h2>
-      <div className="flex flex-wrap items-center gap-3">{action}{mock && <SampleTag />}</div>
-    </div>
-  );
-}
-
-function Note({ children, title }: { children: ReactNode; title?: string }) {
-  return (
-    <div className="flex items-start gap-3 rounded-[14px] border border-info-line bg-info px-4 py-3.5">
-      <InfoIcon className="mt-1 size-5 flex-none text-secondary-foreground" aria-hidden="true" />
-      <div className="flex min-w-0 flex-col gap-1">
-        {title && <p className="font-bold">{title}</p>}
-        <div className="text-[15px]">{children}</div>
-      </div>
-    </div>
   );
 }
 
