@@ -32,10 +32,18 @@ export function ResultTabs<K extends string>({ tabs, value, onChange, mock }: {
 }) {
   return (
     <Tabs.Root value={value} onValueChange={(v) => onChange(v as K)} className="flex flex-col">
-      <Tabs.List aria-label="結果分頁" className="no-print relative z-10 -mb-0.5 flex gap-1.5 overflow-x-auto">
+      {/*
+        資料夾式頁籤：整列往下壓 2px（面板框線的粗細）。沒選的頁籤留 2px 底距，停在框線上方，
+        框線從它們底下連續通過；選中的頁籤往下延伸 2px、用面板的底色蓋住框線，和面板接成一體。
+      */}
+      <Tabs.List aria-label="結果分頁" className="no-print relative z-10 -mb-0.5 flex items-end gap-1.5 overflow-x-auto">
         {tabs.map((t) => (
           <Tabs.Tab key={t.key} value={t.key}
-            className="min-h-[50px] flex-none rounded-t-[12px] border-2 border-b-0 border-input bg-muted px-[18px] font-bold whitespace-nowrap text-muted-foreground hover:text-foreground data-active:border-foreground data-active:bg-card data-active:text-foreground">
+            className={cn(
+              "mb-0.5 min-h-[50px] flex-none rounded-t-[12px] border-2 border-b-0 border-input bg-muted px-[18px] font-bold whitespace-nowrap text-muted-foreground hover:text-foreground",
+              "data-active:mb-0 data-active:min-h-[52px] data-active:pb-0.5 data-active:bg-card data-active:text-foreground",
+              mock ? "data-active:border-dashed data-active:border-sample-line" : "data-active:border-foreground",
+            )}>
             {t.label}
           </Tabs.Tab>
         ))}
