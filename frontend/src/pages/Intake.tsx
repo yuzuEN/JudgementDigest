@@ -1,5 +1,5 @@
 import {
-  ArrowLeftIcon, ArrowLeftRightIcon, ArrowRightIcon, CameraIcon, CheckIcon, ClipboardListIcon, FilePenLineIcon, InfoIcon,
+  ArrowLeftIcon, ArrowLeftRightIcon, ArrowRightIcon, CameraIcon, CheckIcon, ChevronDownIcon, ClipboardListIcon, FilePenLineIcon, InfoIcon,
   MessageSquareQuoteIcon, MessagesSquareIcon, ReceiptTextIcon, SearchIcon, ShieldCheckIcon, StethoscopeIcon, UsersIcon, VideoIcon,
   type LucideIcon,
 } from "lucide-react";
@@ -304,25 +304,44 @@ function CriminalTips() {
   );
 }
 
-type KindGroup = { category: string; items: { value: string; label: string }[] };
+type KindGroup = { title: string; items: { value: string; label: string; summary: string }[] };
 
-/** API 的分組裡同一類可能出現在好幾組，只在第一次出現的組顯示；組名開頭的「侵權：」這種前綴省略。 */
-function kindGroups(options: Options | null, query: string): KindGroup[] {
-  const seen = new Set<string>();
-  const q = query.trim();
-  return (options?.mid_groups ?? []).map((g) => ({
-    category: g.category,
-    items: g.mids.map((m) => m.value)
-      .filter((v) => (seen.has(v) ? false : (seen.add(v), true)))
-      .filter((v) => !q || v.includes(q) || (SUMMARY[v] ?? "").includes(q))
-      .map((v) => ({ value: v, label: v.startsWith(`${g.category}：`) ? v.slice(g.category.length + 1) : v })),
-  })).filter((g) => g.items.length > 0);
+/**
+ * 依說明頁的大類分組（knowledge.ts 的 DISPUTE_GROUPS，和後端的案由中類一一對應）。
+ * 後端新增、說明頁還沒寫到的類型，放在最後一組，不會選不到。
+ */
+function kindGroups(options: Options | null): KindGroup[] {
+  const label = (v: string) => (v.includes("：") ? v.split("：")[1] : v);
+  const groups: KindGroup[] = DISPUTE_GROUPS.map((g) => ({
+    title: g.title,
+    items: g.types.map((t) => ({ value: t.id, label: label(t.id), summary: t.summary })),
+  }));
+  const known = new Set(groups.flatMap((g) => g.items.map((i) => i.value)));
+  const extra = (options?.mid_groups ?? []).flatMap((g) => g.mids.map((m) => m.value)).filter((v, i, all) => !known.has(v) && all.indexOf(v) === i);
+  if (extra.length) groups.push({ title: "其他類型", items: extra.map((v) => ({ value: v, label: v, summary: "" })) });
+  return groups;
 }
 
-/** 糾紛類型：可搜尋、可多選；右邊顯示已選類型的說明。 */
+function matches(item: KindGroup["items"][number], q: string) {
+  return !q || item.value.includes(q) || item.summary.includes(q);
+}
+
+/**
+ * 糾紛類型：大類可以收合，展開就能直接點每一個類型；也可以打字搜尋（有結果的大類自動打開）。
+ * 可以多選；右邊顯示已選類型的說明。
+ */
 function DisputeKinds({ options, mids, onChange }: { options: Options | null; mids: string[]; onChange: (mids: string[]) => void }) {
   const [query, setQuery] = useState("");
-  const groups = kindGroups(options, query);
+  const groups = kindGroups(options);
+  // 一開始打開有已選類型的大類；之後由使用者自己開關
+  const [open, setOpen] = useState<Set<string>>(() => new Set(groups.filter((g) => g.items.some((i) => mids.includes(i.value))).map((g) => g.title)));
+  const q = query.trim();
+  const shown = groups.map((g) => ({ ...g, items: g.items.filter((i) => matches(i, q)) })).filter((g) => g.items.length > 0);
+  const setGroup = (title: string, isOpen: boolean) => setOpen((prev) => {
+    const next = new Set(prev);
+    if (isOpen) next.add(title); else next.delete(title);
+    return next;
+  });
   return (
     <section aria-labelledby="kinds-title" className="flex flex-col gap-3">
       <h2 id="kinds-title" className="font-bold">糾紛類型<span className="text-[15px] font-medium text-muted-foreground">　可以選好幾個，不確定可以不選</span></h2>
@@ -333,28 +352,40 @@ function DisputeKinds({ options, mids, onChange }: { options: Options | null; mi
             <Input type="search" aria-label="搜尋糾紛類型" placeholder="打字找，例如：車禍、借錢、租金" value={query}
               onChange={(e) => setQuery(e.target.value)} className="pl-11" />
           </div>
-          <div className="flex max-h-[420px] flex-col gap-3 overflow-y-auto pr-1">
-            {options && groups.length === 0 && <p className="text-[15px] text-muted-foreground">找不到「{query}」。換個說法，或先不選也可以。</p>}
-            {groups.map((g) => (
-              <div key={g.category} className="flex flex-col gap-1.5">
-                <p className="text-[15px] font-bold text-muted-foreground">{g.category}</p>
-                <div className="flex flex-wrap gap-2">
-                  {g.items.map((item) => {
-                    const on = mids.includes(item.value);
-                    return (
-                      <Toggle key={item.value} pressed={on} onPressedChange={() => onChange(toggle(mids, item.value))} aria-label={item.value}
-                        className={cn(
-                          "h-auto min-h-11 gap-1.5 rounded-full border-[1.5px] px-3.5 text-[15px] font-semibold whitespace-normal",
-                          "hover:border-primary hover:bg-card aria-pressed:bg-secondary aria-pressed:text-secondary-foreground aria-pressed:hover:bg-secondary",
-                          on ? "border-primary" : "border-input bg-card",
-                        )}>
-                        {on && <CheckIcon className="size-4" aria-hidden="true" />}{item.label}
-                      </Toggle>
-                    );
-                  })}
-                </div>
-              </div>
-            ))}
+          {shown.length === 0 && <p className="text-[15px] text-muted-foreground">找不到「{query}」。換個說法，或先不選也可以。</p>}
+          <div className="flex flex-col gap-2">
+            {shown.map((g) => {
+              const picked = g.items.filter((i) => mids.includes(i.value)).length;
+              const isOpen = Boolean(q) || open.has(g.title);
+              return (
+                <details key={g.title} open={isOpen}
+                  onToggle={(e) => { if (!q) setGroup(g.title, (e.currentTarget as HTMLDetailsElement).open); }}
+                  className="group/kind rounded-[12px] border bg-card">
+                  <summary className="flex min-h-12 cursor-pointer list-none items-center gap-2 px-4 py-2 [&::-webkit-details-marker]:hidden">
+                    <span className="font-bold">{g.title}</span>
+                    <span className="text-sm text-muted-foreground">{g.items.length} 類</span>
+                    {picked > 0 && <span className="rounded-full bg-secondary px-2 text-sm font-bold text-secondary-foreground">已選 {picked}</span>}
+                    <ChevronDownIcon className="ml-auto size-5 flex-none transition-transform group-open/kind:rotate-180 motion-reduce:transition-none" aria-hidden="true" />
+                  </summary>
+                  <div className="flex flex-wrap gap-2 px-4 pt-1 pb-4">
+                    {g.items.map((item) => {
+                      const on = mids.includes(item.value);
+                      return (
+                        <Toggle key={item.value} pressed={on} onPressedChange={() => onChange(toggle(mids, item.value))}
+                          aria-label={item.value} title={item.summary || undefined}
+                          className={cn(
+                            "h-auto min-h-11 gap-1.5 rounded-full border-[1.5px] px-3.5 text-[15px] font-semibold whitespace-normal",
+                            "hover:border-primary hover:bg-card aria-pressed:bg-secondary aria-pressed:text-secondary-foreground aria-pressed:hover:bg-secondary",
+                            on ? "border-primary" : "border-input bg-card",
+                          )}>
+                          {on && <CheckIcon className="size-4" aria-hidden="true" />}{item.label}
+                        </Toggle>
+                      );
+                    })}
+                  </div>
+                </details>
+              );
+            })}
           </div>
         </div>
         <aside aria-label="已選類型的說明" className="flex min-w-0 flex-[1_1_260px] flex-col gap-2 rounded-[18px] border bg-muted p-5">

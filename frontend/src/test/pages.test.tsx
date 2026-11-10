@@ -91,6 +91,31 @@ describe("描述案情（關卡 1–3）", () => {
     expect(help).toHaveTextContent("民間借貸");
   });
 
+  it("糾紛類型依說明頁的大類收合，46 類都選得到；搜尋時有結果的大類自動打開", async () => {
+    mockApi({ "GET /meta/options": () => OPTIONS });
+    const user = userEvent.setup();
+    renderApp("/start?stage=2", { mids: ["民間借貸"] });
+    const group = (title: string) => screen.getByText(title, { selector: "summary span" }).closest("details")!;
+    // 和說明頁同樣的 6 個大類，加起來 46 類
+    const groups = Array.from(document.querySelectorAll("details.group\\/kind"));
+    expect(groups.map((d) => d.querySelector("summary span")!.textContent)).toEqual(["受傷、損害賠償（侵權）", "契約", "借錢與金融", "勞動", "房屋與土地", "確認與其他"]);
+    expect(groups.flatMap((d) => Array.from(d.querySelectorAll("button"))).length).toBe(46);
+    // 一開始只打開有已選類型的大類，標出已選幾類
+    expect(group("借錢與金融")).toHaveAttribute("open");
+    expect(group("借錢與金融")).toHaveTextContent("已選 1");
+    expect(group("勞動")).not.toHaveAttribute("open");
+    // 自己打開大類，就能直接點裡面的類型
+    await user.click(screen.getByText("勞動", { selector: "summary span" }));
+    expect(group("勞動")).toHaveAttribute("open");
+    await user.click(within(group("勞動")).getByRole("button", { name: "勞動：資遣費" }));
+    expect(group("勞動")).toHaveTextContent("已選 1");
+    // 搜尋：用說明的字也找得到，有結果的大類自動打開
+    await user.type(screen.getByLabelText("搜尋糾紛類型"), "押金");
+    expect(group("契約")).toHaveAttribute("open");
+    expect(within(group("契約")).getByRole("button", { name: "契約：租金" })).toBeInTheDocument();
+    expect(screen.queryByText("勞動", { selector: "summary span" })).not.toBeInTheDocument();
+  });
+
   it("金額告訴使用者讀成多少，看不懂就擋下一章", async () => {
     mockApi({ "GET /meta/options": () => OPTIONS });
     const user = userEvent.setup();
