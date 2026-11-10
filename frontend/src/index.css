@@ -1,0 +1,319 @@
+@import "tailwindcss";
+@import "tw-animate-css";
+@import "shadcn/tailwind.css";
+
+/* 夜間模式跟著系統（theme.ts 會在 <html> 加上 .dark） */
+@custom-variant dark (&:is(.dark *));
+
+@theme inline {
+  --font-sans: "Noto Sans TC", system-ui, sans-serif;
+  --font-heading: var(--font-sans);
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  /* 平台自己的語意色 */
+  --color-surface: var(--surface);
+  --color-warn: var(--warn);
+  --color-warn-foreground: var(--warn-foreground);
+  --color-warn-border: var(--warn-border);
+  --color-warn-title: var(--warn-title);
+  --color-info: var(--info);
+  --color-info-foreground: var(--info-foreground);
+  --color-info-border: var(--info-border);
+  --color-success: var(--success);
+  --color-success-soft: var(--success-soft);
+  --color-caution: var(--caution);
+  --color-lose-soft: var(--lose-soft);
+  --color-lose-foreground: var(--lose-foreground);
+  --color-mask: var(--mask);
+  --color-track: var(--track);
+  --color-warm: var(--warm);
+  --color-soft-bar: var(--soft-bar);
+  --color-outcome-win: var(--outcome-win);
+  --color-outcome-partial: var(--outcome-partial);
+  --color-outcome-lose: var(--outcome-lose);
+  --color-jump: var(--jump);
+  --color-jump-foreground: var(--jump-foreground);
+  --radius-sm: calc(var(--radius) * 0.6);
+  --radius-md: calc(var(--radius) * 0.8);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) * 1.4);
+  --radius-2xl: calc(var(--radius) * 1.8);
+  --radius-3xl: calc(var(--radius) * 2.2);
+  --radius-4xl: calc(var(--radius) * 2.6);
+}
+
+:root {
+  --radius: 0.625rem;
+  --background: #f5f7fa;
+  --foreground: #1b2533;
+  --surface: #ffffff;
+  --card: #ffffff;
+  --card-foreground: #1b2533;
+  --popover: #ffffff;
+  --popover-foreground: #1b2533;
+  --primary: #1d5fb3;
+  --primary-foreground: #ffffff;
+  --secondary: #eef2f7;
+  --secondary-foreground: #1b2533;
+  --muted: #eef2f7;
+  --muted-foreground: #4a5568;
+  --accent: #e8f0fb;
+  --accent-foreground: #12407a;
+  --destructive: #b42318;
+  --border: #dce2ea;
+  --input: #c5cfdb;
+  --ring: #8fb4e6;
+  --warn: #fff4e5;
+  --warn-foreground: #5c2e0c;
+  --warn-border: #f0c99a;
+  --warn-title: #7a3a0b;
+  --info: #e8f0fb;
+  --info-foreground: #1b3a63;
+  --info-border: #b7ccea;
+  --success: #1e6b3a;
+  --success-soft: #e3f1e8;
+  --caution: #a3460f;
+  --lose-soft: #fcebe3;
+  --lose-foreground: #8a3412;
+  --mask: #ffe7c7;
+  --track: #e3e8ef;
+  --warm: #c9772f;
+  --soft-bar: #5b87c5;
+  --outcome-win: #1baf7a;
+  --outcome-partial: #2a78d6;
+  --outcome-lose: #eb6834;
+  --jump: #ffe45c;
+  --jump-foreground: #3d3200;
+  /* 判決導讀的段落底色 */
+  --p-claim: #eef2f7;
+  --p-claim-chip: #dce2ea;
+  --p-claim-ink: #1b2533;
+  --p-defense: #f3eff8;
+  --p-defense-chip: #e2d9ef;
+  --p-defense-ink: #3f2a63;
+  --p-issue: #fff1d6;
+  --p-issue-chip: #f6d79a;
+  --p-issue-ink: #5c3a00;
+  --p-evidence: #e3f0ff;
+  --p-evidence-chip: #bfd8f7;
+  --p-evidence-ink: #12407a;
+  --p-court: #e6f4ea;
+  --p-court-chip: #bfe3cb;
+  --p-court-ink: #1e5a33;
+}
+
+/* 放在 screen 裡：列印、存成 PDF 一律是淺色 */
+@media screen {
+  .dark {
+    color-scheme: dark;
+    --background: #0e1116;
+    --foreground: #e8ecf1;
+    --surface: #171c23;
+    --card: #171c23;
+    --card-foreground: #e8ecf1;
+    --popover: #1c222b;
+    --popover-foreground: #e8ecf1;
+    --primary: #3a7bd2;
+    --primary-foreground: #ffffff;
+    --secondary: #252c36;
+    --secondary-foreground: #e8ecf1;
+    --muted: #252c36;
+    --muted-foreground: #aab4c1;
+    --accent: #1b2a3e;
+    --accent-foreground: #a9cbf7;
+    --destructive: #f0857a;
+    --border: #2c3440;
+    --input: #434e5c;
+    --ring: #3a7bd2;
+    --warn: #33230f;
+    --warn-foreground: #f3d6b4;
+    --warn-border: #6b4a20;
+    --warn-title: #f7c98e;
+    --info: #1b2a3e;
+    --info-foreground: #cfe0f7;
+    --info-border: #2f4a6e;
+    --success: #84d6a0;
+    --success-soft: #17352a;
+    --caution: #f0a67e;
+    --lose-soft: #3d2017;
+    --lose-foreground: #f4b296;
+    --mask: #5c4116;
+    --track: #2c3440;
+    --warm: #e0954f;
+    --soft-bar: #5b87c5;
+    --outcome-win: #199e70;
+    --outcome-partial: #3987e5;
+    --outcome-lose: #d95926;
+    --jump: #e0c22e;
+    --jump-foreground: #1f1a00;
+    --p-claim: #232a33;
+    --p-claim-chip: #36404c;
+    --p-claim-ink: #e8ecf1;
+    --p-defense: #2a2436;
+    --p-defense-chip: #40355a;
+    --p-defense-ink: #dccdf5;
+    --p-issue: #33280f;
+    --p-issue-chip: #5a4615;
+    --p-issue-ink: #f6dfa8;
+    --p-evidence: #182a40;
+    --p-evidence-chip: #264468;
+    --p-evidence-ink: #a9cbf7;
+    --p-court: #182e22;
+    --p-court-chip: #285038;
+    --p-court-ink: #bce8cb;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+  html {
+    @apply font-sans;
+    line-height: 1.6;
+  }
+  body {
+    @apply bg-background text-foreground antialiased;
+    font-size: 16px;
+  }
+  a:not([data-slot]) {
+    @apply text-primary underline underline-offset-3 hover:text-accent-foreground;
+  }
+  button:not(:disabled),
+  [role="button"]:not(:disabled) {
+    cursor: pointer;
+  }
+}
+
+/* 滾動條：沒有底色的細捲軸，不用瀏覽器預設樣式 */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: color-mix(in oklab, var(--foreground) 22%, transparent) transparent;
+}
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+  background: transparent;
+}
+::-webkit-scrollbar-track,
+::-webkit-scrollbar-corner {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  border: 2px solid transparent;
+  border-radius: 999px;
+  background: color-mix(in oklab, var(--foreground) 22%, transparent) padding-box;
+}
+::-webkit-scrollbar-thumb:hover {
+  background-color: color-mix(in oklab, var(--foreground) 38%, transparent);
+}
+
+@layer components {
+  /* 遮名標記 */
+  mark.masked {
+    @apply rounded bg-mask px-1 text-warn-title;
+  }
+  /* 從說明頁的 i 跳過來時標黃 */
+  .jump-target {
+    @apply -ml-1.5 w-fit rounded bg-jump px-1.5 text-jump-foreground;
+  }
+  /* 判決導讀：段落的功能 */
+  .para[data-on="true"][data-fn="claim"] { background: var(--p-claim); --chip-bg: var(--p-claim-chip); --chip-ink: var(--p-claim-ink); }
+  .para[data-on="true"][data-fn="defense"] { background: var(--p-defense); --chip-bg: var(--p-defense-chip); --chip-ink: var(--p-defense-ink); }
+  .para[data-on="true"][data-fn="issue"] { background: var(--p-issue); --chip-bg: var(--p-issue-chip); --chip-ink: var(--p-issue-ink); }
+  .para[data-on="true"][data-fn="evidence"] { background: var(--p-evidence); --chip-bg: var(--p-evidence-chip); --chip-ink: var(--p-evidence-ink); }
+  .para[data-on="true"][data-fn="court"] { background: var(--p-court); --chip-bg: var(--p-court-chip); --chip-ink: var(--p-court-ink); }
+}
+
+/* ── 列印／下載 PDF ── */
+.print-only {
+  display: none;
+}
+@media screen {
+  .screen-hidden {
+    display: none !important;
+  }
+}
+@media print {
+  @page {
+    margin: 16mm;
+  }
+  html,
+  body {
+    background: #fff;
+  }
+  .no-print,
+  [data-slot="site-header"],
+  [data-slot="site-footer"],
+  [data-slot="stepper"] {
+    display: none !important;
+  }
+  .print-only {
+    display: block;
+  }
+  [data-slot="card"] {
+    break-inside: avoid;
+    box-shadow: none;
+    --tw-ring-color: #bbb;
+  }
+  [data-slot="card"]:has(table),
+  [data-slot="card"]:has([data-slot="collapsible"]) {
+    break-inside: auto;
+  }
+  /* 收起來的明細在列印時也要印出來 */
+  [data-slot="collapsible-content"][hidden] {
+    display: block !important;
+  }
+  [data-print-grid="2"] {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  }
+  a {
+    color: inherit !important;
+    text-decoration: none !important;
+  }
+  a[href^="http"]::after {
+    content: "（" attr(href) "）";
+    font-size: 12px;
+    overflow-wrap: anywhere;
+  }
+  * {
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+  table {
+    min-width: 0 !important;
+  }
+  tr {
+    break-inside: avoid;
+  }
+  [data-slot="table-container"] {
+    overflow: visible !important;
+  }
+}
+
+/* 手機：相似判決表格改成一列一張卡片（只套用在螢幕，不影響列印） */
+@media screen and (max-width: 760px) {
+  table.cases { display: block; }
+  table.cases thead { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
+  table.cases tbody, table.cases tr, table.cases td { display: block; }
+  table.cases tr { padding: 12px 0; }
+  table.cases td { padding: 3px 0; white-space: normal; }
+  table.cases td[data-label] { display: flex; justify-content: space-between; gap: 12px; }
+  table.cases td[data-label]::before { content: attr(data-label); color: var(--muted-foreground); font-size: 14px; }
+}

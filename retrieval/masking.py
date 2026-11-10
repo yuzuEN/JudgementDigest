@@ -39,7 +39,7 @@ class Span(NamedTuple):
 
 def _name_pattern(names: Iterable[str]) -> Optional["re.Pattern"]:
     # 長的名字先比對：「王小明」不會先被「王小」吃掉
-    names = sorted({n.strip() for n in names if n and len(n.strip()) >= 2}, key=len, reverse=True)
+    names = sorted({n.strip() for n in names if n and n.strip()}, key=len, reverse=True)
     return re.compile("|".join(map(re.escape, names))) if names else None
 
 

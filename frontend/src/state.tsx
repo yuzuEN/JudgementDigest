@@ -6,12 +6,13 @@ import { parseAmount } from "./format";
 export interface Intake {
   caseType: CaseType;
   text: string;
-  mid: string;
+  mids: string[];        // 糾紛類型，可以多選
   court: string;
   lawyer: "yes" | "no" | "";
   defendantType: DefendantType | "";
   claimedAmount: string;
   evidence: string[];
+  criminalEvidence: string[];   // 刑事案件手上的證據（標籤文字）
   followupAnswers: Record<string, { question: string; answer: string }>;
   names: string[];
   maskedText: string;
@@ -23,12 +24,13 @@ export interface Intake {
 export const EMPTY_INTAKE: Intake = {
   caseType: "civil",
   text: "",
-  mid: "",
+  mids: [],
   court: "",
   lawyer: "",
   defendantType: "",
   claimedAmount: "",
   evidence: [],
+  criminalEvidence: [],
   followupAnswers: {},
   names: [],
   maskedText: "",
@@ -37,12 +39,22 @@ export const EMPTY_INTAKE: Intake = {
   rewriteFor: "",
 };
 
-/** 描述加上追問的回答，作為遮名與送出的全文。 */
+/**
+ * 送給 API 的案由中類。API 只收一個：只選一類就送那一類；
+ * 沒選或選了好幾類就不送，讓系統從描述判斷。
+ */
+export function primaryMid(intake: Intake): string | null {
+  return intake.mids.length === 1 ? intake.mids[0] : null;
+}
+
+/** 描述加上追問的回答（刑事再加上手上的證據），作為遮名與送出的全文。 */
 export function fullText(intake: Intake): string {
   const extra = Object.values(intake.followupAnswers)
     .filter((a) => a.answer.trim())
     .map((a) => `追問：${a.question}\n回答：${a.answer.trim()}`);   // 後端靠這兩個開頭分辨問題和回答
-  return [intake.text.trim(), ...extra].filter(Boolean).join("\n");
+  const evidence = intake.caseType === "criminal" && intake.criminalEvidence.length
+    ? [`手上的證據：${intake.criminalEvidence.join("、")}`] : [];
+  return [intake.text.trim(), ...extra, ...evidence].filter(Boolean).join("\n");
 }
 
 /** 送給民事 API 的內容：一律用遮名後的文字。 */
@@ -50,7 +62,7 @@ export function civilInput(intake: Intake): CivilInput {
   return {
     text: intake.maskedText || fullText(intake),
     search_text: intake.searchText || null,
-    mid: intake.mid || null,
+    mid: primaryMid(intake),
     court: intake.court || null,
     plaintiff_has_lawyer: intake.lawyer === "" ? null : intake.lawyer === "yes",
     defendant_type: intake.defendantType || null,

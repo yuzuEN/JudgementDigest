@@ -12,12 +12,17 @@ describe("fullText", () => {
     };
     expect(fullText(intake)).toBe("被車撞\n追問：當時是什麼燈？\n回答：綠燈");
   });
+  it("刑事把勾選的證據加在最後，民事不加", () => {
+    const base = { ...EMPTY_INTAKE, text: "被打", criminalEvidence: ["驗傷單、診斷證明", "證人"] };
+    expect(fullText({ ...base, caseType: "criminal" })).toBe("被打\n手上的證據：驗傷單、診斷證明、證人");
+    expect(fullText({ ...base, caseType: "civil" })).toBe("被打");
+  });
 });
 
 describe("civilInput", () => {
   it("送遮名後的文字，問卷轉成 API 的欄位", () => {
     const input = civilInput({
-      ...EMPTY_INTAKE, text: "我是王小明", maskedText: "我是【姓名】", mid: "民間借貸",
+      ...EMPTY_INTAKE, text: "我是王小明", maskedText: "我是【姓名】", mids: ["民間借貸"],
       lawyer: "no", defendantType: "company", claimedAmount: "50萬", evidence: ["transfer"],
     });
     expect(input).toEqual({
@@ -28,6 +33,7 @@ describe("civilInput", () => {
   it("沒填的是 null", () => {
     const input = civilInput({ ...EMPTY_INTAKE, text: "x", maskedText: "x" });
     expect(input.mid).toBeNull();
+    expect(civilInput({ ...EMPTY_INTAKE, text: "x", mids: ["民間借貸", "票據"] }).mid).toBeNull();   // 選好幾類就讓系統判斷
     expect(input.plaintiff_has_lawyer).toBeNull();
     expect(input.defendant_type).toBeNull();
     expect(input.claimed_amount).toBeNull();

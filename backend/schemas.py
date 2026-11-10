@@ -10,7 +10,7 @@ DefendantType = Literal["person", "company", "government"]
 class Health(BaseModel):
     status: str
     civil: Literal["model", "mock"]
-    criminal: Literal["mock"]
+    criminal: Literal["model", "mock"]          # 罪名、法條、刑度、相似判決
     followup: Literal["rules", "llm"]
     model: Optional[str] = None
 
@@ -72,10 +72,12 @@ class FollowupResponse(BaseModel):
     questions: List[Question]
     source: Literal["rules", "llm"]
     llm_available: bool = False
+    llm_vendor: Optional[str] = Field(default=None, description="LLM 廠商名稱，前端的資料使用說明會寫出內容傳給誰")
     fallback: Optional[Literal["not_dispute", "error", "limited"]] = None   # 要求用 LLM 卻改用固定題庫的原因
 
 
 class RewriteRequest(BaseModel):
+    case_type: CaseType = "civil"
     mid: Optional[str] = None
     text: str = Field(min_length=1, max_length=20000, description="遮名後的案情描述")
     allow_llm: bool = Field(default=False, description="使用者看過說明並按下按鈕才是 true")
@@ -154,6 +156,7 @@ class SimilarCase(BaseModel):
     awarded_amount: Optional[int] = None
     sentence: Optional[str] = None
     default_judgment: bool = False      # 一造辯論：被告沒有到庭
+    url: Optional[str] = None           # 刑事：司法院裁判書系統的原文網址（刑事判決沒有導讀）
 
 
 class EvidenceRow(BaseModel):
@@ -214,14 +217,40 @@ class SentenceBucket(BaseModel):
 class Charge(BaseModel):
     name: str
     law: str
+    law_note: Optional[str] = None                        # 修法換條號時註明舊條號
     probability: float
-    sentence: List[SentenceBucket]
+    sentence: List[SentenceBucket]                        # 罪名模型推估的刑度分布（6 區間，含拘役、罰金）
+    similar_sentence: Optional[List[SentenceBucket]] = None   # 相似判決中同罪名案件的宣告刑分布
+    n_similar: Optional[int] = None                       # similar_sentence 用了幾件判決
+
+
+class CriminalModelInfo(BaseModel):
+    name: str
+    description: str
+    n_test: Optional[int] = None
+    charge_top1: Optional[float] = None                   # 第一個罪名猜中的比例
+    bucket_accuracy: Optional[float] = None               # 刑度區間猜中的比例
+    bucket_within_one: Optional[float] = None             # 刑度區間差一格以內的比例
+
+
+class SentenceModel(BaseModel):
+    name: str
+    description: str
+
+
+class SentenceDistribution(BaseModel):
+    """ELECTRA 刑期模型（目前停用）的輸出：有期徒刑落在各區間的機率（只估有期徒刑，不含拘役、罰金）。"""
+    buckets: List[SentenceBucket]
+    mock: bool
+    model: SentenceModel
 
 
 class CriminalReport(BaseModel):
+    sentence: Optional[SentenceDistribution] = None      # ELECTRA 刑期，目前停用、不回傳
     charges: List[Charge]
     similar: List[SimilarCase]
-    mock: bool
+    model: Optional[CriminalModelInfo] = None
+    mock: bool = Field(description="罪名、刑度與相似判決是否為示例資料")
 
 
 class GuideParagraph(BaseModel):

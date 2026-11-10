@@ -15,6 +15,7 @@
     python -m annotation.annotate --run-no 1                # 第 1 次全部
     python -m annotation.annotate --run-no 2
     python -m annotation.annotate --run-no 3
+    python -m annotation.annotate --reparse                 # 解析規則更新後，重新解析舊的失敗列（不呼叫 API）
 
 需要：pip install -r annotation/requirements.txt，以及環境變數 ANTHROPIC_API_KEY。
 """
@@ -23,6 +24,7 @@ import json
 import sqlite3
 import sys
 import time
+from contextlib import closing
 from datetime import datetime
 from pathlib import Path
 
@@ -37,21 +39,40 @@ MODEL = "claude-sonnet-5-5"
 PRICE = {"input": 2.0, "cache_write": 2.5, "cache_read": 0.2, "output": 10.0}
 
 
+def last_labels_json(raw: str):
+    """
+    回應中最後一個含 "labels" 的 JSON 物件；找不到回傳 None。
+
+    v0.3 試標時約 4% 的回應不是純 JSON，兩種情況：
+      - 模型先寫一段推理說明，最後才附上 JSON
+      - 模型給了答案後自我修正（例如發現引文出自後段），再給第二個 JSON
+    兩種都應取最後一個：前者是唯一的答案，後者是修正後的答案。
+    markdown 程式碼框（```json）也一併處理，因為只看大括號。
+    """
+    decoder = json.JSONDecoder()
+    found = None
+    i = (raw or "").find("{")
+    while i != -1:
+        try:
+            obj, end = decoder.raw_decode(raw, i)
+        except ValueError:
+            i = raw.find("{", i + 1)
+            continue
+        if isinstance(obj, dict) and "labels" in obj:
+            found = obj
+        i = raw.find("{", end)
+    return found
+
+
 def parse_response(raw: str, para: str, valid_labels=LABELS_CIVIL, valid_polarity=POLARITY_CIVIL) -> list:
     """
     模型回應 → 要寫入的標籤列 [(label, polarity, quote, confidence, quote_valid), ...]。
-    JSON 解析失敗回傳 [("PARSE_ERROR", None, None, None, 0)]。
+    找不到可用的 JSON 回傳 [("PARSE_ERROR", None, None, None, 0)]。
     """
-    cleaned = (raw or "").strip()
-    if cleaned.startswith("```"):          # 模型偶爾會包 markdown 框
-        cleaned = cleaned.split("```")[1]
-        if cleaned.startswith("json"):
-            cleaned = cleaned[4:]
-        cleaned = cleaned.strip()
-    try:
-        labels = json.loads(cleaned).get("labels", [])
-    except (ValueError, AttributeError):
+    obj = last_labels_json(raw)
+    if obj is None or not isinstance(obj.get("labels"), list):
         return [("PARSE_ERROR", None, None, None, 0)]
+    labels = [item for item in obj["labels"] if isinstance(item, dict)]
 
     rows = []
     for item in labels:
@@ -67,6 +88,35 @@ def parse_response(raw: str, para: str, valid_labels=LABELS_CIVIL, valid_polarit
     return rows or [("PARSE_ERROR", None, None, None, 0)]
 
 
+def reparse(db: Path) -> tuple:
+    """
+    用資料庫裡已存的 raw_response 重新解析 PARSE_ERROR 的列，不呼叫 API、不花錢。
+    救回的列會取代原本的 PARSE_ERROR 列（同一段、同一個 run、同一個 prompt 版本）。
+    回傳 (原本失敗筆數, 救回筆數)。
+    """
+    with closing(sqlite3.connect(db)) as con:
+        failed = con.execute(
+            "SELECT DISTINCT a.sample_id, a.annotator, a.run_no, a.manual_version, a.prompt_version, "
+            "a.raw_response, a.created_at, p.para_text FROM annotations a JOIN paragraphs p USING (sample_id) "
+            "WHERE a.label = 'PARSE_ERROR'").fetchall()
+        fixed = 0
+        for sid, annotator, run, manual, prompt, raw, created, para in failed:
+            rows = parse_response(raw, para)
+            if rows[0][0] == "PARSE_ERROR":
+                continue
+            con.execute("DELETE FROM annotations WHERE sample_id = ? AND annotator = ? AND run_no = ? "
+                        "AND prompt_version = ? AND label = 'PARSE_ERROR'", (sid, annotator, run, prompt))
+            con.executemany(
+                "INSERT INTO annotations (sample_id, annotator, run_no, label, polarity, quote, confidence, "
+                "quote_valid, manual_version, prompt_version, raw_response, created_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)",
+                [(sid, annotator, run, lab, pol, q, conf, v, manual, prompt, raw, created)
+                 for lab, pol, q, conf, v in rows])
+            fixed += 1
+        con.commit()
+    print(f"原本解析失敗 {len(failed)} 筆，重新解析後救回 {fixed} 筆（未呼叫 API）")
+    return len(failed), fixed
+
+
 def main():
     ap = argparse.ArgumentParser(description="以 Claude API 標註段落")
     ap.add_argument("--db", type=Path, default=config.ARTIFACTS_DIR / "annotation_civil_v1" / "annotation.sqlite")
@@ -75,7 +125,13 @@ def main():
     ap.add_argument("--dry-run", action="store_true", help="只印出第一段的 prompt，不呼叫 API")
     ap.add_argument("--budget", type=float, default=2.0, help="本次估算花費超過此金額（美元）就停止")
     ap.add_argument("--max-tokens", type=int, default=4000, help="thinking 區塊也算輸出 token，要留足夠空間")
+    ap.add_argument("--reparse", action="store_true",
+                    help="不呼叫 API：用已存的原始回應重新解析之前的 PARSE_ERROR（解析規則更新後用）")
     args = ap.parse_args()
+
+    if args.reparse:
+        reparse(args.db)
+        return
 
     con = sqlite3.connect(args.db)
     done = {r[0] for r in con.execute(

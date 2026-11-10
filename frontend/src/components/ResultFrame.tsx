@@ -1,8 +1,12 @@
+import { ArrowLeftIcon, DownloadIcon, PenLineIcon } from "lucide-react";
 import { useEffect, type ReactNode } from "react";
 import { Link } from "react-router-dom";
+import { cn } from "@/lib/utils";
+import { LinkButton } from "./LinkButton";
+import { Button } from "@/components/ui/button";
 import { useIntake } from "../state";
-import { DownloadIcon, MockBadge } from "./Common";
-import { Layout } from "./Layout";
+import { MockBadge } from "./Common";
+import { BRAND, Layout, PAGE } from "./Layout";
 
 /** 列印或存成 PDF 時展開所有摺疊內容，印完恢復。按瀏覽器的列印也有效。 */
 function useOpenDetailsForPrint() {
@@ -26,6 +30,17 @@ function useOpenDetailsForPrint() {
   }, []);
 }
 
+function ResultTab({ to, active, disabled, title, children }: { to: string; active: boolean; disabled: boolean; title: string; children: ReactNode }) {
+  const base = "inline-flex h-9 items-center rounded-md px-4 text-sm font-medium no-underline transition-colors";
+  if (disabled) return <span className={cn(base, "cursor-not-allowed text-muted-foreground/60")} aria-disabled="true" title={title}>{children}</span>;
+  return (
+    <Link to={to} aria-current={active ? "page" : undefined}
+      className={cn(base, active ? "bg-card text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground")}>
+      {children}
+    </Link>
+  );
+}
+
 /** 民事、刑事結果頁共用的外框：分頁、標題、下載 PDF，以及只在列印時出現的報告抬頭。 */
 export function ResultFrame({ active, title, lead, mock, maskedText, searchText, children }: {
   active: "civil" | "criminal";
@@ -40,43 +55,37 @@ export function ResultFrame({ active, title, lead, mock, maskedText, searchText,
   const { intake } = useIntake();
   return (
     <Layout step={3}>
-      <main className="page stack">
+      <main className={cn(PAGE, "flex flex-col gap-6 py-8 pb-16")}>
         <div className="print-only">
-          <h1 style={{ margin: "0 0 4px", fontSize: 22 }}>類案判決參考報告（{active === "civil" ? "民事" : "刑事"}）</h1>
-          <p className="hint">產生時間：{new Date().toLocaleString("zh-TW")}・刑事及民事類案判決參考平台・結果僅供參考，不是法律意見</p>
+          <h1 className="mb-1 text-xl font-bold">類案判決參考報告（{active === "civil" ? "民事" : "刑事"}）</h1>
+          <p className="text-sm text-muted-foreground">產生時間：{new Date().toLocaleString("zh-TW")}／{BRAND} 刑事及民事類案判決參考平台／結果僅供參考，不是法律意見</p>
           {mock && <p><strong>本報告是示例資料：數字與判決都不是真的，請勿作為判斷依據。</strong></p>}
-          <h2 style={{ fontSize: 16 }}>案情描述（已遮名）</h2>
-          <p style={{ whiteSpace: "pre-wrap", fontSize: 14 }}>{maskedText}</p>
+          <h2 className="mt-3 text-base font-bold">案情描述（已遮名）</h2>
+          <p className="text-sm whitespace-pre-wrap">{maskedText}</p>
           {searchText && <>
-            <h2 style={{ fontSize: 16 }}>用來搜尋相似判決的文字（已確認）</h2>
-            <p style={{ whiteSpace: "pre-wrap", fontSize: 14 }}>{searchText}</p>
+            <h2 className="mt-3 text-base font-bold">用來搜尋相似判決的文字（已確認）</h2>
+            <p className="text-sm whitespace-pre-wrap">{searchText}</p>
           </>}
         </div>
 
-        <div style={{ display: "flex", flexWrap: "wrap", alignItems: "flex-end", justifyContent: "space-between", gap: 12 }}>
-          <div>
-            <nav className="tabs" aria-label="結果類型">
-              {intake.caseType === "criminal"
-                ? <span className="tab" aria-disabled="true" title="這次選的是刑事">民事</span>
-                : <Link to="/result/civil" className="tab" aria-current={active === "civil" ? "page" : undefined}>民事</Link>}
-              {intake.caseType === "civil"
-                ? <span className="tab" aria-disabled="true" title="這次選的是民事">刑事</span>
-                : <Link to="/result/criminal" className="tab" aria-current={active === "criminal" ? "page" : undefined}>刑事</Link>}
+        <div className="flex flex-wrap items-end justify-between gap-4">
+          <div className="flex flex-col gap-3">
+            <nav aria-label="結果類型" className="no-print inline-flex w-fit gap-1 rounded-lg bg-muted p-1">
+              <ResultTab to="/result/civil" active={active === "civil"} disabled={intake.caseType === "criminal"} title="這次選的是刑事">民事</ResultTab>
+              <ResultTab to="/result/criminal" active={active === "criminal"} disabled={intake.caseType === "civil"} title="這次選的是民事">刑事</ResultTab>
             </nav>
-            <h1 className="page-title" style={{ margin: 0 }}>{title}</h1>
-            <p className="lead" style={{ marginTop: 4 }}>{lead}</p>
+            <h1 className="text-3xl font-bold tracking-tight">{title}</h1>
+            <p className="text-muted-foreground">{lead}</p>
           </div>
-          <div className="actions no-print">
+          <div className="no-print flex flex-wrap items-center gap-3">
             <MockBadge show={mock} />
-            <button type="button" className="btn secondary small" onClick={() => window.print()}>
-              <DownloadIcon />下載 PDF
-            </button>
+            <Button variant="outline" onClick={() => window.print()}><DownloadIcon data-icon="inline-start" />下載 PDF</Button>
           </div>
         </div>
         {children}
-        <div className="actions no-print">
-          <Link to="/confirm" className="btn secondary small">回上一步</Link>
-          <Link to="/start" className="btn secondary small">修改描述</Link>
+        <div className="no-print flex flex-wrap gap-3">
+          <LinkButton variant="outline" to="/confirm"><ArrowLeftIcon data-icon="inline-start" />回上一步</LinkButton>
+          <LinkButton variant="outline" to="/start"><PenLineIcon data-icon="inline-start" />修改描述</LinkButton>
         </div>
       </main>
     </Layout>

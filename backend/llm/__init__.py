@@ -7,6 +7,7 @@ from typing import Optional
 from backend.llm.base import LLMClient, LLMError
 from backend.llm.fake import FakeClient
 from backend.llm.gemini import GeminiClient
+from backend.llm.openai_client import OpenAIClient
 
 __all__ = ["LLMClient", "LLMError", "create_client"]
 
@@ -20,4 +21,8 @@ def create_client(provider: str, model: str = "", api_key: str = "") -> Optional
         if not api_key:
             raise RuntimeError("JD_LLM_PROVIDER=gemini 但沒有設定 GEMINI_API_KEY")
         return GeminiClient(api_key, model)
+    if provider == "openai":
+        if not api_key:
+            raise RuntimeError("JD_LLM_PROVIDER=openai 但沒有設定 OPENAI_API_KEY")
+        return OpenAIClient(api_key, model)
     raise RuntimeError(f"不認得的 JD_LLM_PROVIDER：{provider}")

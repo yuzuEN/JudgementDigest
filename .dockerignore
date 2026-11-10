@@ -2,6 +2,7 @@
 *
 !config.py
 !civil/
+!criminal/
 !retrieval/
 !backend/
 !frontend/

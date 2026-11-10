@@ -10,6 +10,7 @@ class LLMError(Exception):
 
 class LLMClient(Protocol):
     name: str
+    vendor: str        # 顯示給使用者看的廠商名稱，例如「Google Gemini」；資料使用說明會寫出內容傳給誰
 
     def generate_json(self, system: str, user: str, schema: Dict) -> Dict:
         """回傳符合 schema 的 dict；失敗就丟 LLMError。"""
