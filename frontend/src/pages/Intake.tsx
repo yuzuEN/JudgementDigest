@@ -33,7 +33,7 @@ const CASE_TYPES: { value: CaseType; title: string; hint: string }[] = [
   { value: "unsure", title: "不確定", hint: "兩邊都幫我看，結果會有民事、刑事兩個分頁" },
 ];
 
-const TYPE_LABEL: Record<CaseType, string> = { civil: "民事", criminal: "刑事", unsure: "不確定" };
+const TYPE_LABEL: Record<CaseType | "", string> = { "": "還沒選", civil: "民事", criminal: "刑事", unsure: "不確定" };
 
 /** 選了類型之後，告訴使用者會得到什麼。 */
 const YOU_GET: Record<CaseType, string[]> = {
@@ -100,6 +100,7 @@ function readStage(raw: string | null): 1 | 2 | 3 {
 
 /** 這一關為什麼還不能往下；可以就回傳 null。 */
 function blocker(stage: number, intake: IntakeState): string | null {
+  if (stage === 1 && !intake.caseType) return "請先選一種案件類型。";
   if (stage === 2 && storyLength(intake.text) < MIN_STORY) return `案情至少要 ${MIN_STORY} 字。`;
   if (stage === 3 && amountState(intake.claimedAmount) === "bad") return "金額格式不對，請修改。";
   return null;
@@ -127,7 +128,8 @@ export default function Intake() {
     heading.current?.focus();
   }, [stage]);
 
-  // 直接開第 3 關、但案情還不夠時，回到第 2 關
+  // 還沒選類型就直接開第 2、3 關：回第 1 關；直接開第 3 關、但案情還不夠時，回到第 2 關
+  if (stage > 1 && !intake.caseType) return <Navigate to="/start?stage=1" replace />;
   if (stage === 3 && storyLength(intake.text) < MIN_STORY) return <Navigate to="/start?stage=2" replace />;
 
   const go = (n: number) => setParams({ stage: String(n) });
@@ -144,12 +146,14 @@ export default function Intake() {
               <StageCard>
                 <h1 {...titleProps}>第 1 關　這是哪一類的事情？</h1>
                 <RadioCards label="案件類型" value={intake.caseType} options={CASE_TYPES} onChange={(caseType) => update({ caseType })} />
-                <Note>
-                  <p className="font-bold">選{TYPE_LABEL[intake.caseType]}，你會得到：</p>
-                  <ul className="m-0 list-disc pl-5 text-[15px]">
-                    {YOU_GET[intake.caseType].map((g) => <li key={g}>{g}</li>)}
-                  </ul>
-                </Note>
+                {intake.caseType && (
+                  <Note>
+                    <p className="font-bold">選{TYPE_LABEL[intake.caseType]}，你會得到：</p>
+                    <ul className="m-0 list-disc pl-5 text-[15px]">
+                      {YOU_GET[intake.caseType].map((g) => <li key={g}>{g}</li>)}
+                    </ul>
+                  </Note>
+                )}
               </StageCard>
             )}
 

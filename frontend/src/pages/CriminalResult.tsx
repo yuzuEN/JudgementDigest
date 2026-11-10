@@ -65,7 +65,7 @@ export default function CriminalResult() {
   const text = intake.searchText || intake.maskedText;
 
   const load = useCallback(() => {
-    if (intake.caseType === "civil") return;
+    if (!intake.caseType || intake.caseType === "civil") return;
     setError("");
     setReport(null);
     api.criminalReport(text).then(setReport).catch((e: Error) => setError(e.message));
@@ -73,6 +73,7 @@ export default function CriminalResult() {
   }, []);
   useEffect(load, [load]);
 
+  if (!intake.caseType) return <Navigate to="/start?stage=1" replace />;
   if (intake.caseType === "civil") return <Navigate to="/result/civil" replace />;
   if (!intake.maskedText) return <Navigate to={intake.text ? "/confirm" : "/start"} replace />;
 

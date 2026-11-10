@@ -43,6 +43,7 @@ describe("civilInput", () => {
 
 describe("重新整理後還原（sessionStorage）", () => {
   it("讀回這個分頁存的內容，缺的欄位用預設值", () => {
+    expect(EMPTY_INTAKE.caseType).toBe("");   // 案件類型一開始沒有預設
     window.sessionStorage.setItem(STORAGE_KEY, JSON.stringify({ text: "被車撞", caseType: "criminal" }));
     expect(loadIntake()).toEqual({ ...EMPTY_INTAKE, text: "被車撞", caseType: "criminal" });
   });

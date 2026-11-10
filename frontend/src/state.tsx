@@ -7,7 +7,7 @@ import { parseAmount } from "./format";
 export const STORAGE_KEY = "casey-intake-v1";
 
 export interface Intake {
-  caseType: CaseType;
+  caseType: CaseType | "";   // 空字串＝還沒選（第 1 關必選）
   text: string;
   mids: string[];        // 糾紛類型，可以多選
   court: string;
@@ -28,7 +28,7 @@ export interface Intake {
 }
 
 export const EMPTY_INTAKE: Intake = {
-  caseType: "civil",
+  caseType: "",
   text: "",
   mids: [],
   court: "",

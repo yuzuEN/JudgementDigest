@@ -26,10 +26,13 @@ export function mockApi(handlers: Record<string, Handler | { status: number }>) 
   return { calls, spy };
 }
 
+/** 大部分測試從選好類型之後開始，所以預設民事；要測「還沒選」就傳 caseType: ""。 */
+const START: Intake = { ...EMPTY_INTAKE, caseType: "civil" };
+
 export function renderApp(route: string, intake: Partial<Intake> = {}) {
   return render(
     <MemoryRouter initialEntries={[route]}>
-      <IntakeProvider initial={{ ...EMPTY_INTAKE, ...intake }}>
+      <IntakeProvider initial={{ ...START, ...intake }}>
         <App />
       </IntakeProvider>
     </MemoryRouter>,
@@ -39,7 +42,7 @@ export function renderApp(route: string, intake: Partial<Intake> = {}) {
 export function renderAt(path: string, element: ReactElement, route = path, intake: Partial<Intake> = {}) {
   return render(
     <MemoryRouter initialEntries={[route]}>
-      <IntakeProvider initial={{ ...EMPTY_INTAKE, ...intake }}>
+      <IntakeProvider initial={{ ...START, ...intake }}>
         <Routes><Route path={path} element={element} /></Routes>
       </IntakeProvider>
     </MemoryRouter>,

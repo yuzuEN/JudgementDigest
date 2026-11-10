@@ -58,7 +58,7 @@ export default function Confirm() {
 
   // 打開頁面時只拿固定題庫，描述不離開瀏覽器。傳給 LLM 要等使用者加好姓名、同意之後自己按按鈕
   useEffect(() => {
-    if (!intake.text.trim()) return;
+    if (!intake.text.trim() || !intake.caseType) return;
     let stale = false;
     api.followup(intake.caseType, mid, "")
       .then((r) => {
@@ -85,7 +85,9 @@ export default function Confirm() {
     heading.current?.focus();
   }, [stage]);
 
-  if (!intake.text.trim()) return <Navigate to="/start" replace />;
+  if (!intake.caseType) return <Navigate to="/start?stage=1" replace />;
+  if (!intake.text.trim()) return <Navigate to="/start?stage=2" replace />;
+  const caseType = intake.caseType;
 
   const kinds = sensitiveKinds(text);
   const sensitive = kinds.length > 0;
@@ -99,7 +101,7 @@ export default function Confirm() {
 
   const askAi = () => {
     setAiState("asking");
-    api.followup(intake.caseType, mid, maskText(intake.text, intake.names), true)
+    api.followup(caseType, mid, maskText(intake.text, intake.names), true)
       .then((r) => {
         if (r.source === "llm") setAiQuestions(r.questions);
         setAiState(r.source === "llm" ? "done" : r.fallback === "not_dispute" ? "unrelated" : r.fallback === "limited" ? "limited" : "failed");
@@ -110,7 +112,7 @@ export default function Confirm() {
   const startRewrite = () => {
     const source = intake.maskedText;
     setRewriteState("loading");
-    api.rewrite(intake.caseType, mid, source)
+    api.rewrite(caseType, mid, source)
       .then((r) => {
         if (r.source === "llm" && r.text) {
           update({ rewriteDraft: r.text, rewriteAdded: r.added_numbers, rewriteFor: source, useRewrite: "rewrite", searchText: maskText(r.text.trim(), intake.names) });
@@ -394,7 +396,7 @@ function FinalSummary({ intake }: { intake: Intake }) {
   const civil = intake.caseType !== "criminal";
   const amount = parseAmount(intake.claimedAmount);
   const rows: [string, string][] = [
-    ["案件類型", CASE_LABEL[intake.caseType]],
+    ["案件類型", intake.caseType ? CASE_LABEL[intake.caseType] : "還沒選"],
     ...(civil ? [
       ["糾紛類型", intake.mids.length ? intake.mids.join("、") : "未選"],
       ["請求金額", amount !== null ? `${amount.toLocaleString("en-US")} 元` : "未填"],
@@ -544,7 +546,8 @@ function Checklist({ stage, vendor }: { stage: number; vendor: string | null }) 
           </summary>
           <ul className="m-0 flex list-disc flex-col gap-2 px-3 pb-3 pl-8 text-sm">
             <li>蒐集者：JudgementDigest 專題團隊；目的：產生類案判決參考結果。</li>
-            <li>遮名在你的瀏覽器裡完成，原文和你加入的姓名不會傳到我們的伺服器。送出的是遮名後的內容；本平台不保存你的描述。</li>
+            <li>遮名在你的瀏覽器裡完成，原文和你加入的姓名不會傳到我們的伺服器。送出的是遮名後的內容；本平台的伺服器不保存你的描述。</li>
+            <li>你填的內容只暫存在這個瀏覽器分頁：重新整理還在，關掉分頁就清除；不會存在電腦上，也不會存到我們的伺服器。</li>
             {vendor && <li>只有在你按下「傳給 AI，開始提問」或「請 AI 整理敘述」時，遮名後的內容才會傳給 {vendor} 的付費 API，不會被用來訓練或改善它的模型。</li>}
             <li>病歷、醫療、健康檢查、基因、性生活、犯罪前科是法律特別保護的資料。你可以不提供：不同意的話，回上一步刪掉這些描述就能繼續，只是參考結果可能比較不準。</li>
           </ul>

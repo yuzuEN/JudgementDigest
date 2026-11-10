@@ -30,10 +30,14 @@ describe("描述案情（關卡 1–3）", () => {
   it("一次只顯示一關，進度圖標出目前的關卡", async () => {
     mockApi({ "GET /meta/options": () => OPTIONS });
     const user = userEvent.setup();
-    renderApp("/start");
+    renderApp("/start", { caseType: "" });
     expect(screen.getByRole("heading", { name: /第 1 關/ })).toBeInTheDocument();
     expect(current()).toHaveTextContent("類型");
-    expect(screen.getByRole("radio", { name: "民事" })).toBeChecked();
+    // 一開始沒有預設，要自己選
+    expect(screen.getByRole("radio", { name: "民事" })).not.toBeChecked();
+    expect(screen.getByRole("button", { name: "下一關" })).toBeDisabled();
+    expect(screen.getByText("請先選一種案件類型。")).toBeInTheDocument();
+    await user.click(screen.getByRole("radio", { name: "民事" }));
     expect(screen.getByText("可能判准的金額範圍")).toBeInTheDocument();
 
     await user.click(screen.getByRole("radio", { name: "刑事" }));
@@ -134,13 +138,25 @@ describe("描述案情（關卡 1–3）", () => {
   it("填的內容存在這個分頁，重新整理後還在", async () => {
     mockApi({ "GET /meta/options": () => OPTIONS });
     const user = userEvent.setup();
+    window.sessionStorage.setItem(STORAGE_KEY, JSON.stringify({ caseType: "civil" }));   // 第 1 關選過民事
     const page = () => render(<MemoryRouter initialEntries={["/start?stage=2"]}><IntakeProvider><App /></IntakeProvider></MemoryRouter>);
     const first = page();
     await user.type(screen.getByLabelText("用自己的話寫就好"), "被車撞");
-    expect(JSON.parse(window.sessionStorage.getItem(STORAGE_KEY)!)).toMatchObject({ text: "被車撞" });
+    expect(JSON.parse(window.sessionStorage.getItem(STORAGE_KEY)!)).toMatchObject({ caseType: "civil", text: "被車撞" });
     first.unmount();
     page();
     expect(screen.getByLabelText("用自己的話寫就好")).toHaveValue("被車撞");
+  });
+
+  it("還沒選類型就直接開後面的關卡或確認頁、結果頁，回到第 1 關", async () => {
+    const { calls } = mockApi({ "GET /meta/options": () => OPTIONS });
+    for (const route of ["/start?stage=3", "/confirm?stage=5", "/result/civil"]) {
+      const { unmount } = renderApp(route, { caseType: "", text: TRAFFIC, maskedText: TRAFFIC });
+      expect(screen.getByRole("heading", { name: /第 1 關/ })).toBeInTheDocument();
+      unmount();
+    }
+    expect(calls.map((c) => c.key)).not.toContain("POST /civil/report");
+    expect(calls.map((c) => c.key)).not.toContain("POST /intake/followup");
   });
 
   it("直接開第 3 關、案情還不夠時回到第 2 關", () => {
