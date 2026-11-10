@@ -24,7 +24,7 @@ import { fullText, primaryMid, useIntake, type Intake } from "../state";
 const MAX_QUESTIONS = 4;
 
 const SCENE_LINES: Record<number, string> = {
-  4: "我先幫你把個人資料遮掉。請看一下有沒有漏的，再決定要不要同意使用病歷這類資料。",
+  4: "我先幫你把個人資料遮掉。請看一下有沒有漏的，漏掉的名字可以自己加。",
   5: "想補充細節的話，可以回答幾個問題，也可以略過。固定題目不用 AI；要 AI 幫忙看，才會用到 AI。",
   6: "最後一關。我把你的描述改成判決書的寫法，比對會比較準。數字有變動的地方我會特別提醒你。",
 };
@@ -91,11 +91,12 @@ export default function Confirm() {
 
   const kinds = sensitiveKinds(text);
   const sensitive = kinds.length > 0;
-  const consented = !sensitive || intake.sensitiveConsent;
-  // 還沒同意就直接開第 5、6 關：回第 4 關
-  if (stage > 4 && !consented) return <Navigate to="/confirm?stage=4" replace />;
+  // 病歷、前科這類特種個資：平台自己比對時不用同意（已遮名、不保存），傳給外部 AI 前才要同意
+  const aiAllowed = !sensitive || intake.sensitiveConsent;
+  const consent = { kinds, given: intake.sensitiveConsent, declined,
+    onChange: (yes: boolean) => { update({ sensitiveConsent: yes }); setDeclined(!yes); } };
 
-  const ready = intake.maskedText !== "" && consented;
+  const ready = intake.maskedText !== "";
   const go = (n: number) => setParams({ stage: String(n) });
   const resultPath = intake.caseType === "criminal" ? "/result/criminal" : "/result/civil";
 
@@ -125,8 +126,7 @@ export default function Confirm() {
   };
 
   const answered = Object.values(intake.followupAnswers).some((a) => a.answer.trim());
-  const why = stage === 4 && !consented ? "請先選擇「我同意」。選「不同意」要回上一步刪掉這些描述。"
-    : stage === 6 && rewriteState === "loading" ? "正在整理敘述，請稍等。" : null;
+  const why = stage === 6 && rewriteState === "loading" ? "正在整理敘述，請稍等。" : null;
   const titleClass = "text-[22px] leading-[1.45] font-extrabold text-balance outline-none sm:text-[26px]";
 
   return (
@@ -136,19 +136,20 @@ export default function Confirm() {
           <main className="flex min-w-0 flex-[999_1_560px] flex-col gap-6">
             {stage === 4 && (
               <MaskStage heading={<h1 ref={heading} tabIndex={-1} className={titleClass}>第 4 關　確認遮名</h1>}
-                intake={intake} update={update} kinds={kinds} vendor={llmAvailable ? vendor : null}
-                declined={declined} onDecline={setDeclined} />
+                intake={intake} update={update} kinds={kinds} llm={llmAvailable} />
             )}
             {stage === 5 && (
               <DetailStage heading={<h1 ref={heading} tabIndex={-1} className={titleClass}>第 5 關　補充細節<span className="text-[15px] font-medium text-muted-foreground">　可以略過</span></h1>}
                 llm={llmAvailable} vendor={vendor} mode={mode} setMode={setMode} aiState={aiState} askAi={askAi}
+                consent={consent} aiAllowed={aiAllowed}
                 questions={mode === "ai" && aiState === "done" ? aiQuestions : questions}
                 answers={intake.followupAnswers}
                 onAnswer={(q, value) => update({ followupAnswers: { ...intake.followupAnswers, [q.id]: { question: q.text, answer: value } } })} />
             )}
             {stage === 6 && (
               <RewriteStage heading={<h1 ref={heading} tabIndex={-1} className={titleClass}>{llmAvailable ? "第 6 關　整理成判決書的寫法" : "第 6 關　最後確認"}</h1>}
-                llm={llmAvailable} vendor={vendor} intake={intake} update={update} state={rewriteState} onStart={startRewrite} />
+                llm={llmAvailable} vendor={vendor} intake={intake} update={update} state={rewriteState} onStart={startRewrite}
+                consent={consent} aiAllowed={aiAllowed} />
             )}
 
             <nav aria-label="關卡" className="flex flex-col gap-2">
@@ -188,14 +189,12 @@ function Note({ icon: Icon = InfoIcon, children, className, role }: { icon?: typ
 
 /* ── 第 4 關：遮名與敏感資料同意 ── */
 
-function MaskStage({ heading, intake, update, kinds, vendor, declined, onDecline }: {
+function MaskStage({ heading, intake, update, kinds, llm }: {
   heading: ReactNode;
   intake: Intake;
   update: (patch: Partial<Intake>) => void;
   kinds: string[];
-  vendor: string | null;
-  declined: boolean;
-  onDecline: (declined: boolean) => void;
+  llm: boolean;
 }) {
   const [name, setName] = useState("");
   const add = () => {
@@ -203,7 +202,6 @@ function MaskStage({ heading, intake, update, kinds, vendor, declined, onDecline
     if (n && !intake.names.includes(n)) update({ names: [...intake.names, n] });
     setName("");
   };
-  const consent = intake.sensitiveConsent ? "yes" : declined ? "no" : "";
   return (
     <StageCard>
       <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1">
@@ -243,26 +241,40 @@ function MaskStage({ heading, intake, update, kinds, vendor, declined, onDecline
       </div>
 
       {kinds.length > 0 && (
-        <section aria-labelledby="consent-title" className="flex flex-col gap-3 border-t pt-5">
-          <h2 id="consent-title" className="flex items-center gap-3 font-bold">
-            <ShieldCheckIcon className="size-7 text-secondary-foreground" aria-hidden="true" />敏感個人資料，需要你同意
-          </h2>
-          <p>你的描述裡有法律特別保護的資料（偵測到：{kinds.join("、")}）。要用它比對相似判決，需要你同意。你也可以不提供：不同意的話，回上一步刪掉這些描述就能繼續，只是參考結果可能比較不準。</p>
-          <RadioCards label="敏感個人資料同意" value={consent}
-            options={[
-              { value: "yes", title: "我同意", hint: `本平台處理這些資料，只用於產生這次的參考結果。${vendor ? `如果你選擇請 AI 提問或整理敘述，這些內容也會傳給 ${vendor}。` : ""}` },
-              { value: "no", title: "不同意，回上一步刪掉" },
-            ]}
-            onChange={(v) => { update({ sensitiveConsent: v === "yes" }); onDecline(v === "no"); }} />
-          {consent === "no" && (
-            <Note>
-              <p className="text-[15px]">了解。請回到「描述案情」，把這些內容刪掉再繼續。</p>
-              <LinkButton variant="outline" to="/start?stage=2" className="w-fit"><ArrowLeftIcon data-icon="inline-start" />回描述案情</LinkButton>
-            </Note>
-          )}
-        </section>
+        <Note icon={ShieldCheckIcon}>
+          <p className="font-bold">描述裡有法律特別保護的資料（偵測到：{kinds.join("、")}）</p>
+          <p className="text-[15px]">
+            這段文字只用來比對相似判決，不會保存。{llm && "之後如果你選擇用 AI 補充或整理，傳給 AI 服務前會先問你同意。"}
+            不想提供的話，可以<LinkButton variant="link" to="/start?stage=2" className="h-auto p-0 text-[15px]">回描述案情</LinkButton>刪掉這些內容。
+          </p>
+        </Note>
       )}
     </StageCard>
+  );
+}
+
+/* ── 傳給 AI 前的同意（只有描述裡有病歷、前科這類特種個資時才問） ── */
+
+type Consent = { kinds: string[]; given: boolean; declined: boolean; onChange: (yes: boolean) => void };
+
+function AiConsent({ consent, vendor, use, fallback }: { consent: Consent; vendor: string; use: string; fallback: string }) {
+  if (consent.kinds.length === 0) return null;
+  const value = consent.given ? "yes" : consent.declined ? "no" : "";
+  return (
+    <section aria-labelledby="ai-consent-title" className="flex flex-col gap-3">
+      <h2 id="ai-consent-title" className="flex items-center gap-2.5 font-bold">
+        <ShieldCheckIcon className="size-6 text-secondary-foreground" aria-hidden="true" />傳給 AI 前，需要你同意
+      </h2>
+      <p className="text-[15px]">
+        你的描述裡有法律特別保護的資料（偵測到：{consent.kinds.join("、")}）。按下按鈕後，遮名後的內容會傳給 {vendor}，{use}，所以要先取得你的同意。不同意也沒關係，{fallback}。
+      </p>
+      <RadioCards label="傳給 AI 的同意" value={value}
+        options={[
+          { value: "yes", title: "我同意傳給 AI", hint: `只用於這次的${use.replace(/^用來/, "")}，不會被用來訓練它的模型。` },
+          { value: "no", title: "不同意，不用 AI" },
+        ]}
+        onChange={(v) => consent.onChange(v === "yes")} />
+    </section>
   );
 }
 
@@ -286,8 +298,10 @@ function QuestionList({ questions, answers, onAnswer }: {
   );
 }
 
-function DetailStage({ heading, llm, vendor, mode, setMode, aiState, askAi, questions, answers, onAnswer }: {
+function DetailStage({ heading, llm, vendor, mode, setMode, aiState, askAi, consent, aiAllowed, questions, answers, onAnswer }: {
   heading: ReactNode;
+  consent: Consent;
+  aiAllowed: boolean;
   llm: boolean;
   vendor: string;
   mode: "fixed" | "ai";
@@ -330,10 +344,17 @@ function DetailStage({ heading, llm, vendor, mode, setMode, aiState, askAi, ques
           </TabsContent>
           <TabsContent value="ai" className="flex flex-col gap-4 text-base">
             {aiState === "idle" && (
-              <Note>
-                <p className="text-[15px]">按下按鈕後，上一關遮名後的內容（包含你同意處理的資料）會傳給 {vendor}，由 AI 依你的案情提問。不按就不會傳。</p>
-                <Button type="button" className="w-fit" onClick={askAi}><SparklesIcon data-icon="inline-start" />傳給 AI，開始提問</Button>
-              </Note>
+              <>
+                <AiConsent consent={consent} vendor={vendor} use="用來產生補充問題" fallback="改用固定題目就好" />
+                {consent.declined ? (
+                  <Note><p className="text-[15px]">好，這次不用 AI。</p>{backToFixed}</Note>
+                ) : (
+                  <Note>
+                    <p className="text-[15px]">按下按鈕後，上一關遮名後的內容會傳給 {vendor}，由 AI 依你的案情提問。不按就不會傳。</p>
+                    <Button type="button" className="w-fit" disabled={!aiAllowed} onClick={askAi}><SparklesIcon data-icon="inline-start" />傳給 AI，開始提問</Button>
+                  </Note>
+                )}
+              </>
             )}
             {aiState === "asking" && (
               <>
@@ -426,8 +447,10 @@ const REWRITE_NOTICE: Partial<Record<RewriteState, string>> = {
   unrelated: "這段描述看起來不像法律糾紛，所以沒有傳給 AI，會改用你原本的描述。",
 };
 
-function RewriteStage({ heading, llm, vendor, intake, update, state, onStart }: {
+function RewriteStage({ heading, llm, vendor, intake, update, state, onStart, consent, aiAllowed }: {
   heading: ReactNode;
+  consent: Consent;
+  aiAllowed: boolean;
   llm: boolean;
   vendor: string;
   intake: Intake;
@@ -474,10 +497,17 @@ function RewriteStage({ heading, llm, vendor, intake, update, state, onStart }: 
       )}
 
       {state !== "loading" && !reviewed && (
-        <Note>
-          <p className="text-[15px]">按下按鈕後，第 4 關遮名後的內容會傳給 {vendor}；不按就用你原本的描述{usedFor}。</p>
-          <Button type="button" variant="outline" className="w-fit" onClick={onStart}><SparklesIcon data-icon="inline-start" />請 AI 整理敘述</Button>
-        </Note>
+        <>
+          <AiConsent consent={consent} vendor={vendor} use="用來整理成判決書的寫法" fallback={`直接用你原本的描述${usedFor}就好`} />
+          {consent.declined ? (
+            <Note><p className="text-[15px]">好，這次不用 AI，會用你原本的描述{usedFor}。</p></Note>
+          ) : (
+            <Note>
+              <p className="text-[15px]">按下按鈕後，第 4 關遮名後的內容會傳給 {vendor}；不按就用你原本的描述{usedFor}。</p>
+              <Button type="button" variant="outline" className="w-fit" disabled={!aiAllowed} onClick={onStart}><SparklesIcon data-icon="inline-start" />請 AI 整理敘述</Button>
+            </Note>
+          )}
+        </>
       )}
 
       {state !== "loading" && reviewed && (
@@ -514,7 +544,7 @@ function RewriteStage({ heading, llm, vendor, intake, update, state, onStart }: 
 /* ── 右側：送出前檢查、資料使用說明 ── */
 
 function Checklist({ stage, vendor }: { stage: number; vendor: string | null }) {
-  const items = [[4, "遮名與敏感資料同意"], [5, "補充細節（可略過）"], [6, vendor ? "判決書寫法" : "最後確認"]] as const;
+  const items = [[4, "確認遮名"], [5, "補充細節（可略過）"], [6, vendor ? "判決書寫法" : "最後確認"]] as const;
   return (
     <aside aria-labelledby="check-title" className="w-full min-w-0 flex-[1_1_260px] sm:max-w-[340px]">
       <Card className="gap-4 px-6.5">
@@ -549,7 +579,7 @@ function Checklist({ stage, vendor }: { stage: number; vendor: string | null }) 
             <li>遮名在你的瀏覽器裡完成，原文和你加入的姓名不會傳到我們的伺服器。送出的是遮名後的內容；本平台的伺服器不保存你的描述。</li>
             <li>你填的內容只暫存在這個瀏覽器分頁：重新整理還在，關掉分頁就清除；不會存在電腦上，也不會存到我們的伺服器。</li>
             {vendor && <li>只有在你按下「傳給 AI，開始提問」或「請 AI 整理敘述」時，遮名後的內容才會傳給 {vendor} 的付費 API，不會被用來訓練或改善它的模型。</li>}
-            <li>病歷、醫療、健康檢查、基因、性生活、犯罪前科是法律特別保護的資料。你可以不提供：不同意的話，回上一步刪掉這些描述就能繼續，只是參考結果可能比較不準。</li>
+            <li>病歷、醫療、健康檢查、基因、性生活、犯罪前科是法律特別保護的資料。描述裡有這些內容時，平台只用來產生這次的參考結果、不保存{vendor && "；要傳給 AI 服務前，會另外請你同意"}。不想提供的話，回上一步刪掉這些描述就好，只是參考結果可能比較不準。</li>
           </ul>
         </details>
       </Card>
