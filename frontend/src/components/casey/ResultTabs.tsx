@@ -48,10 +48,11 @@ export function ResultTabs<K extends string>({ tabs, value, onChange, mock }: {
           </Tabs.Tab>
         ))}
       </Tabs.List>
-      {tabs.map((t, i) => (
+      {/* 左上角永遠是直角：第一個頁籤的左邊框和面板的左邊框接成一直線，不管選哪一頁 */}
+      {tabs.map((t) => (
         <Tabs.Panel key={t.key} value={t.key} keepMounted data-slot="tabs-content"
-          className={cn("flex flex-col gap-4 rounded-[16px] border-2 bg-card p-[18px] outline-none sm:p-[22px] [&[hidden]]:hidden",
-            i === 0 && "rounded-tl-none", mock ? "border-dashed border-sample-line" : "border-foreground")}>
+          className={cn("flex flex-col gap-4 rounded-[16px] rounded-tl-none border-2 bg-card p-[18px] outline-none sm:p-[22px] [&[hidden]]:hidden",
+            mock ? "border-dashed border-sample-line" : "border-foreground")}>
           {t.content}
         </Tabs.Panel>
       ))}
