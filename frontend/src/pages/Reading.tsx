@@ -84,12 +84,12 @@ export default function Reading() {
                   {FUNCTIONS.map((f) => (
                     <button key={f.id} type="button" aria-pressed={on[f.id]} onClick={() => setOn({ ...on, [f.id]: !on[f.id] })}
                       className={cn("flex min-h-12 items-center gap-3 rounded-[14px] border-2 bg-card px-3.5 py-2 text-left",
-                        on[f.id] ? "border-primary bg-secondary" : "border-input")}>
+                        on[f.id] ? "border-primary" : "border-input")}>
                       <span aria-hidden="true" className={cn("grid size-6 flex-none place-items-center rounded-[7px] border-2",
                         on[f.id] ? "border-primary bg-primary text-primary-foreground" : "border-input bg-card")}>
                         {on[f.id] && <CheckIcon className="size-4" strokeWidth={3} />}
                       </span>
-                      <span aria-hidden="true" className={cn("size-3.5 flex-none rounded-[4px] border-[1.5px] border-foreground", on[f.id] ? f.swatch : "bg-transparent")} />
+                      <span aria-hidden="true" className={cn("size-[18px] flex-none rounded-[5px] border-[1.5px] border-foreground", on[f.id] ? f.swatch : "bg-transparent")} />
                       <span className="font-bold">{f.label}</span>
                       <span className="ml-auto text-sm text-muted-foreground">{counts[f.id] ?? 0} 段</span>
                     </button>
@@ -122,10 +122,7 @@ export default function Reading() {
                   <section key={i} data-fn={p.function} data-on={on[p.function]}
                     className={cn("para flex flex-col gap-1.5 rounded-[12px] px-4 py-3.5 transition-colors motion-reduce:transition-none",
                       on[p.function] ? f.on : "border border-dashed border-input bg-transparent")}>
-                    <span className="inline-flex items-center gap-1.5 text-[13px] font-extrabold tracking-[.06em]">
-                      <span aria-hidden="true" className={cn("size-3.5 rounded-[4px] border-[1.5px] border-foreground", on[p.function] ? f.swatch : "bg-transparent")} />
-                      {f.label}
-                    </span>
+                    <span className="text-[13px] font-extrabold tracking-[.06em]">{f.label}</span>
                     <p className="leading-loose">{p.text}</p>
                   </section>
                 );

@@ -64,28 +64,6 @@
   --color-passage-evidence: var(--passage-evidence);
   --color-passage-court: var(--passage-court);
 
-  /* 舊頁面還在用的名稱（確認頁、結果頁改版前保留），對到新色票 */
-  --color-surface: var(--card);
-  --color-warn: var(--info-bg);
-  --color-warn-foreground: var(--foreground);
-  --color-warn-border: var(--info-line);
-  --color-warn-title: var(--secondary-foreground);
-  --color-info-foreground: var(--foreground);
-  --color-info-border: var(--info-line);
-  --color-success: var(--primary);
-  --color-success-soft: var(--secondary);
-  --color-caution: var(--outcome-lose-fg);
-  --color-lose-soft: var(--outcome-lose-bg);
-  --color-lose-foreground: var(--outcome-lose-fg);
-  --color-track: var(--muted);
-  --color-warm: var(--outcome-part);
-  --color-soft-bar: var(--outcome-part);
-  --color-outcome-win: var(--outcome-full);
-  --color-outcome-partial: var(--outcome-part);
-  --color-outcome-lose: var(--outcome-lose-line);
-  --color-jump: var(--passage-issue);
-  --color-jump-foreground: var(--foreground);
-
   --radius-sm: calc(var(--radius) * 0.6);
   --radius-md: calc(var(--radius) * 0.8);
   --radius-lg: var(--radius);
@@ -145,13 +123,6 @@
 
   --card-shadow: 0 1px 2px rgba(28, 38, 48, .06), 0 4px 16px rgba(28, 38, 48, .05);
   --scene-floor: #8B6340;
-
-  /* 判決導讀（舊版元件用）：底色、標籤底色、標籤字色 */
-  --p-claim: var(--passage-claim);       --p-claim-chip: #C9D7F0;    --p-claim-ink: #1C2630;
-  --p-defense: var(--passage-defense);   --p-defense-chip: #DCCDE9;  --p-defense-ink: #1C2630;
-  --p-issue: var(--passage-issue);       --p-issue-chip: #E9D79A;    --p-issue-ink: #1C2630;
-  --p-evidence: var(--passage-evidence); --p-evidence-chip: #BEDDD2; --p-evidence-ink: #1C2630;
-  --p-court: var(--passage-court);       --p-court-chip: #E1EEF2;    --p-court-ink: #1C2630;
 }
 
 /* 放在 screen 裡：列印、存成 PDF 一律是淺色 */
@@ -195,11 +166,6 @@
     --card-shadow: none;
     --scene-floor: #4A3524;
 
-    --p-claim-chip: #2C3F66;    --p-claim-ink: #EAE8E1;
-    --p-defense-chip: #45365F;  --p-defense-ink: #EAE8E1;
-    --p-issue-chip: #57492C;    --p-issue-ink: #EAE8E1;
-    --p-evidence-chip: #24493C; --p-evidence-ink: #EAE8E1;
-    --p-court-chip: #1A3641;    --p-court-ink: #EAE8E1;
   }
 }
 
@@ -263,16 +229,10 @@
   mark.masked {
     @apply rounded-[5px] border-b-2 border-mask-line bg-mask px-1 font-semibold text-mask-fg;
   }
-  /* 從說明頁的 i 跳過來時標出 */
+  /* 從結果頁的 i 跳到說明頁時，標出那個名詞（點別的地方就消失） */
   .jump-target {
-    @apply -ml-1.5 w-fit rounded bg-jump px-1.5 text-jump-foreground;
+    @apply -ml-1.5 w-fit rounded bg-passage-issue px-1.5 text-foreground;
   }
-  /* 判決導讀：段落的功能 */
-  .para[data-on="true"][data-fn="claim"] { background: var(--p-claim); --chip-bg: var(--p-claim-chip); --chip-ink: var(--p-claim-ink); }
-  .para[data-on="true"][data-fn="defense"] { background: var(--p-defense); --chip-bg: var(--p-defense-chip); --chip-ink: var(--p-defense-ink); }
-  .para[data-on="true"][data-fn="issue"] { background: var(--p-issue); --chip-bg: var(--p-issue-chip); --chip-ink: var(--p-issue-ink); }
-  .para[data-on="true"][data-fn="evidence"] { background: var(--p-evidence); --chip-bg: var(--p-evidence-chip); --chip-ink: var(--p-evidence-ink); }
-  .para[data-on="true"][data-fn="court"] { background: var(--p-court); --chip-bg: var(--p-court-chip); --chip-ink: var(--p-court-ink); }
 }
 
 /* ── 列印／下載 PDF ── */
@@ -307,12 +267,8 @@
     box-shadow: none;
   }
   [data-slot="card"]:has(table),
-  [data-slot="card"]:has([data-slot="collapsible"]) {
+  [data-slot="card"]:has(details) {
     break-inside: auto;
-  }
-  /* 收起來的明細在列印時也要印出來 */
-  [data-slot="collapsible-content"][hidden] {
-    display: block !important;
   }
   /* 結果頁的分頁：列印時每個分頁都印出來 */
   [data-slot="tabs-content"][hidden] {
@@ -336,9 +292,6 @@
   main {
     padding-bottom: 14mm !important;
   }
-  [data-print-grid="2"] {
-    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
-  }
   a {
     color: inherit !important;
     text-decoration: none !important;
@@ -361,15 +314,4 @@
   [data-slot="table-container"] {
     overflow: visible !important;
   }
-}
-
-/* 手機：相似判決表格改成一列一張卡片（只套用在螢幕，不影響列印） */
-@media screen and (max-width: 760px) {
-  table.cases { display: block; }
-  table.cases thead { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
-  table.cases tbody, table.cases tr, table.cases td { display: block; }
-  table.cases tr { padding: 12px 0; }
-  table.cases td { padding: 3px 0; white-space: normal; }
-  table.cases td[data-label] { display: flex; justify-content: space-between; gap: 12px; }
-  table.cases td[data-label]::before { content: attr(data-label); color: var(--muted-foreground); font-size: 14px; }
 }
