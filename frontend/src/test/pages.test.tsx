@@ -398,6 +398,19 @@ describe("說明與知識", () => {
     expect(document.getElementById("民間借貸")).not.toBeNull();
   });
 
+  it("新增的名詞有分類標籤", () => {
+    renderApp("/guide");
+    const term = document.getElementById("與有過失")!;
+    expect(term).toHaveTextContent("民事");
+    expect(document.getElementById("拘役")).toHaveTextContent("未滿 60 天");
+    expect(document.getElementById("告訴乃論")).toHaveTextContent("刑事");
+  });
+
+  it("從結果頁跳到收起來的糾紛類型時，會先打開", () => {
+    renderApp(`/guide#${encodeURIComponent("民間借貸")}`);
+    expect(document.getElementById("民間借貸")!.closest("details")).toHaveAttribute("open");
+  });
+
   it("點目錄平滑捲到該段，不直接跳轉", async () => {
     const scroll = vi.fn();
     Element.prototype.scrollIntoView = scroll;
@@ -807,6 +820,12 @@ describe("民事結果", () => {
     expect(within(panel).getByText("46%")).toBeInTheDocument();
   });
 
+  it("與有過失的抗辯連到說明頁", async () => {
+    await show();
+    const panel = await openTab("對方的說法");
+    expect(within(panel).getByRole("link", { name: "什麼是「與有過失」？" })).toHaveAttribute("href", `/guide#${encodeURIComponent("與有過失")}`);
+  });
+
   describe("相似判決", () => {
     it("表格、相似度說明與判決導讀", async () => {
       await show();
@@ -1008,17 +1027,32 @@ describe("刑事結果", () => {
 });
 
 describe("判決導讀", () => {
-  it("段落與標示切換", async () => {
+  it("五類預設都上色，可以關掉；每段都有文字標籤", async () => {
     const { calls } = mockApi({ "GET /judgments/civil/11/guide": () => GUIDE });
     const user = userEvent.setup();
     const { container } = renderAt("/judgment/:source/:caseId", <Reading />, "/judgment/civil/11");
     expect(await screen.findByRole("heading", { name: "臺灣臺北地方法院 113 年度訴字第 1 號" })).toBeInTheDocument();
     expect(calls[0].key).toBe("GET /judgments/civil/11/guide");
-    expect(container.querySelector(".para[data-fn=issue]")).toHaveAttribute("data-on", "true");
-    expect(container.querySelector(".para[data-fn=claim]")).toHaveAttribute("data-on", "false");
-    await user.click(screen.getByRole("checkbox", { name: /原告主張/ }));
-    expect(container.querySelector(".para[data-fn=claim]")).toHaveAttribute("data-on", "true");
+    const claim = container.querySelector(".para[data-fn=claim]")!;
+    expect(claim).toHaveAttribute("data-on", "true");
+    expect(claim).toHaveTextContent("原告主張");
+    const toggle = screen.getByRole("button", { name: /原告主張/ });
+    expect(toggle).toHaveAttribute("aria-pressed", "true");
+    await user.click(toggle);
+    expect(toggle).toHaveAttribute("aria-pressed", "false");
+    expect(claim).toHaveAttribute("data-on", "false");
+    expect(claim).toHaveTextContent("原告主張");   // 關掉也還有文字標籤
     expect(screen.getByText(/規則初步標示/)).toBeInTheDocument();
+  });
+
+  it("基本資料、判准比例與回結果", async () => {
+    mockApi({ "GET /judgments/civil/11/guide": () => GUIDE });
+    renderAt("/judgment/:source/:caseId", <Reading />, "/judgment/civil/11");
+    await screen.findByRole("heading", { name: "判決的基本資料" });
+    expect(screen.getByText("一部勝訴")).toBeInTheDocument();
+    expect(screen.getByRole("img", { name: "判准金額約占請求金額的 65%" })).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "回結果" })).toHaveAttribute("href", "/result/civil?tab=cases");
+    expect(screen.getByRole("region", { name: "CasEY 角色說明" })).toHaveTextContent("解說員");
   });
 
   it("找不到判決", async () => {

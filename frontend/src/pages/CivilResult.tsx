@@ -302,6 +302,9 @@ function DefensePanel({ report }: { report: CivilReport }) {
             <Disclosure key={d.key} summary={<><span className="flex-1">{d.label}</span><span className="tabular-nums">{percent(d.share)}</span></>}>
               <Bar value={d.share} label={`${d.label}：出現在 ${percent(d.share)} 的相似判決`} />
               <p className="text-[15px] text-muted-foreground">{d.description}。</p>
+              {d.label.includes("與有過失") && (
+                <a href={`/guide#${encodeURIComponent("與有過失")}`} target="_blank" rel="noreferrer" className="w-fit text-[15px] font-semibold decoration-dotted">什麼是「與有過失」？</a>
+              )}
             </Disclosure>
           ))}
         </div>
