@@ -4,6 +4,7 @@ import { Link } from "react-router-dom";
 import { cn } from "@/lib/utils";
 import { CharacterScene, type Speaker } from "./casey/CharacterScene";
 import { StageMap } from "./casey/StageMap";
+import { ThemeToggle } from "./casey/ThemeToggle";
 import { LAF_URL } from "./Common";
 
 export const BRAND = "CasEY";
@@ -68,6 +69,7 @@ export function Layout({ stage, step, scene, nav, children }: { stage?: number; 
             <CircleHelpIcon className="size-5" aria-hidden="true" />
             <span className="max-sm:hidden">說明與法律小知識</span>
           </Link>
+          <ThemeToggle />
         </div>
       </header>
       {at > 0 && <div className={cn(PAGE, "pt-5.5")}><StageMap at={at} /></div>}
