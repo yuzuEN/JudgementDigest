@@ -1,48 +1,41 @@
-import { screen } from "@testing-library/react";
-import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { applyTheme, initialTheme } from "../theme";
-import { renderApp } from "./helpers";
+import { followSystemTheme, systemPrefersDark } from "../theme";
+
+type Listener = (e: MediaQueryListEvent) => void;
 
 const prefers = (dark: boolean) => {
-  vi.spyOn(window, "matchMedia").mockImplementation((q) => ({ matches: dark, media: q } as MediaQueryList));
+  const listeners: Listener[] = [];
+  window.matchMedia ??= (() => ({ matches: false })) as unknown as typeof window.matchMedia;
+  vi.spyOn(window, "matchMedia").mockImplementation((q) => ({
+    matches: dark, media: q,
+    addEventListener: (_: string, l: Listener) => listeners.push(l),
+    removeEventListener: (_: string, l: Listener) => listeners.splice(listeners.indexOf(l), 1),
+  } as unknown as MediaQueryList));
+  return listeners;
 };
 
-describe("夜間模式", () => {
-  afterEach(() => {
-    localStorage.clear();
-    delete document.documentElement.dataset.theme;
-  });
+describe("夜間模式跟著系統", () => {
+  afterEach(() => document.documentElement.classList.remove("dark"));
 
-  it("沒選過就跟著系統", () => {
-    window.matchMedia ??= (() => ({ matches: false })) as unknown as typeof window.matchMedia;
+  it("讀系統設定", () => {
     prefers(true);
-    expect(initialTheme()).toBe("dark");
+    expect(systemPrefersDark()).toBe(true);
     prefers(false);
-    expect(initialTheme()).toBe("light");
+    expect(systemPrefersDark()).toBe(false);
   });
 
-  it("選過的設定優先於系統", () => {
-    window.matchMedia ??= (() => ({ matches: false })) as unknown as typeof window.matchMedia;
-    prefers(true);
-    applyTheme("light", true);
-    expect(initialTheme()).toBe("light");
+  it("系統切換時頁面也跟著換", () => {
+    const listeners = prefers(false);
+    const stop = followSystemTheme();
+    expect(document.documentElement.classList.contains("dark")).toBe(false);
+    listeners.forEach((l) => l({ matches: true } as MediaQueryListEvent));
+    expect(document.documentElement.classList.contains("dark")).toBe(true);
+    stop();
+    expect(listeners).toHaveLength(0);
   });
 
-  it("瀏覽器不給存也不會壞", () => {
-    vi.spyOn(Storage.prototype, "setItem").mockImplementation(() => { throw new Error("blocked"); });
-    expect(() => applyTheme("dark", true)).not.toThrow();
-    expect(document.documentElement.dataset.theme).toBe("dark");
-  });
-
-  it("按鈕可以來回切換，並記住選擇", async () => {
-    const user = userEvent.setup();
-    localStorage.setItem("jd-theme", "light");
-    renderApp("/");
-    await user.click(screen.getByRole("button", { name: "切換成夜間模式" }));
-    expect(document.documentElement.dataset.theme).toBe("dark");
-    expect(localStorage.getItem("jd-theme")).toBe("dark");
-    await user.click(screen.getByRole("button", { name: "切換成日間模式" }));
-    expect(document.documentElement.dataset.theme).toBe("light");
+  it("瀏覽器沒有 matchMedia 也不會壞", () => {
+    vi.spyOn(window, "matchMedia").mockImplementation(undefined as unknown as typeof window.matchMedia);
+    expect(() => followSystemTheme()).not.toThrow();
   });
 });

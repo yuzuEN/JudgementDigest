@@ -18,6 +18,7 @@ logger = logging.getLogger("uvicorn.error")    # 這個 logger 預設會顯示�
 
 class GeminiClient:
     name = "gemini"
+    vendor = "Google Gemini"
 
     def __init__(self, api_key: str, model: str = "", transport=None):
         self.model = model or DEFAULT_MODEL

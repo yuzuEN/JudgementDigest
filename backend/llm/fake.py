@@ -6,6 +6,7 @@ from typing import Dict, List, Optional
 
 class FakeClient:
     name = "fake"
+    vendor = "測試用的假 AI（不會連線）"
 
     def __init__(self, reply: Optional[Dict] = None, error: Optional[Exception] = None):
         self.reply = reply if reply is not None else {"questions": [

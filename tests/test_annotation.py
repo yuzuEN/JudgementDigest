@@ -14,7 +14,8 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from annotation import prompts_v3  # noqa: E402
-from annotation.annotate import parse_response  # noqa: E402
+from annotation.annotate import parse_response, reparse  # noqa: E402
+from annotation.sample import SCHEMA  # noqa: E402
 from annotation.cues import CUES, INTEREST_SERVICE, cue_hits  # noqa: E402
 from annotation.sample import build_sample  # noqa: E402
 from annotation.spot_check import majority, wilson  # noqa: E402
@@ -99,11 +100,50 @@ class TestParseResponse(unittest.TestCase):
         raw = '```json\n{"reasoning_present": false, "labels": [{"code": "NONE", "quote": "", "polarity": null, "confidence": "high"}]}\n```'
         self.assertEqual(parse_response(raw, self.PARA), [("NONE", None, "", "high", 1)])
 
+    def test_reasoning_before_json(self):
+        """v0.3 試標：模型先寫推理說明，最後才附 JSON。"""
+        raw = ('這段是在核定慰撫金，法院審酌身分地位後認定金額，標 DAM。\n\n'
+               '{"reasoning_present": true, "labels": [{"code": "DAM", "quote": "認原告請求精神慰撫金以20萬元為適當", '
+               '"polarity": "全額准許", "confidence": "medium"}]}')
+        self.assertEqual(parse_response(raw, self.PARA)[0][:2], ("DAM", "全額准許"))
+
+    def test_self_correction_takes_last_json(self):
+        """v0.3 試標：模型給了答案又自我修正，應取最後（修正後）的那個。"""
+        raw = ('{"labels": [{"code": "EV", "quote": "不在原文", "polarity": "有利原告", "confidence": "low"}]}\n\n'
+               'Wait — 引文出自後段，修正如下：\n\n'
+               '{"labels": [{"code": "DAM", "quote": "精神慰撫金以20萬元為適當", "polarity": "不明", "confidence": "low"}]}')
+        rows = parse_response(raw, self.PARA)
+        self.assertEqual([(r[0], r[4]) for r in rows], [("DAM", 1)])
+
     def test_invalid_label_polarity_and_parse_error(self):
         raw = '{"labels": [{"code": "SENT", "quote": "精神慰撫金", "polarity": "很多", "confidence": "high"}]}'
         label, pol, _, _, valid = parse_response(raw, self.PARA)[0]
         self.assertEqual((label, pol, valid), ("INVALID:SENT", "INVALID:很多", 0))  # SENT 是刑事標籤
         self.assertEqual(parse_response("不是 JSON", self.PARA)[0][0], "PARSE_ERROR")
+
+
+class TestReparse(unittest.TestCase):
+    def test_reparse_recovers_old_parse_errors(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            db = Path(tmp) / "annotation.sqlite"
+            para = "本院審酌兩造之身分、地位，認原告請求精神慰撫金以20萬元為適當"
+            good = ('說明文字。{"labels": [{"code": "DAM", "quote": "精神慰撫金以20萬元為適當", '
+                    '"polarity": "全額准許", "confidence": "high"}]}')
+            with closing(sqlite3.connect(db)) as con:
+                con.executescript(SCHEMA)
+                con.execute("INSERT INTO paragraphs (sample_id, para_text) VALUES (1001, ?)", (para,))
+                con.execute("INSERT INTO paragraphs (sample_id, para_text) VALUES (1002, ?)", (para,))
+                cols = ("sample_id, annotator, run_no, label, polarity, quote, confidence, quote_valid, "
+                        "manual_version, prompt_version, raw_response, created_at")
+                con.executemany(f"INSERT INTO annotations ({cols}) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)", [
+                    (1001, "m", 1, "PARSE_ERROR", None, None, None, 0, "v0.3", "p3.0", good, "t"),
+                    (1002, "m", 1, "PARSE_ERROR", None, None, None, 0, "v0.3", "p3.0", "完全不是 JSON", "t"),
+                ])
+                con.commit()
+            self.assertEqual(reparse(db), (2, 1))
+            rows = read(db, "SELECT sample_id, label, polarity, quote_valid FROM annotations ORDER BY sample_id")
+            self.assertEqual(rows, [(1001, "DAM", "全額准許", 1), (1002, "PARSE_ERROR", None, 0)])
+            self.assertEqual(reparse(db), (1, 0))   # 再跑一次不會重複寫入
 
 
 class TestSpotCheck(unittest.TestCase):

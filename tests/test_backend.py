@@ -23,6 +23,7 @@ from backend.settings import Settings  # noqa: E402
 from civil.models import service  # noqa: E402
 from retrieval import build  # noqa: E402
 from tests.test_civil_service import LOSE, WIN, synthetic  # noqa: E402
+from tests.test_criminal_service import DRUNK as CRIMINAL_DRUNK, train_artifacts as train_criminal  # noqa: E402
 
 TRAFFIC = "去年三月我騎機車在路口直行，被右轉的汽車撞到，右手骨折住院五天，之後三個月沒辦法工作。" * 3
 
@@ -130,6 +131,59 @@ class TestWithoutModel(_MockCase):
         self.assertEqual(client.get("/api/health").json()["civil"], "mock")
 
 
+class TestCriminalWithModel(unittest.TestCase):
+    """有刑事模型檔：回傳模型結果、不標示例；相似判決檢索還沒做，回空清單。"""
+
+    @classmethod
+    def setUpClass(cls):
+        cls.tmp = tempfile.TemporaryDirectory()
+        train_criminal(Path(cls.tmp.name))
+        cls.client = TestClient(create_app(Settings(artifacts_dir=Path(cls.tmp.name))))
+
+    @classmethod
+    def tearDownClass(cls):
+        cls.tmp.cleanup()
+
+    def test_health(self):
+        self.assertEqual(self.client.get("/api/health").json()["criminal"], "model")
+
+    def test_predict(self):
+        r = self.client.post("/api/criminal/predict", json={"text": CRIMINAL_DRUNK}).json()
+        self.assertFalse(r["mock"])
+        self.assertEqual(r["charges"][0]["name"], "酒駕罪")
+        self.assertEqual(len(r["charges"][0]["sentence"]), 6)
+        # 相似判決只在含「酒駕罪」的判決裡找，附宣告刑與原文網址；真的判決沒有導讀
+        self.assertTrue(r["similar"] and all(c["mid"] == "酒駕罪" for c in r["similar"]))
+        self.assertTrue(r["similar"][0]["url"].startswith("https://judgment.judicial.gov.tw/"))
+        self.assertIn(r["similar"][0]["sentence"], ("有期徒刑 4 月", "拘役 20 日"))
+        guide = self.client.get(f"/api/judgments/criminal/{r['similar'][0]['case_id']}/guide")
+        self.assertEqual(guide.status_code, 404)
+        # 每個罪名另外附相似判決的宣告刑分布（合成資料：酒駕 30 件，有期徒刑 4 月與拘役各半）
+        drunk = r["charges"][0]
+        self.assertEqual(drunk["n_similar"], 30)
+        shares = {b["label"]: b["share"] for b in drunk["similar_sentence"]}
+        self.assertAlmostEqual(shares["拘役、罰金"] + shares["1～6 個月"], 1.0)
+        self.assertEqual(r["model"]["name"], "criminal_v1")
+        self.assertIsNone(r["sentence"])          # ELECTRA 刑期停用
+
+    def test_search(self):
+        r = self.client.post("/api/retrieval/search", json={"type": "criminal", "text": CRIMINAL_DRUNK, "k": 3}).json()
+        self.assertFalse(r["mock"])
+        self.assertEqual(len(r["criminal"]), 3)
+
+    def test_without_retrieval_index(self):
+        tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(tmp.cleanup)
+        train_criminal(Path(tmp.name), retrieval=False)
+        client = TestClient(create_app(Settings(artifacts_dir=Path(tmp.name))))
+        r = client.post("/api/criminal/predict", json={"text": CRIMINAL_DRUNK}).json()
+        self.assertEqual((r["mock"], r["similar"]), (False, []))
+
+    def test_forced_mock_mode(self):
+        client = TestClient(create_app(Settings(artifacts_dir=Path(self.tmp.name), mode="mock")))
+        self.assertTrue(client.post("/api/criminal/predict", json={"text": CRIMINAL_DRUNK}).json()["mock"])
+
+
 class TestStartupErrors(unittest.TestCase):
     def test_real_cause_is_not_hidden_from_uvicorn(self):
         """uvicorn 遇到 AttributeError 只會說找不到 app，讀模型檔失敗時要看得到真正的原因。"""
@@ -181,6 +235,7 @@ class TestCommonEndpoints(_MockCase):
     def test_criminal_is_mock(self):
         r = self.client.post("/api/criminal/predict", json={"text": "開車撞到人"}).json()
         self.assertTrue(r["mock"])
+        self.assertIsNone(r["sentence"])
         self.assertEqual(len(r["charges"][0]["sentence"]), 6)
         self.assertAlmostEqual(sum(b["share"] for b in r["charges"][0]["sentence"]), 1.0, places=5)
         case_id = r["similar"][0]["case_id"]

@@ -21,6 +21,7 @@ from backend.llm.base import LLMError  # noqa: E402
 from backend.llm.fake import FakeClient  # noqa: E402
 from backend.llm.gemini import DEFAULT_MODEL, GeminiClient  # noqa: E402
 from backend.llm.limits import UsageLimiter  # noqa: E402
+from backend.llm.openai_client import OpenAIClient, strict_schema  # noqa: E402
 from backend.llm.tasks import (added_numbers, rewrite_claim, FOLLOWUP_SCHEMA, MAX_INPUT, MAX_QUESTION, SAFE_WHY,  # noqa: E402
                                followup_questions, outgoing)
 from backend.main import create_app  # noqa: E402
@@ -125,6 +126,54 @@ class TestUsageLog(unittest.TestCase):
         self.assertNotIn("secret-key", text)
 
 
+def openai(handler):
+    return OpenAIClient("secret-key", "test-model", transport=httpx.MockTransport(handler))
+
+
+def openai_reply(payload, **message):
+    content = payload if isinstance(payload, str) else json.dumps(payload, ensure_ascii=False)
+    return httpx.Response(200, json={"choices": [{"message": {"content": content, **message}}],
+                                     "usage": {"prompt_tokens": 10, "completion_tokens": 5}})
+
+
+class TestOpenAI(unittest.TestCase):
+    def test_request_shape(self):
+        seen = {}
+
+        def handler(request):
+            seen.update(url=str(request.url), auth=request.headers["authorization"], body=json.loads(request.content))
+            return openai_reply(GOOD)
+
+        self.assertEqual(openai(handler).generate_json("系統", "使用者", FOLLOWUP_SCHEMA), GOOD)
+        self.assertEqual(seen["url"], "https://api.openai.com/v1/chat/completions")
+        self.assertEqual(seen["auth"], "Bearer secret-key")
+        self.assertNotIn("secret-key", seen["url"], "key 不能放在網址")
+        self.assertEqual(seen["body"]["model"], "test-model")
+        self.assertEqual(seen["body"]["messages"], [{"role": "system", "content": "系統"}, {"role": "user", "content": "使用者"}])
+        fmt = seen["body"]["response_format"]
+        self.assertEqual((fmt["type"], fmt["json_schema"]["strict"]), ("json_schema", True))
+
+    def test_strict_schema(self):
+        s = strict_schema(FOLLOWUP_SCHEMA)
+        item = s["properties"]["questions"]["items"]
+        self.assertEqual((s["additionalProperties"], item["additionalProperties"]), (False, False))
+        self.assertEqual(item["required"], ["text", "why"])
+        self.assertNotIn("additionalProperties", FOLLOWUP_SCHEMA, "不能改到原本的 schema")
+
+    def test_failures_raise_llm_error(self):
+        for response in (httpx.Response(429, json={}), httpx.Response(200, json={"choices": []}),
+                         openai_reply("不是 JSON"), openai_reply("", refusal="不行")):
+            with self.assertRaises(LLMError):
+                openai(lambda request, r=response: r).generate_json("s", "u", FOLLOWUP_SCHEMA)
+
+    def test_connection_error_hides_key(self):
+        def handler(request):
+            raise httpx.ConnectError("secret-key")
+        with self.assertRaises(LLMError) as e:
+            openai(handler).generate_json("s", "u", FOLLOWUP_SCHEMA)
+        self.assertNotIn("secret-key", str(e.exception))
+
+
 class TestCreateClient(unittest.TestCase):
     def test_not_configured(self):
         self.assertIsNone(llm.create_client(""))
@@ -132,10 +181,13 @@ class TestCreateClient(unittest.TestCase):
     def test_providers(self):
         self.assertEqual(llm.create_client("fake").name, "fake")
         self.assertEqual(llm.create_client("gemini", "m", "k").model, "m")
+        self.assertEqual(llm.create_client("openai", "", "k").vendor, "OpenAI")
 
     def test_mistakes_fail_at_startup(self):
         with self.assertRaises(RuntimeError):
             llm.create_client("gemini", "", "")
+        with self.assertRaises(RuntimeError):
+            llm.create_client("openai", "", "")
         with self.assertRaises(RuntimeError):
             llm.create_client("gpt")
 
@@ -192,6 +244,19 @@ class TestRewriteTask(unittest.TestCase):
         self.assertNotIn("追問", client.sent[0])
         self.assertIn("他說沒錢", client.sent[0])
 
+    def test_criminal_uses_criminal_facts_prompt(self):
+        systems = []
+
+        class Recording(FakeClient):
+            def generate_json(self, system, user, schema):
+                systems.append(system)
+                return super().generate_json(system, user, schema)
+
+        rewrite_claim(Recording({"claim": "被告徒手毆打被害人。"}), None, DISPUTE, "criminal")
+        rewrite_claim(Recording({"claim": "原告主張被告未還款。"}), None, DISPUTE, "unsure")
+        self.assertIn("犯罪事實", systems[0])
+        self.assertIn("原告主張", systems[1])
+
     def test_result_is_masked(self):
         r = rewrite_claim(FakeClient({"claim": "原告電話0912345678，被告未還款。"}), None, DISPUTE)
         self.assertNotIn("0912345678", r["text"])
@@ -225,6 +290,12 @@ class TestRewriteEndpoint(unittest.TestCase):
         fake = FakeClient({"claim": "原告主張被告未還款。"})
         r = self.rewrite(self.client(fake))
         self.assertEqual((r["source"], r["text"]), ("llm", "原告主張被告未還款。"))
+
+    def test_case_type_is_passed(self):
+        with mock.patch("backend.main.rewrite_claim", return_value={"text": "被告毆打被害人。", "added_numbers": []}) as rw:
+            c = self.client(FakeClient())
+            c.post("/api/intake/rewrite", json={"text": DISPUTE, "allow_llm": True, "case_type": "criminal"})
+        self.assertEqual(rw.call_args.args[3], "criminal")
 
     def test_nothing_is_sent_without_permission(self):
         fake = FakeClient()
@@ -267,7 +338,7 @@ class TestEndpoint(unittest.TestCase):
         fake = FakeClient(GOOD)
         c = self.client(fake)
         r = self.ask(c, allow_llm=False)
-        self.assertEqual((r["source"], r["llm_available"]), ("rules", True))
+        self.assertEqual((r["source"], r["llm_available"], r["llm_vendor"]), ("rules", True, FakeClient.vendor))
         r = c.post("/api/intake/followup", json={"case_type": "civil", "text": DISPUTE}).json()
         self.assertEqual(r["source"], "rules", "沒有寫 allow_llm 也不能傳")
         self.assertEqual(fake.sent, [])
@@ -322,7 +393,7 @@ class TestEndpoint(unittest.TestCase):
         self.addCleanup(tmp.cleanup)
         c = TestClient(create_app(Settings(artifacts_dir=Path(tmp.name))))
         r = self.ask(c)
-        self.assertEqual((r["source"], r["llm_available"]), ("rules", False))
+        self.assertEqual((r["source"], r["llm_available"], r["llm_vendor"]), ("rules", False, None))
         self.assertEqual(c.get("/api/health").json()["followup"], "rules")
 
 
@@ -346,12 +417,18 @@ class TestSettings(unittest.TestCase):
             s = Settings.from_env()
         self.assertEqual((s.llm_provider, s.llm_model, s.llm_api_key), ("gemini", "m", "k"))
 
+    def test_reads_openai_key(self):
+        env = {"JD_LLM_PROVIDER": "openai", "GEMINI_API_KEY": "g", "OPENAI_API_KEY": "o"}
+        with mock.patch.dict("os.environ", env), mock.patch("backend.settings.load_dotenv"):
+            self.assertEqual(Settings.from_env().llm_api_key, "o")
+
     def test_env_file_is_ignored_by_git(self):
         root = Path(__file__).resolve().parents[1]
         self.assertIn(".env", (root / ".gitignore").read_text(encoding="utf-8").splitlines())
         for line in (root / ".env.example").read_text(encoding="utf-8").splitlines():
-            if line.startswith("GEMINI_API_KEY"):
-                self.assertEqual(line, "GEMINI_API_KEY=", "範本不能有真的 key")
+            for name in ("GEMINI_API_KEY", "OPENAI_API_KEY"):
+                if line.startswith(name):
+                    self.assertEqual(line, f"{name}=", "範本不能有真的 key")
 
 
 if __name__ == "__main__":

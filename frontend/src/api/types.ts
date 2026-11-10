@@ -6,7 +6,7 @@ export type DefendantType = "person" | "company" | "government";
 export interface Health {
   status: string;
   civil: "model" | "mock";
-  criminal: "mock";
+  criminal: "model" | "mock";
   followup: "rules" | "llm";
   model: string | null;
 }
@@ -34,6 +34,7 @@ export interface FollowupResponse {
   questions: Question[];
   source: "rules" | "llm";
   llm_available?: boolean;
+  llm_vendor?: string | null;
   fallback?: "not_dispute" | "error" | "limited" | null;
 }
 
@@ -93,6 +94,7 @@ export interface SimilarCase {
   awarded_amount?: number | null;
   sentence?: string | null;
   default_judgment?: boolean;
+  url?: string | null;
 }
 
 export interface EvidenceRow {
@@ -138,13 +140,33 @@ export interface CivilReport {
 export interface Charge {
   name: string;
   law: string;
+  law_note?: string | null;
   probability: number;
   sentence: { label: string; share: number }[];
+  similar_sentence?: { label: string; share: number }[] | null;
+  n_similar?: number | null;
+}
+
+export interface CriminalModelInfo {
+  name: string;
+  description: string;
+  n_test?: number | null;
+  charge_top1?: number | null;
+  bucket_accuracy?: number | null;
+  bucket_within_one?: number | null;
+}
+
+export interface SentenceDistribution {
+  buckets: { label: string; share: number }[];
+  mock: boolean;
+  model: { name: string; description: string };
 }
 
 export interface CriminalReport {
+  sentence?: SentenceDistribution | null;   // ELECTRA 刑期，後端目前停用
   charges: Charge[];
   similar: SimilarCase[];
+  model?: CriminalModelInfo | null;
   mock: boolean;
 }
 

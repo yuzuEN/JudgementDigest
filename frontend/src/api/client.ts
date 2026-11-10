@@ -38,8 +38,8 @@ export const api = {
   options: () => request<Options>("/meta/options"),
   followup: (case_type: CaseType, mid: string | null, text: string, allow_llm = false) =>
     request<FollowupResponse>("/intake/followup", { case_type, mid, text, allow_llm }),
-  rewrite: (mid: string | null, text: string) =>
-    request<RewriteResponse>("/intake/rewrite", { mid, text, allow_llm: true }),
+  rewrite: (case_type: CaseType, mid: string | null, text: string) =>
+    request<RewriteResponse>("/intake/rewrite", { case_type, mid, text, allow_llm: true }),
   civilReport: (input: CivilInput) => request<CivilReport>("/civil/report", input),
   criminalReport: (text: string) => request<CriminalReport>("/criminal/predict", { text }),
   guide: (source: string, caseId: number) => request<Guide>(`/judgments/${source}/${caseId}/guide`),

@@ -1,6 +1,7 @@
 # 一行啟動整個平台（在 repo 根目錄）：
 #   docker compose up --build
-# 開 http://localhost:8080 （port 被占用時：JD_PORT=8180 docker compose up）。沒有 artifacts/ 時民事會顯示示例資料，流程照樣走得完。
+# 開 http://localhost:8080 （port 被占用時：JD_PORT=8180 docker compose up）。沒有 artifacts/ 時民事與刑事會顯示示例資料，流程照樣走得完。
+# 模型放 artifacts/（民事 civil_winloss_v1、retrieval_civil_v3；刑事 criminal_v1、retrieval_criminal_v1）；AI 整理敘述、AI 追問要在 .env 設定 JD_LLM_PROVIDER=gemini 與 GEMINI_API_KEY（範本 .env.example）。
 services:
   backend:
     build:
