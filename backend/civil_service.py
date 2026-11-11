@@ -5,7 +5,7 @@
 任一個不存在時整個民事改回傳示例資料（mock = true），伺服器照樣能啟動，前端照樣能走完流程。
 
 獲償比例模型（artifacts/civil_amount_v1）是選用的：有的話金額範圍用模型推估（若為一部勝訴），
-沒有或讀不出來時退回相似判決的分位數（和沒有這個模型之前相同）。
+沒有、讀不出來、或這次不適合用模型時（見 _use_amount_model），退回相似判決的分位數（和沒有這個模型之前相同）。
 """
 import json
 import logging
@@ -36,6 +36,7 @@ MAX_DEFAULT_SHOWN = 3     # 列表裡一造辯論的上限
 DUPLICATE_PREFIX = 40     # 摘要開頭這麼多字相同，視為同一種制式案件
 MID_VOTE = 0.4            # 沒選糾紛類型時，相似判決的案由投票超過這個比例才採用：口語測試 23 件對 21 件，全部都用只對 47%
 MIN_SAME_MID = 10         # 同案由的判決少於這個數時，改在全部案件中找
+MIN_AMOUNT_MODEL_CASES = 30   # 獲償比例模型在這個案由的訓練件數少於這個數就不用（16 類、共 113 件；例如債務人異議 11 件）
 
 
 class CivilService:
@@ -71,9 +72,19 @@ class CivilService:
             return
         try:
             self.amount_model, self.amount_meta = amount_service.load(path)
+        except amount_service.StaleModel as e:
+            logger.warning("獲償比例模型 %s 不能用：%s；金額範圍改用相似判決的分位數", path, e)
+            self.amount_model = self.amount_meta = None
         except Exception:
             logger.warning("獲償比例模型 %s 讀取失敗，金額範圍改用相似判決的分位數", path, exc_info=True)
             self.amount_model = self.amount_meta = None
+
+    @property
+    def amount_source(self) -> str:
+        """/health 用：金額範圍目前用模型還是相似判決。"""
+        if self.mock:
+            return "mock"
+        return "model" if self.amount_model is not None else "similar"
 
     @property
     def mock(self) -> bool:
@@ -223,9 +234,14 @@ class CivilService:
         rows, _ = self.index.top(sim, N_NEIGHBORS, self._allowed(mid, self.in_stats))
         winners = [r for r in rows if self.y[r] == 1]
         similar_range = amount_range(self.grant_ratio[winners], req.claimed_amount)
+        if similar_range:
+            similar_range = {"source": "similar", "scope": "win", **similar_range}
+        # 相似的勝訴判決裡有幾件是全部勝訴：模型只回答「若為一部勝訴」，全勝多的案由要讓使用者知道
+        full_wins = {"n_wins": len(winners), "n_full_wins": sum(self.outcomes[r] in ("勝訴", "確認勝訴") for r in winners)}
+        amount = self._amount_range(req, mid, similar_range)
         return {
             "prediction": prediction,
-            "amount_range": self._amount_range(req, mid, similar_range),
+            "amount_range": {**amount, **full_wins} if amount else None,
             "similar": self._listed(sim, mid, N_SHOWN),
             "evidence": evidence_table([self.case_evidence[r] for r in winners], user_evidence(req.text, req.evidence)),
             "defenses": defense_table([self.case_defenses[r] for r in rows]),
@@ -236,15 +252,32 @@ class CivilService:
             "mock": False,
         }
 
+    def _use_amount_model(self, req) -> bool:
+        """
+        什麼時候用獲償比例模型（其他時候用相似判決的分位數）：
+        - 使用者自己選了單一個案由（系統猜的不算：沒選案由時模型的中位數會偏很多）
+        - 法院、請求金額至少填了一項（兩者都沒填時，評估裡模型比相似判決差：MAE +0.007）
+        - 這個案由的訓練件數夠（MIN_AMOUNT_MODEL_CASES）
+        """
+        return (self.amount_model is not None and bool(req.mid) and bool(req.court or req.claimed_amount)
+                and amount_service.usable_for(self.amount_meta, req.mid, MIN_AMOUNT_MODEL_CASES))
+
     def _amount_range(self, req, mid: Optional[str], similar: Optional[Dict]) -> Optional[Dict]:
         """
-        有獲償比例模型：範圍是「若為一部勝訴」的模型推估；相似判決的分布（件數與 buckets）留著當佐證，
-        但不是這個範圍的依據。沒有模型：就是相似的勝訴判決的分位數。
+        用模型時：範圍是「若為一部勝訴」的模型推估；相似判決的分布（件數與 buckets）留著當佐證，但不是範圍的依據。
+        不用模型時：就是相似的勝訴判決的分位數。描述看不出是糾紛時兩種都不給（空白描述也會算出一個範圍，沒有意義）。
         """
-        if self.amount_model is None:
+        if not looks_like_dispute(req.text):
+            return None
+        if not self._use_amount_model(req):
             return similar
-        r = self.amount_model.predict_one(without_questions(req.text), {**self.answers(req), "mid": mid},
-                                          req.claimed_amount)
+        try:
+            r = self.amount_model.predict_one(without_questions(req.text), {**self.answers(req), "mid": mid},
+                                              req.claimed_amount)
+        except Exception:
+            # 金額模型出錯不能拖垮整個結果頁（勝訴機率、相似判決都還要顯示）
+            logger.warning("獲償比例模型預測失敗，這次改用相似判決的分位數", exc_info=True)
+            return similar
         return {"source": "model", "scope": "partial_win",
                 "n_cases": similar["n_cases"] if similar else None,
                 "ratio_low": r["ratio_low"], "ratio_median": r["ratio_median"], "ratio_high": r["ratio_high"],

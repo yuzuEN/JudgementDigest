@@ -17,7 +17,6 @@
 """
 import argparse
 import json
-import re
 import sqlite3
 import time
 from contextlib import closing
@@ -35,6 +34,7 @@ from sklearn.preprocessing import OneHotEncoder
 
 import config
 from civil.dataset.text import prepare_input
+from civil.features import ITEM_PATTERNS, ITEMS
 from civil.models.service import FEATURES, UNKNOWN, features_frame
 from civil.models.tfidf import vec
 
@@ -45,13 +45,7 @@ UNKNOWN_SHARE = 0.3        # 訓練與校準時，法院、請求金額各有這
 ALPHA = 1.0                # 事先固定（同 amount.py），不看測試結果調整
 SEED = 42
 MIN_RATIO = 0.001
-# 損害子項目的關鍵字。和 civil/models/amount.py 的 ITEMS 相同（tests/test_amount_service.py 檢查兩邊一致）；
-# 複製一份是因為後端載入模型時不該跟著 import 整支分析腳本。
-ITEMS = {"醫療費": r"醫療費|醫藥費", "住院": r"住院", "手術": r"手術", "骨折": r"骨折", "看護": r"看護",
-         "勞動能力": r"勞動能力", "工作損失": r"工作損失|不能工作|無法工作|薪資損失|營業損失",
-         "慰撫金": r"慰撫金|精神上?之?損害|非財產上", "車損": r"修復費|修理費|維修費|車損|車輛損害",
-         "死亡喪葬": r"死亡|喪葬", "律師費": r"律師費", "違約金": r"違約金", "租金": r"租金"}
-ITEM_PATTERNS = [re.compile(p) for p in ITEMS.values()]
+CLAIM_CLIP = (1, 99)       # 請求金額（log10）裁到訓練資料的這兩個百分位，超出範圍不外插（平方項會亂跳）
 
 
 # ── 資料 ──
@@ -161,6 +155,7 @@ class AmountModel:
     def __init__(self):
         self.vec = self.enc = self.ridge = None
         self.mu = self.sd = None
+        self.claim_range = None    # 訓練資料 log10(請求金額) 的（第 1, 第 99 百分位）
         self.edges = self.q = None
 
     def _dense(self, texts, claim, fit: bool) -> csr_matrix:
@@ -168,6 +163,10 @@ class AmountModel:
         known = np.isfinite(claim) & (claim > 0)
         lc = np.full(len(claim), np.nan)
         lc[known] = np.log10(claim[known])
+        if fit:
+            self.claim_range = tuple(float(x) for x in np.nanpercentile(lc, CLAIM_CLIP)) if known.any() else None
+        if getattr(self, "claim_range", None):
+            lc = np.clip(lc, *self.claim_range)
         if fit:
             self.mu, self.sd = float(np.nanmean(lc)), float(np.nanstd(lc)) + 1e-9
         z = np.where(known, (lc - self.mu) / self.sd, 0.0)       # 沒填的請求金額放平均，另用旗標告訴模型
@@ -336,6 +335,10 @@ def train(d: pd.DataFrame, version: str, out: Path, metrics_summary: Optional[Di
     joblib.dump(model, out / "model.joblib", compress=3)
     meta = {"name": MODEL_NAME, "trained_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
             "dataset": f"text_dataset_{version}.csv", "n_cases": int(len(d)), "median_ratio": float(d.ratio.median()),
+            # 後端用：各案由的訓練件數（太少的案由不用模型）、損害子項目的關鍵字（改了沒重訓就不用）、請求金額的範圍
+            "mid_counts": {str(k): int(v) for k, v in d.mid.value_counts().items()},
+            "items": ITEMS,
+            "claim_log10_range": list(model.claim_range) if model.claim_range else None,
             "sample": f"一部勝訴一部敗訴、獲償比例是算出來的（金額欄位規則 {rule_version}）", "amount_rules": rule_version, "features": FEATURES + ["claimed_amount"],
             "unknown_share": UNKNOWN_SHARE, "interval": [LOW, HIGH],
             "description": "TF-IDF（原告主張）＋案由、法院、律師、對方是否為法人、請求金額、損害子項目；若為一部勝訴的獲償比例範圍",
@@ -344,10 +347,25 @@ def train(d: pd.DataFrame, version: str, out: Path, metrics_summary: Optional[Di
     return out
 
 
+class StaleModel(ValueError):
+    """模型檔和目前的程式對不上（舊格式、或關鍵字改了沒重訓），要重新訓練。"""
+
+
 def load(path: Optional[Path] = None):
-    """回傳（模型, meta）。"""
+    """回傳（模型, meta）。meta 缺少後端需要的欄位、或關鍵字表和現在不同時丟 StaleModel。"""
     path = Path(path or artifact_dir())
-    return joblib.load(path / "model.joblib"), json.loads((path / "meta.json").read_text(encoding="utf-8"))
+    model = joblib.load(path / "model.joblib")
+    meta = json.loads((path / "meta.json").read_text(encoding="utf-8"))
+    if "mid_counts" not in meta or "items" not in meta:
+        raise StaleModel("模型檔是舊格式（meta.json 沒有各案由件數或關鍵字表），請重新訓練")
+    if meta["items"] != ITEMS:
+        raise StaleModel("損害子項目的關鍵字和訓練時不同（civil/features.py 改過），請重新訓練")
+    return model, meta
+
+
+def usable_for(meta: Dict, mid: Optional[str], min_cases: int) -> bool:
+    """這個案由的訓練件數夠不夠：太少的案由（例如債務人異議只有 11 件）模型沒學到東西，不用它。"""
+    return bool(mid) and meta.get("mid_counts", {}).get(mid, 0) >= min_cases
 
 
 def main():

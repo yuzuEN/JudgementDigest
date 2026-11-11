@@ -176,7 +176,7 @@ function AmountPanel({ range, mock }: { range: AmountRange | null; mock: boolean
       <>
         <PanelTitle mock={mock}>可能判准的金額</PanelTitle>
         <EmptyState title="無法估出金額範圍" icon={<CircleMinusIcon className="size-7 text-ink-3" aria-hidden="true" />}>
-          相似的勝訴判決太少，估出來的範圍不可靠，所以不顯示。你可以參考「相似判決」分頁，或回上一步補充細節。
+          相似的勝訴判決太少，或描述看不出是哪一種糾紛，估出來的範圍不可靠，所以不顯示。你可以參考「相似判決」分頁，或回上一步補充細節。
         </EmptyState>
       </>
     );
@@ -226,6 +226,9 @@ function AmountPanel({ range, mock }: { range: AmountRange | null; mock: boolean
         </>
       )}
       <p>{coverage}金額只能給範圍，不能給單一數字。</p>
+      {range.n_wins ? (
+        <p>相似的勝訴判決 {range.n_wins} 件中，<b>{range.n_full_wins ?? 0} 件是全部勝訴</b>（判准請求的全部金額）。</p>
+      ) : null}
       {isModel && <Note>模型推估的範圍<b>很寬</b>，因為同樣的案情，法院判准的比例落差很大，只能看個大概。如果判決是全部勝訴，通常就是請求的全部金額。</Note>}
       {!claimed && <Note>想看到實際的金額範圍？<Link to="/start?stage=3">回上一步填寫想請求的金額</Link>，資料會保留。</Note>}
       <AmountDetail range={range} />

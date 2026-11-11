@@ -47,13 +47,10 @@ QUICK = False     # 試跑：只取 3,000 件，輸出檔名加 _quick（--quick
 import config                                            # noqa: E402
 from civil.models import structured as tvs               # noqa: E402  同一套結構化變數
 from civil.models.tfidf import vec                       # noqa: E402  同一套 TF-IDF 設定
+from civil.features import ITEMS                         # noqa: E402  損害子項目（和平台模型共用）
 
 OUT = config.OUTPUT_DIR
 LF = "longformer_amount_pd_fold{k}_v5_L4096_t2s_last4"
-ITEMS = {"醫療費": r"醫療費|醫藥費", "住院": r"住院", "手術": r"手術", "骨折": r"骨折", "看護": r"看護",
-         "勞動能力": r"勞動能力", "工作損失": r"工作損失|不能工作|無法工作|薪資損失|營業損失",
-         "慰撫金": r"慰撫金|精神上?之?損害|非財產上", "車損": r"修復費|修理費|維修費|車損|車輛損害",
-         "死亡喪葬": r"死亡|喪葬", "律師費": r"律師費", "違約金": r"違約金", "租金": r"租金"}
 lines = []
 
 

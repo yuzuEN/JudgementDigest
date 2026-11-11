@@ -9,6 +9,8 @@ export interface Health {
   criminal: "model" | "mock";
   followup: "rules" | "llm";
   model: string | null;
+  /** 民事金額範圍：有可用的獲償比例模型，或只用相似判決 */
+  amount?: "model" | "similar" | "mock";
 }
 
 export interface MidOption {
@@ -83,6 +85,9 @@ export interface AmountRange {
   amount_median?: number | null;
   amount_high?: number | null;
   buckets?: { low: number; high: number; count: number }[];
+  /** 相似判決（對審、最多 30 件）裡勝訴與一部勝訴的件數，以及其中全部勝訴的件數 */
+  n_wins?: number | null;
+  n_full_wins?: number | null;
 }
 
 export interface SimilarCase {

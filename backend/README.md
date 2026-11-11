@@ -51,7 +51,14 @@ API 文件（可以直接在網頁上試）：http://127.0.0.1:8000/docs
 
 `civil_winloss_v1/`、`retrieval_civil_v3/` 任一個不存在時，民事改回傳示例資料；沒有 `criminal_v1/` 時罪名、法條、刑度、相似判決改回傳示例資料。伺服器照樣能啟動。
 
-`civil_amount_v1/` 是獲償比例模型：有的話，結果頁的金額範圍是模型推估的「若為一部勝訴」（`amount_range.source` 是 `model`，`scope` 是 `partial_win`），相似判決的分布留著當對照；沒有、或讀不出來（例如 `scikit-learn` 版本不同，會在記錄裡留下警告）時，退回相似的勝訴判決的 10%–90% 分位數（`source` 是 `similar`）。
+`civil_amount_v1/` 是獲償比例模型：有的話，結果頁的金額範圍是模型推估的「若為一部勝訴」（`amount_range.source` 是 `model`，`scope` 是 `partial_win`），相似判決的分布留著當對照。以下情況退回相似的勝訴判決的 10%–90% 分位數（`source` 是 `similar`）：
+
+- 沒有模型檔、讀不出來（例如 `scikit-learn` 版本不同），或模型檔是舊格式、`civil/features.py` 的關鍵字改了沒重訓：啟動時在記錄裡留下警告，`/api/health` 的 `amount` 是 `similar`
+- 使用者沒有自己選單一個案由，或法院和請求金額都沒填（評估裡這時模型比相似判決差）
+- 這個案由的訓練件數少於 `MIN_AMOUNT_MODEL_CASES`（30 件，`backend/civil_service.py`）
+- 模型這次預測出錯（記警告，結果頁其他部分照常）
+
+描述看不出是糾紛時（`looks_like_dispute`），不論哪一種都不給金額範圍。`amount_range` 另外附 `n_wins`、`n_full_wins`：相似判決裡勝訴幾件、其中全部勝訴幾件，因為模型只回答「若為一部勝訴」。
 
 刑期模型的注意事項：
 - 只用區間的頭（6 個區間；第 7 類無期／死刑訓練資料沒有，不顯示）。迴歸頭（估計月數）目前不用。
