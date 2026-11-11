@@ -809,6 +809,16 @@ describe("民事結果", () => {
       expect(screen.getByText(/上面的範圍是模型推估的/)).toBeInTheDocument();
     });
 
+    it("說明相似的勝訴判決裡有幾件是全部勝訴", async () => {
+      await show({ ...model, n_wins: 21, n_full_wins: 17 });
+      expect(screen.getByText(/相似的勝訴判決 21 件中/)).toHaveTextContent("17 件是全部勝訴");
+    });
+
+    it("舊版後端沒有全勝件數時不顯示那一行", async () => {
+      await show(model);
+      expect(screen.queryByText(/件是全部勝訴/)).not.toBeInTheDocument();
+    });
+
     it("模型：相似的勝訴判決不夠時仍給範圍，只是沒有分布可看", async () => {
       await show({ ...model, n_cases: null, buckets: [] });
       expect(screen.getByText("18 萬～42 萬")).toBeInTheDocument();

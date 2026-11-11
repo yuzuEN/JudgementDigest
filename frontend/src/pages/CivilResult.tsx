@@ -233,11 +233,21 @@ function AmountDetail({ range }: { range: AmountRange }) {
 
 const BIG = "text-4xl leading-none font-bold text-accent-foreground";
 
+/** 相似的勝訴判決中幾件是全部勝訴：模型只回答「若為一部勝訴」，全勝多的案由要讓使用者知道。 */
+function FullWins({ range }: { range: AmountRange }) {
+  if (!range.n_wins) return null;
+  return (
+    <p className="text-[15px]">
+      相似的勝訴判決 {range.n_wins} 件中，<strong>{range.n_full_wins ?? 0} 件是全部勝訴</strong>（判准請求的全部金額）。
+    </p>
+  );
+}
+
 function Amount({ range }: { range: AmountRange | null }) {
   if (!range) {
     return (
       <Section id="a-title" title="如果勝訴，可能判准的金額">
-        <p className="text-sm text-muted-foreground">相似的勝訴判決不夠多，這次無法估出金額範圍。</p>
+        <p className="text-sm text-muted-foreground">相似的勝訴判決不夠多，或描述看不出是哪一種糾紛，這次無法估出金額範圍。</p>
       </Section>
     );
   }
@@ -253,7 +263,9 @@ function Amount({ range }: { range: AmountRange | null }) {
       <Section id="a-title" title={`${when}可能拿到請求金額的`}>
         <span className={BIG}>{percent(range.ratio_low)}～{percent(range.ratio_high)}</span>
         <p className="text-[15px] text-muted-foreground">{pct}。回上一步填寫想請求的金額，就會換算成金額。</p>
-        <AmountDetail range={range} />
+        <FullWins range={range} />
+        <FullWins range={range} />
+      <AmountDetail range={range} />
       </Section>
     );
   }
@@ -272,6 +284,7 @@ function Amount({ range }: { range: AmountRange | null }) {
       <p className="text-[15px] text-muted-foreground">
         {isModel ? `${pct}。` : `${pct}（依 ${range.n_cases} 件相似的勝訴判決）。`}金額只能給範圍，不能給單一數字。
       </p>
+      <FullWins range={range} />
       <AmountDetail range={range} />
     </Section>
   );

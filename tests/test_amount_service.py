@@ -10,6 +10,7 @@ import pandas as pd
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
+from civil import features  # noqa: E402
 from civil.models import amount, amount_service as A  # noqa: E402
 from tests.test_civil_service import LOSE, WIN, synthetic  # noqa: E402
 
@@ -25,10 +26,11 @@ def amount_frame(n=200):
 ANSWERS = {"mid": "侵權：交通事故", "court": "臺北", "plaintiff_has_lawyer": False, "defendant_is_corp": True}
 
 
-class TestKeywordTableInSync(unittest.TestCase):
-    def test_items_match_analysis_script(self):
-        """後端不 import 分析腳本，所以關鍵字表複製了一份；兩邊改動要一起改。"""
-        self.assertEqual(A.ITEMS, amount.ITEMS)
+class TestKeywordTableShared(unittest.TestCase):
+    def test_both_use_the_shared_table(self):
+        """分析腳本和平台模型都從 civil/features.py import，只有一份。"""
+        self.assertIs(A.ITEMS, features.ITEMS)
+        self.assertIs(amount.ITEMS, features.ITEMS)
 
 
 class TestSelectSample(unittest.TestCase):
@@ -199,6 +201,15 @@ class TestModel(unittest.TestCase):
         self.assertEqual(flags[1].sum(), 0)
         self.assertEqual(list(count), [4 / 5, 0.0])         # 項目數（除以 5）
 
+    def test_claimed_amount_is_clipped_to_the_training_range(self):
+        """請求金額遠超出訓練範圍時不外插（平方項會讓 10 億、1 兆給出亂跳的結果）：都裁到訓練資料的第 99 百分位。"""
+        lo, hi = self.model.claim_range
+        top = 10 ** hi
+        same = [self.model.predict_one(WIN[0] * 5, ANSWERS, c)["ratio_median"] for c in (top, 1e9, 1e12)]
+        self.assertEqual(len(set(same)), 1, same)
+        small = [self.model.predict_one(WIN[0] * 5, ANSWERS, c)["ratio_median"] for c in (10 ** lo, 1, 10)]
+        self.assertEqual(len(set(small)), 1, small)
+
     def test_missing_claim_is_flagged_and_neutral(self):
         """沒填的請求金額：標成「沒填」，數值放平均（z＝0），模型才學得到使用者沒填的情況。"""
         dense = self.model._dense(["甲", "乙", "丙"], [np.nan, 0, 250_000], fit=False).toarray()
@@ -218,9 +229,32 @@ class TestTrainAndLoad(unittest.TestCase):
         self.assertEqual((meta["name"], meta["n_cases"], meta["amount_rules"]), (A.MODEL_NAME, 150, "2.5.1"))
         self.assertEqual(meta["interval"], [A.LOW, A.HIGH])
         self.assertEqual(meta["metrics"]["模型：全部填"]["mae"], 0.2)
+        self.assertEqual(meta["mid_counts"], {"侵權：交通事故": 100, "契約：買賣": 50})
+        self.assertEqual(meta["items"], features.ITEMS)
+        self.assertEqual(meta["claim_log10_range"], list(model.claim_range))
         self.assertEqual(len(model.edges), A.N_BINS - 1)
         r = model.predict_one(WIN[0] * 5, ANSWERS, 500_000)
         self.assertTrue(0 < r["ratio_low"] <= r["ratio_high"] <= 1)
+
+    def test_refuses_stale_model_files(self):
+        """舊格式（沒有各案由件數），或關鍵字表改了沒重訓：讀取時就拒絕，後端改用相似判決。"""
+        import json
+        with tempfile.TemporaryDirectory() as tmp:
+            out = A.train(amount_frame(150), "test", A.artifact_dir(Path(tmp)), {}, "2.5.1")
+            meta = json.loads((out / "meta.json").read_text(encoding="utf-8"))
+            for broken, why in (({k: v for k, v in meta.items() if k != "mid_counts"}, "舊格式"),
+                                ({**meta, "items": {**meta["items"], "醫療費": "醫療費"}}, "關鍵字")):
+                (out / "meta.json").write_text(json.dumps(broken, ensure_ascii=False), encoding="utf-8")
+                with self.assertRaises(A.StaleModel) as e:
+                    A.load(out)
+                self.assertIn(why, str(e.exception))
+
+    def test_usable_for_needs_enough_training_cases(self):
+        meta = {"mid_counts": {"民間借貸": 883, "強制執行救濟：債務人異議等": 11}}
+        self.assertTrue(A.usable_for(meta, "民間借貸", 30))
+        self.assertFalse(A.usable_for(meta, "強制執行救濟：債務人異議等", 30))
+        self.assertFalse(A.usable_for(meta, "沒看過的案由", 30))
+        self.assertFalse(A.usable_for(meta, None, 30))
 
     def test_pickled_class_is_importable_by_its_module_name(self):
         """用 python -m 訓練時類別不能記成 __main__.AmountModel，否則後端讀不出來。"""
