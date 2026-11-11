@@ -138,11 +138,11 @@ docker compose up --build
 |---|---|---|
 | `criminal_term/` | 刑度 ELECTRA（約 410 MB） | `scripts/sync_criminal_term.sh` |
 
-其他資料夾（民事模型、民事檢索、刑事 SVM、刑事檢索）還在組內另外傳。
+其他資料夾（民事模型、民事檢索、刑事 SVM、刑事檢索）還在組內另外傳。上傳方式見 [`docs/模型檔上傳.md`](docs/模型檔上傳.md)。
 
 第一次使用：
 
-1. 請 repo 擁有者把你加進協作者（repo 是私人的）。
+1. 請管理者把你加進 repo 所在的 HF 組織（repo 是私人的，組織成員才看得到）。
 2. 安裝 Hugging Face CLI 並登入（token 在 https://huggingface.co/settings/tokens 建立，選 Read 權限）：
    ```bash
    pip install -U "huggingface_hub[cli]"
