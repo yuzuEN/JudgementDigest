@@ -4,7 +4,7 @@ import { cn } from "@/lib/utils";
 import { Card, CardAction, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { api } from "../api/client";
-import type { CriminalModelInfo, CriminalReport, SentenceDistribution } from "../api/types";
+import type { CriminalModelInfo, CriminalReport } from "../api/types";
 import { ErrorBox, InfoLink, LAF_URL, Loading, MockBadge, ResultNotes } from "../components/Common";
 import { ResultFrame } from "../components/ResultFrame";
 import { percent } from "../format";
@@ -29,30 +29,21 @@ function Buckets({ items }: { items: Bucket[] }) {
   );
 }
 
-/**
- * ELECTRA 刑期模型（只估有期徒刑）的卡片。後端目前停用 ELECTRA，不回傳 report.sentence，這張卡不會出現；
- * 之後在 backend/main.py 打開 ELECTRA 就會顯示。
- */
-function ElectraSentenceCard({ sentence }: { sentence: SentenceDistribution }) {
-  return (
-    <Card aria-labelledby="electra-title">
-      <CardHeader>
-        <CardTitle id="electra-title" className="text-lg font-bold">可能的刑期範圍（有期徒刑）</CardTitle>
-        <CardDescription className="text-[15px]">AI 模型讀了你的描述後，估計判有期徒刑時刑期落在各區間的機會。</CardDescription>
-        {sentence.mock && <CardAction><MockBadge show>示例資料</MockBadge></CardAction>}
-      </CardHeader>
-      <CardContent><Buckets items={sentence.buckets} /></CardContent>
-    </Card>
-  );
-}
-
 function ModelScore({ model }: { model: CriminalModelInfo }) {
   const { n_test: n, charge_top1: top1, bucket_accuracy: acc, bucket_within_one: near } = model;
   if (n == null || top1 == null || acc == null || near == null) return null;
+  const electra = model.sentence_description && model.sentence_n_test != null;
   return (
     <p className="text-[13px] text-muted-foreground">
-      模型：{model.description}。用 {n.toLocaleString()} 件沒參與訓練的判決測試時，第一個罪名猜中 {percent(top1)}；
-      刑期區間猜中 {percent(acc)}，差一格以內 {percent(near)}。測試用的是判決書的文字，一般口語描述的準確度可能較低。
+      {electra ? <>
+        罪名模型：{model.description}，用 {n.toLocaleString()} 件沒參與訓練的判決測試時，第一個罪名猜中 {percent(top1)}。
+        刑期模型：{model.sentence_description}，用 {model.sentence_n_test!.toLocaleString()} 件{model.sentence_test ? ` ${model.sentence_test}` : "沒參與訓練的判決"}測試時，
+        刑期區間猜中 {percent(acc)}，差一格以內 {percent(near)}。
+      </> : <>
+        模型：{model.description}。用 {n.toLocaleString()} 件沒參與訓練的判決測試時，第一個罪名猜中 {percent(top1)}；
+        刑期區間猜中 {percent(acc)}，差一格以內 {percent(near)}。
+      </>}
+      測試用的是判決書的文字，一般口語描述的準確度可能較低。
     </p>
   );
 }
@@ -133,7 +124,6 @@ export default function CriminalResult() {
               </Card>
             ))}
           </div>
-          {report.sentence && <ElectraSentenceCard sentence={report.sentence} />}
           <Card aria-labelledby="crim-sim-title">
             <CardHeader>
               <CardTitle id="crim-sim-title" className="text-lg font-bold">相似的真實判決</CardTitle>

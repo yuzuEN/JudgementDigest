@@ -834,6 +834,17 @@ describe("刑事結果", () => {
     expect(screen.getByText(/第一個罪名猜中 93%/)).toBeInTheDocument();
   });
 
+  it("刑期用 ELECTRA 時，罪名和刑期的測試成績分開寫", async () => {
+    mockApi({ "POST /criminal/predict": () => ({ ...CRIMINAL_REPORT, mock: false,
+      model: { name: "criminal_v1", description: "TF-IDF ＋ SVM", n_test: 10000, charge_top1: 0.98,
+        bucket_accuracy: 0.763, bucket_within_one: 0.973, sentence_description: "法律 ELECTRA", sentence_n_test: 15369,
+        sentence_test: "2025 年判決" } }) });
+    renderAt("/result/criminal", <CriminalResult />, "/result/criminal", { caseType: "criminal", text: "x", maskedText: "開車撞到人" });
+    expect(await screen.findByText(/刑期模型：法律 ELECTRA，用 15,369 件 2025 年判決測試時/)).toBeInTheDocument();
+    expect(screen.getByText(/第一個罪名猜中 98%/)).toBeInTheDocument();
+    expect(screen.getByText(/刑期區間猜中 76%，差一格以內 97%/)).toBeInTheDocument();
+  });
+
   it("真的刑事判決連到司法院原文，不連判決導讀", async () => {
     const url = "https://judgment.judicial.gov.tw/FJUD/data.aspx?ty=JD&id=TPDM";
     mockApi({ "POST /criminal/predict": () => ({ ...CRIMINAL_REPORT, mock: false,

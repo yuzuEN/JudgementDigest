@@ -15,7 +15,7 @@ API 文件（可以直接在網頁上試）：http://127.0.0.1:8000/docs
 | `main.py` | 路由（全部在 `/api` 底下） |
 | `schemas.py` | 輸入輸出格式；前端的 `frontend/src/api/types.ts` 和它一一對應 |
 | `civil_service.py` | 民事：讀模型與檢索資料，算勝訴機率、相似判決、金額範圍、證據對照、常見抗辯、判決導讀 |
-| `criminal_service.py` | 刑事：讀模型（`artifacts/criminal_v1`）與檢索資料（`artifacts/retrieval_criminal_v1`），算罪名、法條、刑度、相似判決；下半部是 ELECTRA 刑期模型（目前停用）；沒有模型檔時回傳示例資料 |
+| `criminal_service.py` | 刑事：讀模型（`artifacts/criminal_v1`）與檢索資料（`artifacts/retrieval_criminal_v1`），算罪名、法條、刑度、相似判決；刑度有 ELECTRA 時用 ELECTRA（下半部 `CriminalTermService`），沒有時用 SVM；沒有模型檔時回傳示例資料 |
 | `followup.py` | 追問的固定題庫 |
 | `llm/` | LLM 追問，見下面的「LLM」 |
 | `quality.py` | 描述的品質檢查 |
@@ -47,13 +47,13 @@ API 文件（可以直接在網頁上試）：http://127.0.0.1:8000/docs
 - `retrieval_civil_v3/`：`python -m retrieval.build` 產生
 
 - `criminal_v1/`、`retrieval_criminal_v1/`：刑事罪名、法條模型與相似判決檢索（PR #39，`python -m criminal.models.service`、`python -m retrieval.criminal` 產生）
-- `criminal_term/`：ELECTRA 刑期模型（目前停用），Kaggle 訓練輸出的 `checkpoints/fold_01/`；啟用方式見 `criminal_service.py` 開頭說明
+- `criminal_term/`：刑度 ELECTRA（6 區間，和 SVM 相同），Kaggle `term-bucket-future-seed42-20261110` 的輸出（`best.pt`、`tokenizer/`、`encoder_config/`、`experiment_summary.json`）；沒有時刑度用 SVM。從 Hugging Face 下載：`scripts/sync_criminal_term.sh`（見根目錄 README 的「模型檔」）
 
 民事任一個不存在時，民事改回傳示例資料；沒有 `criminal_v1/` 時罪名、法條、刑度、相似判決改回傳示例資料。伺服器照樣能啟動。
 
 刑期模型的注意事項：
-- 只用區間的頭（6 個區間；第 7 類無期／死刑訓練資料沒有，不顯示）。迴歸頭（估計月數）目前不用。
-- 訓練時 beta 固定為 0，罪名／法條向量對輸出沒有影響，所以只建 encoder 和刑期的頭；beta 不是 0 的 checkpoint 會拒絕載入。
+- 只有分類頭（6 個區間），不估計月數；無期、死刑不在訓練資料裡。
+- 權重的名稱是 `encoder.*`、`mlp.*`、`head.*`；少了任何一個（例如舊版的刑期模型）會拒絕載入。
 - 送進模型前把【姓名】【地址】這類標記換成訓練資料的寫法（甲○○、○○市○○區…），見 `to_training_style()`。
 - 有使用者確認過的整理文字時，前端送整理文字；沒有就送遮名後的原始描述。
 - CPU 推論一筆約 0.3 秒；後端映像檔裝 CPU 版的 torch。`JD_BACKEND_MODE=mock` 可以強制使用示例資料。
@@ -107,7 +107,7 @@ API 文件（可以直接在網頁上試）：http://127.0.0.1:8000/docs
 
 ## 接上其他組的功能
 
-- **刑事**：罪名、法條、刑度、相似判決都在 `criminal_service.py`（TF-IDF＋SVM，PR #39）；ELECTRA 刑期也在同一檔、目前停用；模型檔另外傳，放進 `artifacts/`
+- **刑事**：罪名、法條、刑度、相似判決都在 `criminal_service.py`（TF-IDF＋SVM，PR #39）；刑度用同一檔的 ELECTRA（2025 年判決測試：區間 0.763、差一區 0.973），沒有模型檔時用 SVM；模型檔另外傳，放進 `artifacts/`
 - **LLM 追問**：已接上，見上面的「LLM」；送出的文字一律先經過 `retrieval.masking.mask()`
 - **段落功能標註**：`civil.insights.guide_paragraphs()` 換成標註模型，`labeler` 改成模型名稱
 

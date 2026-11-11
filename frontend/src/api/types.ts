@@ -7,6 +7,7 @@ export interface Health {
   status: string;
   civil: "model" | "mock";
   criminal: "model" | "mock";
+  criminal_sentence?: "electra" | "svm" | null;
   followup: "rules" | "llm";
   model: string | null;
 }
@@ -154,16 +155,12 @@ export interface CriminalModelInfo {
   charge_top1?: number | null;
   bucket_accuracy?: number | null;
   bucket_within_one?: number | null;
-}
-
-export interface SentenceDistribution {
-  buckets: { label: string; share: number }[];
-  mock: boolean;
-  model: { name: string; description: string };
+  sentence_description?: string | null;   // 刑期另用別的模型（法律 ELECTRA）時才有
+  sentence_n_test?: number | null;
+  sentence_test?: string | null;
 }
 
 export interface CriminalReport {
-  sentence?: SentenceDistribution | null;   // ELECTRA 刑期，後端目前停用
   charges: Charge[];
   similar: SimilarCase[];
   model?: CriminalModelInfo | null;
