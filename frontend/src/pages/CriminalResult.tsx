@@ -5,7 +5,7 @@ import { cn } from "@/lib/utils";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { api } from "../api/client";
-import type { Charge, CriminalModelInfo, CriminalReport, SentenceDistribution } from "../api/types";
+import type { Charge, CriminalModelInfo, CriminalReport } from "../api/types";
 import { Bar } from "../components/casey/Bars";
 import { Disclosure } from "../components/casey/Disclosure";
 import { EmptyState } from "../components/casey/EmptyState";
@@ -131,10 +131,20 @@ function ModelDetail({ model }: { model: CriminalModelInfo }) {
   if (n == null || top1 == null || acc == null || near == null) return null;
   return (
     <Disclosure summary="模型細節">
-      <p className="text-[15px]">
-        模型：{model.description}。用 {n.toLocaleString()} 件沒參與訓練的判決測試時，第一個罪名猜中 {percent(top1)}；
-        刑期區間猜中 {percent(acc)}，差一格以內 {percent(near)}。
-      </p>
+      {model.sentence_description && model.sentence_n_test != null ? <>
+        <p className="text-[15px]">
+          罪名模型：{model.description}，用 {n.toLocaleString()} 件沒參與訓練的判決測試時，第一個罪名猜中 {percent(top1)}。
+        </p>
+        <p className="text-[15px]">
+          刑期模型：{model.sentence_description}，用 {model.sentence_n_test.toLocaleString()} 件{model.sentence_test ? ` ${model.sentence_test}` : "沒參與訓練的判決"}測試時，
+          刑期區間猜中 {percent(acc)}，差一格以內 {percent(near)}。
+        </p>
+      </> : (
+        <p className="text-[15px]">
+          模型：{model.description}。用 {n.toLocaleString()} 件沒參與訓練的判決測試時，第一個罪名猜中 {percent(top1)}；
+          刑期區間猜中 {percent(acc)}，差一格以內 {percent(near)}。
+        </p>
+      )}
       <p className="text-[15px] text-muted-foreground">測試用的是判決書的文字，一般口語描述的準確度可能較低。</p>
     </Disclosure>
   );
@@ -204,28 +214,7 @@ function SentencePanel({ report, selected }: { report: CriminalReport; selected:
       ))}
       {!report.mock && <p className="text-[15px] text-muted-foreground">模型推估的是整個案件的刑度，切換罪名時這一組不會變；實際宣告刑則是含這個罪名的相似判決。</p>}
       <InfoNote>實際刑期還是會依前科、損害多寡、有沒有賠償與認罪而不同。這裡是過去類似案件的分布，不是你這件的結果。</InfoNote>
-      {report.sentence && <ElectraSentence sentence={report.sentence} />}
     </>
-  );
-}
-
-/**
- * ELECTRA 刑期模型（只估有期徒刑）。後端目前停用、不回傳 report.sentence，所以不會出現；
- * 之後在 backend/main.py 打開就會顯示。
- */
-function ElectraSentence({ sentence }: { sentence: SentenceDistribution }) {
-  return (
-    <section aria-labelledby="electra-title" className="flex flex-col gap-3 border-t pt-4">
-      <h3 id="electra-title" className="text-xl font-bold">可能的刑期範圍（有期徒刑）</h3>
-      <p className="text-[15px] text-muted-foreground">AI 模型讀了你的描述後，估計判有期徒刑時刑期落在各區間的機會。</p>
-      <ul className="m-0 flex list-none flex-col gap-2 p-0">
-        {sentence.buckets.map((b) => (
-          <li key={b.label} className="grid grid-cols-[96px_minmax(0,1fr)_48px] items-center gap-2.5 text-[15px]">
-            <span>{b.label}</span><Bar value={b.share} label={`${b.label} ${percent(b.share)}`} /><span className="text-right tabular-nums">{percent(b.share)}</span>
-          </li>
-        ))}
-      </ul>
-    </section>
   );
 }
 

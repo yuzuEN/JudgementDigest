@@ -1063,6 +1063,14 @@ describe("刑事結果", () => {
     expect(within(panel).getByRole("img", { name: "1～6 個月：模型推估 62%，最相似 50 件實際宣告刑 80%" })).toBeInTheDocument();
   });
 
+  it("刑期用 ELECTRA 時，罪名和刑期的測試成績分開寫", async () => {
+    await show({ mock: false,
+      model: { name: "criminal_v1", description: "TF-IDF ＋ SVM", n_test: 10000, charge_top1: 0.93, bucket_accuracy: 0.76, bucket_within_one: 0.97,
+        sentence_description: "法律 ELECTRA", sentence_n_test: 15369, sentence_test: "2025 年判決" } });
+    expect(screen.getByText(/罪名模型：TF-IDF ＋ SVM，用 10,000 件沒參與訓練的判決測試時，第一個罪名猜中 93%/)).toBeInTheDocument();
+    expect(screen.getByText(/刑期模型：法律 ELECTRA，用 15,369 件 2025 年判決測試時，\s*刑期區間猜中 76%，差一格以內 97%/)).toBeInTheDocument();
+  });
+
   it("真模型沒有相似判決時說明，不出現表格", async () => {
     await show({ similar: [], mock: false });
     const panel = await openTab("相似判決");

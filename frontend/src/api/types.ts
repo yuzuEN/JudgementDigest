@@ -11,6 +11,8 @@ export interface Health {
   model: string | null;
   /** 民事金額範圍：有可用的獲償比例模型，或只用相似判決 */
   amount?: "model" | "similar" | "mock";
+  /** 刑事的刑期用哪個模型；刑事是示例資料時為 null */
+  criminal_sentence?: "electra" | "svm" | null;
 }
 
 export interface MidOption {
@@ -164,16 +166,13 @@ export interface CriminalModelInfo {
   charge_top1?: number | null;
   bucket_accuracy?: number | null;
   bucket_within_one?: number | null;
-}
-
-export interface SentenceDistribution {
-  buckets: { label: string; share: number }[];
-  mock: boolean;
-  model: { name: string; description: string };
+  /** 刑期另外用 ELECTRA 時才有；這時 bucket_* 是 ELECTRA 的分數 */
+  sentence_description?: string | null;
+  sentence_n_test?: number | null;
+  sentence_test?: string | null;
 }
 
 export interface CriminalReport {
-  sentence?: SentenceDistribution | null;   // ELECTRA 刑期，後端目前停用
   charges: Charge[];
   similar: SimilarCase[];
   model?: CriminalModelInfo | null;
