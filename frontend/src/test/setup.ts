@@ -5,6 +5,7 @@ import { afterEach, vi } from "vitest";
 afterEach(() => {
   cleanup();
   vi.restoreAllMocks();
+  window.sessionStorage.clear();   // 填寫內容會存在 sessionStorage，測試之間不要互相影響
 });
 
 // jsdom 沒有 PointerEvent，Base UI 的勾選框、選單會用到

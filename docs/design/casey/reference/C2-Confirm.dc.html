@@ -1,0 +1,202 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<title>CasEY 第二章：確認內容</title>
+<script src="./support.js"></script>
+<link rel="stylesheet" href="./jd.css">
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;700;800&display=swap" rel="stylesheet">
+<style>body{margin:0}</style>
+</helmet>
+<div class="jd {{theme}}">
+  <dc-import name="CTop" at="{{stage}}" who="a" line="{{line}}" note="false" hint-size="100%,420px"></dc-import>
+
+  <div class="wrap" style="padding-top:28px;padding-bottom:64px">
+    <div style="display:flex;flex-wrap:wrap;gap:28px;align-items:flex-start">
+      <main class="stack-l" style="flex:999 1 560px;min-width:0">
+
+        <!-- 關卡 4 遮名與同意 -->
+        <sc-if value="{{s4}}" hint-placeholder-val="{{ true }}">
+          <section class="card stack-l">
+            <div class="card-h"><h1 class="h2">第 4 關　確認遮名</h1><a class="lnk" href="C2-Start.dc.html"><span class="ic ic-pencil"></span>修改描述</a></div>
+            <div class="stack-s">
+              <p class="b">會送出的內容（已遮名）</p>
+              <p class="legend-mask small"><span class="mk">橘色</span><span class="muted">＝系統自動遮掉的身分證、電話、email、地址</span></p>
+              <div style="background:var(--bg);border:1px solid var(--line);border-radius:12px;padding:18px;line-height:2">今年 7 月下午，我騎機車經過路口，被一輛轉彎的汽車撞倒。右腿骨折，住院兩週，之後復健了兩個月。機車全毀，請了一個月的假沒有領到薪水。對方說是我闖紅燈，但路口有監視器。對方留給我的電話是<span class="mk">［電話已遮］</span>，保險公司的聯絡信箱是<span class="mk">［email 已遮］</span>。醫藥費、修車費、薪水損失加起來約 64 萬。</div>
+            </div>
+            <div class="field">
+              <label class="b" for="mk">還有要遮的名字嗎？</label>
+              <p class="hint">輸入後按「加入」。文字裡所有相同的字都會被遮掉。</p>
+              <div class="row"><input id="mk" class="inp" placeholder="例如：對方的姓名、公司名稱" value="{{maskInput}}" onChange="{{onMask}}" style="flex:1 1 240px"><button class="btn btn-s" type="button" onClick="{{addMask}}"><span class="ic ic-plus"></span>加入</button></div>
+              <div class="row" style="gap:8px"><sc-for list="{{masks}}" as="m" hint-placeholder-count="2"><span class="chip chip-mask">{{m.name}}<button type="button" aria-label="移除 {{m.name}}" onClick="{{m.remove}}" style="all:unset;cursor:pointer;display:inline-flex"><span class="ic ic-x" style="width:1em;height:1em"></span></button></span></sc-for></div>
+            </div>
+            <div class="stack-s" style="padding-top:8px;border-top:1px solid var(--line)">
+              <div class="row"><span class="ic ic-shield ic-lg" style="color:var(--brand-ink)"></span><p class="b">敏感個人資料，需要你同意</p></div>
+              <p>你的描述裡有<b>病歷（骨折、住院）</b>這類資料。要用它比對相似判決，需要你同意。</p>
+              <div class="menu" role="radiogroup" aria-label="敏感個人資料同意">
+                <button class="mi {{c.yes}}" type="button" role="radio" aria-checked="{{c.yesOn}}" onClick="{{agree}}"><b>我同意</b></button>
+                <button class="mi {{c.no}}" type="button" role="radio" aria-checked="{{c.noOn}}" onClick="{{disagree}}"><span><b>不同意，回上一步刪掉</b></span></button>
+              </div>
+              <sc-if value="{{consentNo}}" hint-placeholder-val="{{ false }}"><div class="note"><span class="ic ic-info"></span><p class="small">了解。請回到「描述案情」，把病歷這類內容刪掉再繼續。<a href="C2-Start.dc.html">回描述案情</a></p></div></sc-if>
+            </div>
+          </section>
+        </sc-if>
+
+        <!-- 關卡 5 補充細節 -->
+        <sc-if value="{{s5}}" hint-placeholder-val="{{ false }}">
+          <section class="card stack-l">
+            <div class="stack-s"><h1 class="h2">第 5 關　補充細節<span class="muted small" style="font-weight:500">　可以略過</span></h1><p class="hint">多寫幾個細節，比對會更準。兩種方式擇一。</p></div>
+            <div class="seg" role="tablist" aria-label="補充方式">
+              <button type="button" class="{{m.fixed}}" role="tab" aria-selected="{{m.fixedOn}}" onClick="{{modeFixed}}">固定題目（不會傳給 AI）</button>
+              <button type="button" class="{{m.ai}}" role="tab" aria-selected="{{m.aiOn}}" onClick="{{modeAi}}"><span class="ic ic-sparkle" style="margin-right:6px"></span>請 AI 幫我看還缺什麼</button>
+            </div>
+
+            <sc-if value="{{showQs}}" hint-placeholder-val="{{ true }}">
+              <div class="stack-l">
+                <sc-for list="{{qs}}" as="q" hint-placeholder-count="3">
+                  <div class="field" style="padding-top:12px;border-top:1px solid var(--line)"><label class="b" for="{{q.id}}">{{q.q}}</label><p class="hint">為什麼要問：{{q.why}}</p><input id="{{q.id}}" class="inp" placeholder="{{q.ph}}" value="{{q.a}}"></div>
+                </sc-for>
+              </div>
+            </sc-if>
+            <sc-if value="{{aiLoading}}" hint-placeholder-val="{{ false }}"><div class="note" role="status"><span class="ic ic-loader ic-spin"></span><div><p class="b">AI 正在看你的描述…</p><p class="small muted">大約需要幾秒。你也可以先略過，回頭再補。</p></div></div><div class="stack-s"><div class="sk" style="height:20px;width:60%"></div><div class="sk" style="height:48px"></div><div class="sk" style="height:20px;width:50%"></div><div class="sk" style="height:48px"></div></div></sc-if>
+            <sc-if value="{{aiFail}}" hint-placeholder-val="{{ false }}"><div class="note"><span class="ic ic-alert"></span><div class="stack-s"><p class="b">這次沒有成功</p><p class="small muted">出了點問題，不是你填錯。</p><div class="row"><button class="btn btn-p" type="button"><span class="ic ic-retry"></span>再試一次</button><button class="btn btn-g" type="button" onClick="{{modeFixed}}">改用固定題目</button></div></div></div></sc-if>
+            <sc-if value="{{aiQuota}}" hint-placeholder-val="{{ false }}"><div class="note"><span class="ic ic-clock"></span><div class="stack-s"><p class="b">今天的 AI 次數用完了</p><p class="small muted">還是可以用固定題目，不影響看結果。</p><button class="btn btn-g" type="button" onClick="{{modeFixed}}">改用固定題目</button></div></div></sc-if>
+            <sc-if value="{{aiNotLegal}}" hint-placeholder-val="{{ false }}"><div class="note"><span class="ic ic-info"></span><div class="stack-s"><p class="b">這看起來不像法律糾紛</p><p class="small muted">如果你寫的是別的事，可以回上一章改寫。</p><a class="btn btn-g" href="C2-Start.dc.html">回描述案情</a></div></div></sc-if>
+
+            <sc-if value="{{isAi}}" hint-placeholder-val="{{ false }}">
+              <div class="row xs muted" style="gap:6px;border-top:1px dashed var(--line2);padding-top:10px"><span>設計稿：預覽 AI 狀態</span>
+                <sc-for list="{{aiStates}}" as="a" hint-placeholder-count="5"><button class="chip {{a.cls}}" type="button" onClick="{{a.go}}">{{a.name}}</button></sc-for></div>
+            </sc-if>
+          </section>
+        </sc-if>
+
+        <!-- 關卡 6 改寫與確認 -->
+        <sc-if value="{{s6}}" hint-placeholder-val="{{ false }}">
+          <section class="card stack-l">
+            <div class="stack-s"><div class="row"><h1 class="h2">第 6 關　整理成判決書的寫法</h1><span class="oc oc-part">建議</span></div>
+              <p class="hint">判決書的用詞和口語不一樣。AI 把你的描述改成判決書的寫法，比對會更準。你可以直接改、直接用，或改用原文。</p></div>
+            <sc-if value="{{hasNew}}" hint-placeholder-val="{{ true }}">
+              <div class="note" role="alert" style="background:var(--surface);border:2px solid var(--brand)"><span class="ic ic-alert" style="color:var(--brand-ink)"></span><div class="stack-s"><p class="b">整理後出現了原文沒有的數字：{{newNums}}</p><p class="small">AI 可能是拆開或猜測。請確認這些數字，不對就直接改掉，或改用原文。</p></div></div>
+            </sc-if>
+            <sc-if value="{{noNew}}" hint-placeholder-val="{{ false }}"><p class="small okmsg"><span class="ic ic-check" style="vertical-align:-4px;margin-right:6px"></span>整理後的數字，都能在原文找到。</p></sc-if>
+            <div class="field"><label class="b" for="rw">整理後的寫法（可以直接修改）</label>
+              <textarea id="rw" class="ta" style="min-height:200px" onChange="{{onRw}}">{{rewrite}}</textarea></div>
+            <div class="menu" role="radiogroup" aria-label="使用哪一種寫法">
+              <button class="mi {{u.rw}}" type="button" role="radio" aria-checked="{{u.rwOn}}" onClick="{{useRw}}"><b>使用整理後的寫法</b></button>
+              <button class="mi {{u.orig}}" type="button" role="radio" aria-checked="{{u.origOn}}" onClick="{{useOrig}}"><b>改用我的原文</b></button>
+            </div>
+            <div class="stack-s" style="padding-top:8px;border-top:1px solid var(--line)">
+              <p class="b">最後確認：你提供的資料</p>
+              <dl class="auto2 small" style="margin:0;gap:6px 24px">
+                <div class="dl-row"><dt class="muted">案件類型</dt><dd class="b">民事</dd></div>
+                <div class="dl-row"><dt class="muted">糾紛類型</dt><dd class="b">侵權：交通事故</dd></div>
+                <div class="dl-row"><dt class="muted">請求金額</dt><dd class="b num">648,000 元</dd></div>
+                <div class="dl-row"><dt class="muted">對方</dt><dd class="b">個人</dd></div>
+                <div class="dl-row"><dt class="muted">律師</dt><dd class="b">沒有</dd></div>
+                <div class="dl-row"><dt class="muted">證物</dt><dd class="b">3 項</dd></div>
+              </dl>
+            </div>
+          </section>
+        </sc-if>
+
+        <!-- 導覽 -->
+        <div class="stack-s">
+          <div class="row row-sb">
+            <button class="btn btn-s" type="button" onClick="{{back}}"><span class="ic ic-back"></span>{{backLabel}}</button>
+            <sc-if value="{{notLast}}" hint-placeholder-val="{{ true }}"><button class="btn btn-p btn-lg" type="button" disabled="{{nextOff}}" onClick="{{next}}">{{nextLabel}}<span class="ic ic-right"></span></button></sc-if>
+            <sc-if value="{{isLast}}" hint-placeholder-val="{{ false }}"><a class="btn btn-p btn-lg {{ctaCls}}" href="{{ctaHref}}" aria-disabled="{{nextOff}}">看參考結果<span class="ic ic-right"></span></a></sc-if>
+          </div>
+          <sc-if value="{{nextOff}}" hint-placeholder-val="{{ false }}"><p class="small" role="status"><span class="ic ic-info" style="vertical-align:-4px;margin-right:6px"></span>{{nextWhy}}</p></sc-if>
+        </div>
+      </main>
+
+      <aside class="card stack" style="flex:1 1 260px;max-width:340px;min-width:0">
+        <div class="row row-sb"><h2 class="h3">送出前檢查</h2></div>
+        <div class="prog">
+          <div class="prog-i {{k1}}"><span class="d"><sc-if value="{{d1}}" hint-placeholder-val="{{ false }}"><span class="ic ic-check" style="width:14px;height:14px"></span></sc-if></span><span>遮名與敏感資料同意</span></div>
+          <div class="prog-i {{k2}}"><span class="d"><sc-if value="{{d2}}" hint-placeholder-val="{{ false }}"><span class="ic ic-check" style="width:14px;height:14px"></span></sc-if></span><span>補充細節（可略過）</span></div>
+          <div class="prog-i {{k3}}"><span class="d"><sc-if value="{{d3}}" hint-placeholder-val="{{ false }}"><span class="ic ic-check" style="width:14px;height:14px"></span></sc-if></span><span>判決書寫法</span></div>
+        </div>
+        <p class="xs muted">只有案情文字會送去比對，而且是遮名後的版本。固定題目的答案不會傳給 AI。</p>
+      </aside>
+    </div>
+  </div>
+  <footer class="ftr"><div class="wrap"><p>本服務提供的是過去判決的統計參考，不是法律意見。</p></div></footer>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"dark":{"editor":"boolean","default":false},"startStage":{"editor":"int","default":4,"min":4,"max":6},"$preview":{"width":1280,"height":1900}}'>
+class Component extends DCLogic {
+  renderVals() {
+    const st = this.state || {};
+    const stage = st.stage !== undefined ? st.stage : (Number(this.props.startStage) || 4);
+    const consent = st.consent !== undefined ? st.consent : 'yes';
+    const masks = st.masks || ['王大明', '○○保險'];
+    const maskInput = st.maskInput || '';
+    const mode = st.mode || 'fixed';
+    const ai = st.ai || 'ok';
+    const orig = '今年 7 月下午，我騎機車經過路口，被一輛轉彎的汽車撞倒。右腿骨折，住院兩週，之後復健了兩個月。機車全毀，請了一個月的假沒有領到薪水。醫藥費、修車費、薪水損失加起來約 64 萬。';
+    const rewrite = st.rewrite !== undefined ? st.rewrite : '原告於 7 月某日下午騎乘機車行經路口，遭被告駕駛之自用小客車左轉撞擊，致原告倒地，受有右側股骨骨折之傷害，住院治療兩週，並接受復健治療約兩個月。機車全毀，原告因傷請假一個月未領薪資。原告所受醫療費用、修車費用及薪資損失，合計約新臺幣 30 萬元。';
+    const use = st.use || 'rw';
+    const set = (o) => () => this.setState(o);
+    const o = { theme: this.props.dark ? 'dark' : '', stage };
+    const lines = {
+      4: '我先幫你把個人資料遮掉。請看一下有沒有漏的，再決定要不要同意使用病歷這類資料。',
+      5: '想補充細節的話，可以回答幾個問題，也可以略過。固定題目不會傳給 AI；要 AI 幫忙看，才會用到 AI。',
+      6: '最後一關。我把你的描述改成判決書的寫法，比對會比較準。數字有變動的地方我會特別提醒你。'
+    };
+    o.line = lines[stage]; o.s4 = stage === 4; o.s5 = stage === 5; o.s6 = stage === 6;
+
+    o.maskInput = maskInput; o.onMask = (e) => this.setState({ maskInput: e.target.value });
+    o.addMask = () => { if (maskInput.trim()) this.setState({ masks: masks.concat([maskInput.trim()]), maskInput: '' }); };
+    o.masks = masks.map((name, i) => ({ name, remove: () => this.setState({ masks: masks.filter((x, j) => j !== i) }) }));
+    o.c = { yes: consent === 'yes' ? 'on' : '', no: consent === 'no' ? 'on' : '', yesOn: consent === 'yes', noOn: consent === 'no' };
+    o.consentNo = consent === 'no';
+    o.agree = set({ consent: 'yes' }); o.disagree = set({ consent: 'no' });
+
+    o.m = { fixed: mode === 'fixed' ? 'on' : '', ai: mode === 'ai' ? 'on' : '', fixedOn: mode === 'fixed', aiOn: mode === 'ai' };
+    o.modeFixed = set({ mode: 'fixed', ai: 'ok' }); o.modeAi = set({ mode: 'ai' });
+    o.isAi = mode === 'ai';
+    o.showQs = mode === 'fixed' || ai === 'ok';
+    o.aiLoading = mode === 'ai' && ai === 'loading'; o.aiFail = mode === 'ai' && ai === 'fail'; o.aiQuota = mode === 'ai' && ai === 'quota'; o.aiNotLegal = mode === 'ai' && ai === 'notlegal';
+    o.aiStates = [['有題目', 'ok'], ['載入中', 'loading'], ['失敗', 'fail'], ['次數用完', 'quota'], ['不是法律糾紛', 'notlegal']].map(([name, k]) => ({ name, cls: ai === k ? 'sel' : '', go: set({ ai: k }) }));
+    const fixedQs = [
+      { id: 'q1', q: '事故發生在哪一類的路口或道路？', why: '路口、車速和號誌，常是雙方爭執「誰的錯」的重點。', ph: '例如：有號誌的十字路口', a: '有號誌的十字路口，我直行綠燈' },
+      { id: 'q2', q: '有沒有警方的事故資料或鑑定結果？', why: '勝訴的判決常會引用，這會影響過失比例。', ph: '有／沒有／還在申請', a: '有，已向警局申請事故資料' },
+      { id: 'q3', q: '你自己有沒有可能也有一部分責任？', why: '對方常會主張你也有過失，先想過比較不會慌。', ph: '例如：對方說我超速', a: '對方說我闖紅燈，但路口有監視器' }
+    ];
+    const aiQs = [
+      { id: 'a1', q: '住院和復健的費用大約是多少？', why: '醫療費用是請求金額裡最常被檢查的一項。', ph: '例如：醫藥費 18 萬', a: '醫藥費約 18 萬' },
+      { id: 'a2', q: '請假一個月，原本的月薪是多少？', why: '薪資損失需要有計算的基礎。', ph: '例如：月薪 4 萬', a: '月薪 4 萬' }
+    ];
+    o.qs = mode === 'ai' ? aiQs : fixedQs;
+
+    const nums = (t) => (t.match(/\d+/g) || []);
+    const base = nums(orig);
+    const extra = nums(rewrite).filter((n, i, a) => !base.includes(n) && a.indexOf(n) === i);
+    o.hasNew = extra.length > 0; o.noNew = extra.length === 0; o.newNums = extra.map(n => '「' + n + '」').join('、');
+    o.rewrite = rewrite; o.onRw = (e) => this.setState({ rewrite: e.target.value });
+    o.u = { rw: use === 'rw' ? 'on' : '', orig: use === 'orig' ? 'on' : '', rwOn: use === 'rw', origOn: use === 'orig' };
+    o.useRw = set({ use: 'rw' }); o.useOrig = set({ use: 'orig' });
+
+    const off = (stage === 4 && consent !== 'yes') || (stage === 6 && consent !== 'yes');
+    o.nextOff = off;
+    o.nextWhy = consent !== 'yes' ? '請先在第 4 關選擇「我同意」。選「不同意」要回上一步刪掉病歷內容。' : '';
+    o.notLast = stage < 6; o.isLast = stage === 6;
+    o.nextLabel = stage === 5 ? (mode === 'ai' && ai === 'ok' ? '下一關' : '略過，下一關') : '下一關';
+    o.ctaCls = off ? 'dis' : ''; o.ctaHref = off ? '#' : 'C2-Civil.dc.html';
+    o.backLabel = stage === 4 ? '回上一章' : '上一關';
+    o.next = () => this.setState({ stage: Math.min(6, stage + 1) });
+    o.back = () => { if (stage === 4) { /* 回第一章 */ } else this.setState({ stage: Math.max(4, stage - 1) }); };
+    const pass = (n) => (stage > n ? 'done' : (stage === n ? 'now' : ''));
+    o.k1 = pass(4); o.k2 = pass(5); o.k3 = pass(6); o.d1 = stage > 4; o.d2 = stage > 5; o.d3 = false;
+    return o;
+  }
+}
+</script>
+</body>
+</html>

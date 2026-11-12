@@ -1,0 +1,112 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<title>CasEY 說明與法律小知識</title>
+<script src="./support.js"></script>
+<link rel="stylesheet" href="./jd.css">
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;700;800&display=swap" rel="stylesheet">
+<style>body{margin:0}html{scroll-behavior:smooth}</style>
+</helmet>
+<div class="jd {{theme}}">
+  <dc-import name="CTop" at="0" who="b" line="這裡是說明與法律小知識。我用白話解釋常見的名詞，也告訴你怎麼看結果。看不懂的地方，可以從結果頁的「？」連到這裡。" note="false" hint-size="100%,420px"></dc-import>
+
+  <div class="wrap" style="padding-top:32px;padding-bottom:64px">
+    <div style="display:flex;flex-wrap:wrap;gap:36px;align-items:flex-start">
+
+      <nav aria-label="目錄" class="card stack-s toc-s" style="flex:1 1 240px;max-width:300px;min-width:0">
+        <p class="b">目錄</p>
+        <sc-for list="{{toc}}" as="t" hint-placeholder-count="5">
+          <a class="mi" href="#{{t.id}}" style="min-height:48px;text-decoration:none;color:var(--ink);font-weight:700"><span>{{t.name}}</span></a>
+        </sc-for>
+      </nav>
+
+      <article class="stack-l" style="flex:999 1 520px;min-width:0;max-width:760px">
+        <header class="stack-s"><h1 class="h1">說明與法律小知識</h1><p class="lead">幾分鐘讀完。你不需要懂法律，也能看懂 CasEY 的結果。</p></header>
+
+        <section id="diff" class="stack">
+          <div class="row"><span class="nbadge">1</span><h2 class="h2">民事和刑事有什麼不一樣？</h2></div>
+          <div class="auto2">
+            <div class="card stack-s"><h3 class="h3">民事</h3><p class="small muted">私人之間的糾紛，例如要求賠償、還錢、履行契約。主要是「要不要賠、賠多少」。</p></div>
+            <div class="card stack-s"><h3 class="h3">刑事</h3><p class="small muted">做了法律規定的犯罪行為，由檢察官起訴，法院判斷有沒有罪、判多重。</p></div>
+          </div>
+          <p class="small muted">同一件事有時兩邊都會發生，例如車禍可能同時有賠償問題（民事）和過失傷害問題（刑事）。分不清楚時，在第 1 關選「不確定」。</p>
+        </section>
+
+        <section id="kinds" class="stack">
+          <div class="row"><span class="nbadge">2</span><h2 class="h2">糾紛類型說明</h2></div>
+          <p class="muted">民事共 15 大類、46 類。下面是幾個大類的白話說明。</p>
+          <div class="stack-s">
+            <details open="{{open}}"><summary>侵權</summary><div class="dbody"><p class="small muted">因為別人的過失或故意，讓你的身體、財物受傷害，請求對方賠償。例如交通事故。</p></div></details>
+            <details open="{{open}}"><summary>契約</summary><div class="dbody"><p class="small muted">雙方約定好的事，有一方沒做到。例如買賣、租賃。</p></div></details>
+            <details open="{{open}}"><summary>民間借貸</summary><div class="dbody"><p class="small muted">借錢給別人或向別人借錢，要求還款。</p></div></details>
+            <details open="{{open}}"><summary>勞動</summary><div class="dbody"><p class="small muted">和雇主之間的薪水、加班費、資遣等問題。</p></div></details>
+            <details open="{{open}}"><summary>不動產</summary><div class="dbody"><p class="small muted">買賣、租賃房屋或土地時發生的糾紛。</p></div></details>
+          </div>
+          <p class="xs muted">其他類型的說明，在這裡逐項補上。</p>
+        </section>
+
+        <section id="read" class="stack">
+          <div class="row"><span class="nbadge">3</span><h2 class="h2">怎麼看結果</h2></div>
+          <ul class="stack-s" style="margin:0">
+            <li><b>看件數，不看保證。</b>CasEY 告訴你「相似判決有幾件、結果怎麼樣」。範圍一定搭配「10 件約有 8 件」這類說明。</li>
+            <li><b>範圍很寬時，請保守看待。</b>相似判決不多、金額落差大時，結果只能當粗略的參考。</li>
+            <li><b>勝訴、一部勝訴、敗訴</b>不用顏色分好壞：深靛、淺藍、斜線，都附文字。「敗訴」只是結果的一種，不是警告。</li>
+            <li><b>模型的機率收在「模型細節」。</b>它是輔助，不是你會贏的機率。</li>
+            <li><b>相似度</b>是 0 到 1 之間的小數，不是百分比。數字越大越相似；大多數判決的數字不會很高，這是正常的。</li>
+          </ul>
+        </section>
+
+        <section id="terms" class="stack">
+          <div class="row"><span class="nbadge">4</span><h2 class="h2">常見名詞</h2></div>
+          <dl class="stack" style="margin:0">
+            <sc-for list="{{terms}}" as="t" hint-placeholder-count="6">
+              <div class="card card-flat stack-s" id="{{t.id}}" style="padding:16px 18px"><dt class="row row-sb" style="gap:8px"><b>{{t.name}}</b><span class="chip" style="min-height:28px;font-size:13px;padding:0 10px">{{t.g}}</span></dt><dd class="small muted">{{t.desc}}</dd></div>
+            </sc-for>
+          </dl>
+        </section>
+
+        <section id="next" class="stack">
+          <div class="row"><span class="nbadge">5</span><h2 class="h2">接下來可以怎麼做？</h2></div>
+          <ol class="stack-s" style="margin:0">
+            <li><b>下載 PDF，帶去給專業人士看。</b>律師或法律扶助基金會可以根據你的實際情況給意見。</li>
+            <li><b>先把手上的證物整理好。</b>診斷證明、收據、轉帳紀錄、對話紀錄、照片，都先備份。</li>
+            <li><b>有些事情有期限。</b>建議儘早詢問專業人士，不要等到最後。</li>
+          </ol>
+          <p class="small muted">需要協助可以洽詢<a href="https://www.laf.org.tw">法律扶助基金會<span class="ic ic-ext" style="vertical-align:-3px;margin-left:2px"></span></a>。</p>
+          <div class="row"><a class="btn btn-p btn-lg" href="C2-Start.dc.html">開始查詢<span class="ic ic-right"></span></a><a class="btn btn-g" href="C2-Home.dc.html">回首頁</a></div>
+        </section>
+      </article>
+    </div>
+  </div>
+  <footer class="ftr"><div class="wrap"><p>本服務提供的是過去判決的統計參考，<b>不是法律意見</b>，也不是對你案子的預測。</p></div></footer>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"dark":{"editor":"boolean","default":false},"$preview":{"width":1280,"height":2900}}'>
+class Component extends DCLogic {
+  renderVals() {
+    return {
+      theme: this.props.dark ? 'dark' : '', open: true,
+      toc: [['diff', '民事和刑事的差別'], ['kinds', '糾紛類型說明'], ['read', '怎麼看結果'], ['terms', '常見名詞'], ['next', '接下來可以怎麼做']].map(([id, name]) => ({ id, name })),
+      terms: [
+        ['相似度', '看結果', '判斷兩件判決有多像的分數，0 到 1 之間的小數，不是百分比。'],
+        ['判准／請求', '民事', '「請求」是原告要求的金額；「判准」是法院最後同意的金額。'],
+        ['全部勝訴／一部勝訴／敗訴', '民事', '全部勝訴：請求幾乎都被接受。一部勝訴：只被接受一部分。敗訴：請求沒有被接受。'],
+        ['抗辯', '民事', '被告針對原告的主張，提出的反駁或理由。'],
+        ['與有過失', '民事', '受害的一方自己也有一部分過失。法院可能因此減少賠償的金額。'],
+        ['一造辯論（被告未到庭）', '民事', '被告沒有到庭，法院只聽原告一方的說法。這類判決結果可能和雙方都出庭的案件不同，所以另外標示。'],
+        ['告訴乃論', '刑事', '要有被害人提出告訴，檢察官才能起訴的罪。雙方和解後，通常就沒有判決。'],
+        ['宣告刑', '刑事', '法院判決書上實際宣告的刑期或罰金。'],
+        ['拘役', '刑事', '比有期徒刑輕的短期刑，一般是 1 天以上、不超過 4 個月。']
+      ].map(([name, g, desc], i) => ({ name, g, desc, id: 't' + i }))
+    };
+  }
+}
+</script>
+</body>
+</html>
