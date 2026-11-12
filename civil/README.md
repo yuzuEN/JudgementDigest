@@ -25,6 +25,11 @@
 | `train_longformer.py` | Longformer 微調（勝敗或金額），也可以單獨上傳到雲端 GPU 跑 | `.venv-bert`（GPU） |
 | `train_bert_amount.py` | 金額任務的 BERT | `.venv-bert`（GPU） |
 | `service.py` | **平台用的勝敗模型**：只用原告主張的 TF-IDF＋使用者填得出來的特徵（案由、法院、律師、對方是否為法人）。`evaluate` 做 5 折評估，`train` 存到 `artifacts/civil_winloss_v1/` | `.venv` |
+| `amount_service.py` | **平台用的獲償比例模型**（兩階段的第二階段）：「若為一部勝訴，原告大約贏幾成」，給 10%–90% 的範圍。輸入同 `service.py`，再加請求金額和損害子項目。`evaluate`、`train`（→ `artifacts/civil_amount_v1/`）；`--rules db` 改讀資料庫裡的金額欄位 | `.venv` |
+
+`features.py` 是金額的共用特徵（損害子項目的關鍵字），`amount.py` 和 `amount_service.py` 都從這裡讀；關鍵字改了要重訓金額模型，否則後端不會用舊模型。
+
+平台模型的 `meta.json` 會記錄訓練時的 git commit 與 scikit-learn 版本，見 [backend/README.md](../backend/README.md) 的「模型與資料」。
 
 目前結果（文字資料集 v5，46,683 件，5 折，機率 50% 為切線）：兩造的 TF-IDF＋Longformer＋結構化，勝訴 precision 0.787、recall 0.796，
 敗訴 precision 0.686、recall 0.674；只用原告主張的 TF-IDF，勝訴 0.728、0.818，敗訴 0.661、0.538。詳見實驗輸出的 `pr_ensemble_v5.md`。
