@@ -173,6 +173,9 @@ class CriminalModel:
     def fit(self, rows: List[Dict]) -> "CriminalModel":
         t0 = time.time()
         self.vec = vectorizer().fit([r["text"] for r in rows])
+        # scikit-learn 的字典照「第一次出現」的順序存，依序讀出來就是訓練判決的原文片段。
+        # 照欄位編號重排（編號不變、預測完全相同），模型檔才不會帶著原文的順序。
+        self.vec.vocabulary_ = dict(sorted(self.vec.vocabulary_.items(), key=lambda kv: kv[1]))
         print(f"TF-IDF 完成（{time.time() - t0:.0f}s）", flush=True)
         cal = []
         if self.kind == "svm_cal":                    # 留一部分不訓練，用來校正機率
@@ -342,14 +345,13 @@ def artifact_dir(base: Optional[Path] = None) -> Path:
 
 
 def train(rows: List[Dict], out: Path, source: str, jobs: int = 1) -> Path:
-    import sklearn
     # 用 python -m 執行時這個檔案是 __main__，直接用 CriminalModel 會存成 __main__.CriminalModel，後端讀不到
     from criminal.models.service import CriminalModel as Model
     model = Model("svm_cal", jobs).fit(rows)
     out.mkdir(parents=True, exist_ok=True)
     joblib.dump(model, out / "model.joblib", compress=3)
     meta = {"name": MODEL_NAME, "trained_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
-            "source": source, "n_train": len(rows), "sklearn": sklearn.__version__, "kind": model.kind,
+            "source": source, "n_train": len(rows), **config.build_info(), "kind": model.kind,
             "calibration_share": CAL_SHARE,
             "charges": len(model.charge_mlb.classes_), "articles": len(model.article_mlb.classes_), "buckets": BUCKETS}
     (out / "meta.json").write_text(json.dumps(meta, ensure_ascii=False, indent=2), encoding="utf-8")
@@ -363,7 +365,9 @@ def load(path: Optional[Path] = None):
     for cls in (CriminalModel, Platt):            # 舊模型檔（2026-11-06 Kaggle）存成 __main__.CriminalModel
         if not hasattr(__main__, cls.__name__):
             setattr(__main__, cls.__name__, cls)
-    return joblib.load(path / "model.joblib"), json.loads((path / "meta.json").read_text(encoding="utf-8"))
+    meta = json.loads((path / "meta.json").read_text(encoding="utf-8"))
+    config.warn_if_other_sklearn(meta, MODEL_NAME)    # 先提醒再讀：版本不合時 joblib.load 可能直接失敗
+    return joblib.load(path / "model.joblib"), meta
 
 
 def main():
