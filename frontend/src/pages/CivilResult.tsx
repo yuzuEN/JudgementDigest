@@ -23,11 +23,11 @@ import { civilInput, useIntake } from "../state";
 export { Bar };
 
 const TABS = [
-  { key: "overview", label: "整體結果", line: "資料整理好了。我是解說員，只負責說明過去類似判決的統計，不會預測你這件的結果。先看整體。" },
+  { key: "overview", label: "整體結果", line: "我是解說員。這裡整理了相似判決的結果，你可以切換分頁查看金額、證據與判決內容。" },
   { key: "amount", label: "可能的金額", line: "這是相似判決的判准金額。範圍通常很寬，請當作粗略參考。" },
-  { key: "evidence", label: "證據對照", line: "這是勝訴的相似判決常提到的證據。你有的我幫你標出來。" },
-  { key: "defense", label: "對方的說法", line: "這些是對方在相似判決裡常說的話。先看過，到時比較不會慌。" },
-  { key: "cases", label: "相似判決", line: "這些是最相似的判決。每一件都可以點「判決導讀」，我會把主張、抗辯和法院的判斷分顏色給你看。" },
+  { key: "evidence", label: "證據對照", line: "你填寫過的證據已標上「你有提到」，可以和相似的勝訴判決對照。" },
+  { key: "defense", label: "對方的說法", line: "展開各項說法，可以查看被告提出這些理由的意思。" },
+  { key: "cases", label: "相似判決", line: "點「判決導讀」可閱讀全文，並查看原告主張、被告抗辯與法院判斷的段落標示。" },
 ] as const;
 type TabKey = (typeof TABS)[number]["key"];
 
@@ -63,14 +63,14 @@ export default function CivilResult() {
 
   const mid = intake.mids.length === 1 ? intake.mids[0] : "";
   const title = `民事參考結果${intake.mids.length ? `：${intake.mids.join("、")}` : ""}`;
-  const lead = report ? `比對了 ${report.n_compared} 件${mid ? "案由相同的" : ""}真實判決。一次看一個分頁。` : "正在比對相似的真實判決……";
+  const lead = report ? `比對了 ${report.n_compared} 件${mid ? "案由相同的" : ""}真實判決。` : "正在比對相似的真實判決……";
   const mock = report?.mock ?? false;
 
   return (
     <ResultFrame active="civil" title={title} lead={lead} mock={mock} maskedText={intake.maskedText} searchText={intake.searchText}
       sceneLine={TABS.find((t) => t.key === tab)!.line} notice={NOTICE}>
       {error && (
-        <ErrorBox message={error} onRetry={load} hint="結果暫時沒有載入成功，不是你填錯了什麼。">
+        <ErrorBox message={error} onRetry={load} hint="請重新載入結果，或回上一步檢查描述。">
           <LinkButton variant="outline" to="/confirm?stage=6">回上一步</LinkButton>
         </ErrorBox>
       )}
@@ -295,10 +295,10 @@ function EvidencePanel({ report }: { report: CivilReport }) {
 function DefensePanel({ report }: { report: CivilReport }) {
   return (
     <>
-      <PanelTitle mock={report.mock}>對方可能會怎麼說</PanelTitle>
-      <p className="text-muted-foreground">相似判決裡，被告常提出的說法（抗辯）。數字是出現的比例。</p>
+      <PanelTitle mock={report.mock}>相似判決中的被告抗辯</PanelTitle>
+      <p className="text-muted-foreground">數字表示各項說法在相似判決中出現的比例。</p>
       {report.defenses.length === 0 ? (
-        <EmptyState title="相似判決裡沒有看到明顯的抗辯">不代表對方不會反駁，只是這些判決裡沒有整理出常見的說法。</EmptyState>
+        <EmptyState title="未整理出常見的抗辯">這些判決中沒有整理出常見說法，對方仍可能提出反駁。</EmptyState>
       ) : (
         <div className="flex max-w-[760px] flex-col gap-2">
           {report.defenses.map((d) => (

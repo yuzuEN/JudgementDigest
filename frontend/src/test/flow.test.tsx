@@ -18,7 +18,7 @@ describe("完整流程", () => {
     await user.click(screen.getAllByRole("link", { name: "開始查詢" })[0]);
     await user.click(screen.getByRole("radio", { name: "不確定" }));
     await user.click(screen.getByRole("button", { name: "下一關" }));
-    await user.type(screen.getByLabelText("用自己的話寫就好"), "去年三月朋友向我借了五十萬，說好半年就還，到現在一直不還，他的電話0912345678");
+    await user.type(screen.getByLabelText("事情經過"), "去年三月朋友向我借了五十萬，說好半年就還，到現在一直不還，他的電話0912345678");
     await user.click(await screen.findByRole("button", { name: "民間借貸" }));
     await user.click(screen.getByRole("button", { name: "下一關" }));
     await user.type(screen.getByLabelText("想請求的金額"), "50萬");

@@ -42,7 +42,7 @@ export default function Reading() {
   const resultPath = `/result/${source === "criminal" ? "criminal" : "civil"}?tab=cases`;
 
   return (
-    <Layout stage={7} scene={{ who: "explainer", line: "這是一件相似的判決。我把全文依功能上色：誰主張什麼、對方怎麼回、爭點在哪、法院怎麼認定。顏色只是幫你找段落，每段開頭都有文字標籤。" }}>
+    <Layout stage={7} scene={{ who: "explainer", line: "全文已標出主張、抗辯、爭點、證據與法院判斷。你可以選擇要上色的類別，方便找出相關段落。" }}>
       <main className={cn(PAGE, "flex flex-col gap-7 pt-7 pb-14")}>
         <div className="flex flex-col gap-3">
           <LinkButton variant="outline" to={resultPath} className="no-print w-fit border-input text-foreground"><ArrowLeftIcon data-icon="inline-start" />回結果</LinkButton>
@@ -50,13 +50,13 @@ export default function Reading() {
           {guide && <h1 className="text-[26px] leading-[1.4] font-extrabold text-balance sm:text-[32px]">{guide.case.case_number}</h1>}
         </div>
 
-        {error && <ErrorBox message={error} onRetry={load} hint="這件判決暫時沒有載入成功，不是你填錯了什麼。" />}
+        {error && <ErrorBox message={error} onRetry={load} hint="請重新載入判決，或返回結果頁查看其他判決。" />}
         {!guide && !error && <LoadingPanel>正在整理這件判決…</LoadingPanel>}
         {guide && (
           <div className="flex flex-wrap items-start gap-7">
             <aside className="flex w-full min-w-0 flex-[1_1_280px] flex-col gap-4 sm:max-w-[360px]">
               <Card className="gap-4 px-6.5" aria-labelledby="basic-title">
-                <h2 id="basic-title" className="text-xl font-bold">判決的基本資料</h2>
+                <h2 id="basic-title" className="text-xl font-bold">判決資料</h2>
                 <dl className="m-0 flex flex-col gap-2.5 text-[15px]">
                   <div><dt className="text-muted-foreground">{source === "criminal" ? "罪名" : "案由"}</dt><dd className="m-0 font-bold">{guide.case.mid}</dd></div>
                   <div className="flex flex-col gap-1"><dt className="text-muted-foreground">結果</dt>
@@ -78,8 +78,8 @@ export default function Reading() {
               </Card>
 
               <Card className="gap-3 px-6.5" aria-labelledby="legend-title">
-                <h2 id="legend-title" className="text-xl font-bold">要標色哪幾類？</h2>
-                <p className="text-[15px] text-muted-foreground">按一下切換。關掉的類別不上色，但文字標籤還在。</p>
+                <h2 id="legend-title" className="text-xl font-bold">段落標色</h2>
+                <p className="text-[15px] text-muted-foreground">選擇要上色的類別。取消後仍會保留文字標籤。</p>
                 <div className="flex flex-col gap-2">
                   {FUNCTIONS.map((f) => (
                     <button key={f.id} type="button" aria-pressed={on[f.id]} onClick={() => setOn({ ...on, [f.id]: !on[f.id] })}
@@ -100,8 +100,8 @@ export default function Reading() {
               <Card className="gap-2 px-6.5 shadow-none" aria-labelledby="about-title">
                 <h2 id="about-title" className="text-xl font-bold">關於這些標示</h2>
                 <p className="text-[15px] text-muted-foreground">
-                  標示是系統自動判斷的，不是法院寫的，偶爾會標錯；看不確定時，以判決原文為準。
-                  {guide.labeler === "rule-v0" ? "目前是用規則初步標示（第一版），之後改用段落功能標註模型。" : "段落功能依標註手冊，由 LLM 輔助標註、法律系學生抽查驗證。"}
+                  段落標示由系統判斷，可能有誤，請以判決原文為準。
+                  {guide.labeler === "rule-v0" ? "目前依文字規則標示。" : "段落功能依標註手冊，由 LLM 輔助標註、法律系學生抽查驗證。"}
                 </p>
                 <p className="text-sm text-muted-foreground">判決中的當事人姓名已換成【原告】【被告】，證人、訴外人等換成【關係人】；這是自動處理，可能有遺漏。</p>
                 <a href={JUDICIAL_URL} target="_blank" rel="noreferrer" className="inline-flex w-fit items-center gap-1 text-[15px] font-semibold">

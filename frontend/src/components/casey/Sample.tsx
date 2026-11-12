@@ -7,7 +7,7 @@ export function SampleBanner({ detail }: { detail?: string }) {
       <BookOpenIcon className="mt-1 size-5 flex-none" aria-hidden="true" />
       <div>
         <p className="font-bold">這一頁是示例資料</p>
-        <p className="text-[15px]">{detail ?? "目前沒有連到比對模型，下面的數字是示範用的，不是你這個案子的查詢結果。每個分頁和下載的 PDF 都會標上「示例資料」。"}</p>
+        <p className="text-[15px]">{detail ?? "目前未連接比對模型，數字僅供示範，並非你的查詢結果。下載的 PDF 也會標示為示例資料。"}</p>
       </div>
     </div>
   );

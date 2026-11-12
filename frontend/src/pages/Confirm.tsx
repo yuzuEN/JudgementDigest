@@ -24,12 +24,12 @@ import { fullText, primaryMid, useIntake, type Intake } from "../state";
 const MAX_QUESTIONS = 4;
 
 const SCENE_LINES: Record<number, string> = {
-  4: "我先幫你把個人資料遮掉。請看一下有沒有漏的，漏掉的名字可以自己加。",
-  5: "想補充細節的話，可以回答幾個問題，也可以略過。固定題目不用 AI；要 AI 幫忙看，才會用到 AI。",
-  6: "最後一關。我把你的描述改成判決書的寫法，比對會比較準。數字有變動的地方我會特別提醒你。",
+  4: "請檢查預覽中的個資。若有未遮蔽的姓名或公司名稱，可以在下方加入。",
+  5: "你可以回答固定題目，或請 AI 根據案情提問。不想補充也可以略過。",
+  6: "你可以請 AI 將描述整理成判決書的寫法。整理後請檢查內容，尤其是新增的數字。",
 };
 
-const NO_LLM_LINE = "最後一關。請再看一次你提供的資料，沒問題就可以看參考結果了。";
+const NO_LLM_LINE = "請確認資料是否正確，再按「看參考結果」。";
 
 type AiState = "idle" | "asking" | "done" | "failed" | "limited" | "unrelated";
 type RewriteState = "idle" | "loading" | "failed" | "limited" | "unrelated";
@@ -211,7 +211,7 @@ function MaskStage({ heading, intake, update, kinds, llm }: {
       <div className="flex flex-col gap-2">
         <p className="font-bold">會送出的內容（已遮名）</p>
         <p className="flex flex-wrap items-center gap-2 text-[15px]">
-          <mark className="masked">橘色</mark><span className="text-muted-foreground">＝系統自動遮掉的身分證、電話、email、地址，以及你加入的名字</span>
+          <mark className="masked">橘色</mark><span className="text-muted-foreground">標示已遮蔽的身分證字號、電話、email、地址，以及你加入的名字</span>
         </p>
         <MaskedText text={intake.maskedText} live />
       </div>
@@ -266,7 +266,7 @@ function AiConsent({ consent, vendor, use, fallback }: { consent: Consent; vendo
         <ShieldCheckIcon className="size-6 text-secondary-foreground" aria-hidden="true" />傳給 AI 前，需要你同意
       </h2>
       <p className="text-[15px]">
-        你的描述裡有法律特別保護的資料（偵測到：{consent.kinds.join("、")}）。按下按鈕後，遮名後的內容會傳給 {vendor}，{use}，所以要先取得你的同意。不同意也沒關係，{fallback}。
+        你的描述裡有法律特別保護的資料（偵測到：{consent.kinds.join("、")}）。按下按鈕後，遮名後的內容會傳給 {vendor}，{use}。若不同意，可以{fallback}。
       </p>
       <RadioCards label="傳給 AI 的同意" value={value}
         options={[
@@ -321,11 +321,11 @@ function DetailStage({ heading, llm, vendor, mode, setMode, aiState, askAi, cons
     <StageCard>
       <div className="flex flex-col gap-2">
         {heading}
-        <p className="text-[15px] text-muted-foreground">多寫幾個細節，比對會更準。回答會加在你的描述後面一起送出，已經回答的內容切換方式時也會保留。</p>
+        <p className="text-[15px] text-muted-foreground">補充細節有助於比對。回答會和案情一起送出，切換補充方式時也會保留。</p>
       </div>
       {!llm ? (
         <>
-          <p className="text-[15px]">這類案件常缺的細節，是固定的問題，不用 AI。</p>
+          <p className="text-[15px]">以下是這類案件常需要補充的資料。</p>
           {fixed}
         </>
       ) : (
@@ -339,7 +339,7 @@ function DetailStage({ heading, llm, vendor, mode, setMode, aiState, askAi, cons
             </TabsTrigger>
           </TabsList>
           <TabsContent value="fixed" className="flex flex-col gap-4 text-base">
-            <p className="text-[15px]">這類案件常缺的細節，是固定的問題，不會用到 AI。</p>
+            <p className="text-[15px]">以下是這類案件常需要補充的資料。</p>
             {fixed}
           </TabsContent>
           <TabsContent value="ai" className="flex flex-col gap-4 text-base">
@@ -347,7 +347,7 @@ function DetailStage({ heading, llm, vendor, mode, setMode, aiState, askAi, cons
               <>
                 <AiConsent consent={consent} vendor={vendor} use="用來產生補充問題" fallback="改用固定題目就好" />
                 {consent.declined ? (
-                  <Note><p className="text-[15px]">好，這次不用 AI。</p>{backToFixed}</Note>
+                  <Note><p className="text-[15px]">已選擇不使用 AI，可以改答固定題目。</p>{backToFixed}</Note>
                 ) : (
                   <Note>
                     <p className="text-[15px]">按下按鈕後，上一關遮名後的內容會傳給 {vendor}，由 AI 依你的案情提問。不按就不會傳。</p>
@@ -359,7 +359,7 @@ function DetailStage({ heading, llm, vendor, mode, setMode, aiState, askAi, cons
             {aiState === "asking" && (
               <>
                 <Note icon={LoaderCircleIcon} role="status">
-                  <p className="font-bold">AI 正在看你的描述…</p>
+                  <p className="font-bold">AI 正在產生補充問題…</p>
                   <p className="text-[15px] text-muted-foreground">大約需要幾秒。你也可以先略過，回頭再補。</p>
                 </Note>
                 <div className="flex flex-col gap-2" aria-hidden="true">
@@ -371,13 +371,13 @@ function DetailStage({ heading, llm, vendor, mode, setMode, aiState, askAi, cons
               <>
                 <p className="text-[15px]">這些問題由 AI 依你的案情產生，只用來補充事實，不是法律意見。</p>
                 {questions.length > 0 ? <QuestionList questions={questions} answers={answers} onAnswer={onAnswer} />
-                  : <p className="text-[15px] text-muted-foreground">AI 覺得目前的描述已經夠完整，可以直接下一關。</p>}
+                  : <p className="text-[15px] text-muted-foreground">AI 沒有提出補充問題，可以繼續下一關。</p>}
               </>
             )}
             {aiState === "failed" && (
               <Note icon={TriangleAlertIcon}>
-                <p className="font-bold">這次沒有成功</p>
-                <p className="text-[15px] text-muted-foreground">出了點問題，不是你填錯。</p>
+                <p className="font-bold">無法產生補充問題</p>
+                <p className="text-[15px] text-muted-foreground">請再試一次，或改用固定題目。</p>
                 <div className="flex flex-wrap gap-2.5">
                   <Button type="button" onClick={askAi}><RotateCwIcon data-icon="inline-start" />再試一次</Button>
                   {backToFixed}
@@ -394,7 +394,7 @@ function DetailStage({ heading, llm, vendor, mode, setMode, aiState, askAi, cons
             {aiState === "unrelated" && (
               <Note>
                 <p className="font-bold">這看起來不像法律糾紛</p>
-                <p className="text-[15px] text-muted-foreground">所以沒有傳給 AI。如果你寫的是別的事，可以回上一章改寫。</p>
+                <p className="text-[15px] text-muted-foreground">內容未傳給 AI。請回到案情描述，補充糾紛的經過。</p>
                 <div className="flex flex-wrap gap-2.5">
                   <LinkButton variant="outline" to="/start?stage=2">回描述案情</LinkButton>
                   {backToFixed}
@@ -442,7 +442,7 @@ function FinalSummary({ intake }: { intake: Intake }) {
 }
 
 const REWRITE_NOTICE: Partial<Record<RewriteState, string>> = {
-  failed: "AI 暫時無法使用，會改用你原本的描述。不是你填錯。",
+  failed: "AI 暫時無法使用，會改用你原本的描述。",
   limited: "AI 的使用次數暫時用完了，會改用你原本的描述。",
   unrelated: "這段描述看起來不像法律糾紛，所以沒有傳給 AI，會改用你原本的描述。",
 };
@@ -500,7 +500,7 @@ function RewriteStage({ heading, llm, vendor, intake, update, state, onStart, co
         <>
           <AiConsent consent={consent} vendor={vendor} use="用來整理成判決書的寫法" fallback={`直接用你原本的描述${usedFor}就好`} />
           {consent.declined ? (
-            <Note><p className="text-[15px]">好，這次不用 AI，會用你原本的描述{usedFor}。</p></Note>
+            <Note><p className="text-[15px]">這次不用 AI，會用你原本的描述{usedFor}。</p></Note>
           ) : (
             <Note>
               <p className="text-[15px]">按下按鈕後，第 4 關遮名後的內容會傳給 {vendor}；不按就用你原本的描述{usedFor}。</p>
@@ -517,7 +517,7 @@ function RewriteStage({ heading, llm, vendor, intake, update, state, onStart, co
               <TriangleAlertIcon className="mt-1 size-5 flex-none text-secondary-foreground" aria-hidden="true" />
               <div className="flex flex-col gap-1.5">
                 <p className="font-bold">整理後出現了原文沒有的數字：{intake.rewriteAdded.map((n) => `「${n}」`).join("、")}</p>
-                <p className="text-[15px]">AI 可能是拆開或猜測。請確認這些數字，不對就直接改掉，或改用原文。</p>
+                <p className="text-[15px]">請逐一確認這些數字是否正確。若有錯誤，可以直接修改，或改用原文。</p>
               </div>
             </div>
           ) : (
