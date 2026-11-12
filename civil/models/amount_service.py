@@ -334,6 +334,7 @@ def train(d: pd.DataFrame, version: str, out: Path, metrics_summary: Optional[Di
     out.mkdir(parents=True, exist_ok=True)
     joblib.dump(model, out / "model.joblib", compress=3)
     meta = {"name": MODEL_NAME, "trained_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+            **config.build_info(),
             "dataset": f"text_dataset_{version}.csv", "n_cases": int(len(d)), "median_ratio": float(d.ratio.median()),
             # 後端用：各案由的訓練件數（太少的案由不用模型）、損害子項目的關鍵字（改了沒重訓就不用）、請求金額的範圍
             "mid_counts": {str(k): int(v) for k, v in d.mid.value_counts().items()},
@@ -354,8 +355,9 @@ class StaleModel(ValueError):
 def load(path: Optional[Path] = None):
     """回傳（模型, meta）。meta 缺少後端需要的欄位、或關鍵字表和現在不同時丟 StaleModel。"""
     path = Path(path or artifact_dir())
-    model = joblib.load(path / "model.joblib")
     meta = json.loads((path / "meta.json").read_text(encoding="utf-8"))
+    config.warn_if_other_sklearn(meta, MODEL_NAME)    # 先提醒再讀：版本不合時 joblib.load 可能直接失敗
+    model = joblib.load(path / "model.joblib")
     if "mid_counts" not in meta or "items" not in meta:
         raise StaleModel("模型檔是舊格式（meta.json 沒有各案由件數或關鍵字表），請重新訓練")
     if meta["items"] != ITEMS:
