@@ -102,7 +102,7 @@ JudgementDigest/
 ├── annotation/        段落功能標註：標註手冊 v0.3、LLM 標註（annotate.py）、抽樣與抽查
 ├── backend/           API 伺服器（FastAPI）
 ├── frontend/          網頁（React＋Vite，CasEY 改版）
-├── scripts/           輔助工具（瀏覽資料庫）
+├── scripts/           輔助工具（瀏覽資料庫、從 Hugging Face 同步模型）
 ├── docs/              爬蟲用法、欄位說明、資料版本、刑事結構化規則、repo 結構、介面設計（design/）
 ├── docker-compose.yml
 └── tests/
@@ -121,7 +121,7 @@ docker compose up --build
 
 開 http://localhost:8080 。8080 被占用時改用別的 port：`JD_PORT=8180 docker compose up --build`。
 
-模型與檢索資料（`artifacts/`）不在 repo 裡，由組內另外分享：
+模型與檢索資料（`artifacts/`）不在 repo 裡。民事的兩個模型從 Hugging Face 下載（`bash scripts/sync_civil_models.sh`，見 [civil/README.md](civil/README.md)），檢索資料由組內另外分享：
 
 | 情況 | 民事顯示 | 適合 |
 |---|---|---|
