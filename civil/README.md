@@ -31,6 +31,15 @@
 
 平台模型的 `meta.json` 會記錄訓練時的 git commit 與 scikit-learn 版本，見 [backend/README.md](../backend/README.md) 的「模型與資料」。
 
+訓練好的兩個平台模型放在 Hugging Face 的私人 repo `JudgementDigest/judgementdigest-artifacts`（要先加入組織並 `hf auth login`）：
+
+```bash
+bash scripts/sync_civil_models.sh                          # 下載到 artifacts/civil_winloss_v1、civil_amount_v1
+JD_HF_REVISION=<commit> bash scripts/sync_civil_models.sh  # 部署時固定某一版
+```
+
+重訓後要上傳的話，用 `scikit-learn` 1.6.1（`backend/requirements.txt` 固定的版本），從沒有未 commit 改動的 main 訓練，並在資料夾的 `README.md` 寫明成績和跟上一版的差別。
+
 目前結果（文字資料集 v5，46,683 件，5 折，機率 50% 為切線）：兩造的 TF-IDF＋Longformer＋結構化，勝訴 precision 0.787、recall 0.796，
 敗訴 precision 0.686、recall 0.674；只用原告主張的 TF-IDF，勝訴 0.728、0.818，敗訴 0.661、0.538。詳見實驗輸出的 `pr_ensemble_v5.md`。
 
