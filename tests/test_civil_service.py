@@ -133,6 +133,17 @@ class TestModel(unittest.TestCase):
         self.assertEqual(groups, {"侵權": ["侵權：交通事故"], "契約": ["契約：買賣"]})
         self.assertEqual(set(meta["options"]["courts"]), {"臺北", "臺中", "高雄"})
         self.assertTrue(0 < model.predict_one(WIN[1], {}) < 1)
+        import sklearn
+        self.assertEqual(meta["sklearn"], sklearn.__version__)
+        self.assertIn("git_commit", meta)
+
+    def test_load_warns_about_another_sklearn_version(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            out = S.train(synthetic(), "test", Path(tmp) / S.MODEL_NAME)
+            meta = json.loads((out / "meta.json").read_text(encoding="utf-8"))
+            (out / "meta.json").write_text(json.dumps({**meta, "sklearn": "0.0.1"}), encoding="utf-8")
+            with self.assertLogs("config", "WARNING"):
+                S.load(out)
 
 
 class TestTrainFromCommandLine(unittest.TestCase):

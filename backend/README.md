@@ -51,6 +51,8 @@ API 文件（可以直接在網頁上試）：http://127.0.0.1:8000/docs
 
 `civil_winloss_v1/`、`retrieval_civil_v3/` 任一個不存在時，民事改回傳示例資料；沒有 `criminal_v1/` 時罪名、法條、刑度、相似判決改回傳示例資料。伺服器照樣能啟動。
 
+模型的 `meta.json` 記錄訓練時的 `git_commit`（有沒 commit 的改動會加 `-dirty`）、`sklearn`、`python` 版本（`config.build_info()`）。讀模型時如果 `sklearn` 和目前安裝的不同，記錄裡會留一筆警告（`config.warn_if_other_sklearn()`）；舊的 meta 沒有這個欄位就不比對。
+
 `civil_amount_v1/` 是獲償比例模型：有的話，結果頁的金額範圍是模型推估的「若為一部勝訴」（`amount_range.source` 是 `model`，`scope` 是 `partial_win`），相似判決的分布留著當對照。以下情況退回相似的勝訴判決的 10%–90% 分位數（`source` 是 `similar`）：
 
 - 沒有模型檔、讀不出來（例如 `scikit-learn` 版本不同），或模型檔是舊格式、`civil/features.py` 的關鍵字改了沒重訓：啟動時在記錄裡留下警告，`/api/health` 的 `amount` 是 `similar`

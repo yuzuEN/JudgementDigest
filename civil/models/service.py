@@ -171,6 +171,7 @@ def train(d: pd.DataFrame, version: str, out: Path, metrics: Optional[Dict] = No
     out.mkdir(parents=True, exist_ok=True)
     joblib.dump(model, out / "model.joblib", compress=3)
     meta = {"name": MODEL_NAME, "trained_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+            **config.build_info(),
             "dataset": f"text_dataset_{version}.csv", "n_cases": int(len(d)), "base_rate": float(d.y.mean()),
             "features": FEATURES, "unknown": UNKNOWN, "court_unknown_share": COURT_UNKNOWN_SHARE,
             "description": "TF-IDF（只用原告主張）＋案由中類、法院、律師、對方是否為法人", "metrics": metrics or {},
@@ -182,7 +183,9 @@ def train(d: pd.DataFrame, version: str, out: Path, metrics: Optional[Dict] = No
 def load(path: Optional[Path] = None):
     """回傳（模型, meta）。"""
     path = Path(path or artifact_dir())
-    return joblib.load(path / "model.joblib"), json.loads((path / "meta.json").read_text(encoding="utf-8"))
+    meta = json.loads((path / "meta.json").read_text(encoding="utf-8"))
+    config.warn_if_other_sklearn(meta, MODEL_NAME)    # 先提醒再讀：版本不合時 joblib.load 可能直接失敗
+    return joblib.load(path / "model.joblib"), meta
 
 
 def report(results: Dict, version: str, n: int) -> str:

@@ -232,6 +232,9 @@ class TestTrainAndLoad(unittest.TestCase):
         self.assertEqual(meta["mid_counts"], {"侵權：交通事故": 100, "契約：買賣": 50})
         self.assertEqual(meta["items"], features.ITEMS)
         self.assertEqual(meta["claim_log10_range"], list(model.claim_range))
+        import sklearn
+        self.assertEqual(meta["sklearn"], sklearn.__version__)
+        self.assertIn("git_commit", meta)
         self.assertEqual(len(model.edges), A.N_BINS - 1)
         r = model.predict_one(WIN[0] * 5, ANSWERS, 500_000)
         self.assertTrue(0 < r["ratio_low"] <= r["ratio_high"] <= 1)
