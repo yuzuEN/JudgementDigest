@@ -5,7 +5,7 @@
     python -m civil.dataset.build_dataset v5 _試建        # 輸出 text_dataset_v5_試建.csv，不覆蓋正式檔
 
 輸入（路徑見 config.py，資料版本見 docs/資料版本.md）：
-  - 分析用資料庫 judgments_work_20261014.db（規則 2.4.0 的固定副本，唯讀）
+  - 分析用資料庫 judgments_work_20261108.db（規則 2.5.1 的固定副本，唯讀；和 20261014 的 id 相同）
   - analysis_fields.pkl：A2 對審樣本（is_default_judgment=0、結果為四類之一）
   - v5 另讀 text_dataset_v4.csv，沿用 v4 案件的折別
 母體：A2 對審樣本，再：
