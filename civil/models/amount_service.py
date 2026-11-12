@@ -17,7 +17,6 @@
 """
 import argparse
 import json
-import re
 import sqlite3
 import time
 from contextlib import closing
@@ -35,7 +34,7 @@ from sklearn.preprocessing import OneHotEncoder
 
 import config
 from civil.dataset.text import prepare_input
-from civil.models.amount import ITEMS
+from civil.features import ITEM_PATTERNS, ITEMS
 from civil.models.service import FEATURES, UNKNOWN, features_frame
 from civil.models.tfidf import vec
 
@@ -46,7 +45,7 @@ UNKNOWN_SHARE = 0.3        # 訓練與校準時，法院、請求金額各有這
 ALPHA = 1.0                # 事先固定（同 amount.py），不看測試結果調整
 SEED = 42
 MIN_RATIO = 0.001
-ITEM_PATTERNS = [re.compile(p) for p in ITEMS.values()]
+CLAIM_CLIP = (1, 99)       # 請求金額（log10）裁到訓練資料的這兩個百分位，超出範圍不外插（平方項會亂跳）
 
 
 # ── 資料 ──
@@ -91,7 +90,8 @@ def rederive_amounts(ids, con) -> tuple:
 
 def load_training(version: str = "v5", rules: str = "current") -> pd.DataFrame:
     """
-    rules="current"：金額欄位用目前的 structuring.py 重新推導（2.5.1）；rules="db"：直接讀資料庫的欄位（2.4.0）。
+    rules="current"：金額欄位用目前的 structuring.py 重新推導；rules="db"：直接讀資料庫的欄位
+    （版本以資料庫的 structuring_version 為準：10/14 的副本是 2.4.0，11/08 回填的是 2.5.1）。
     """
     assert rules in ("current", "db")
     t = pd.read_csv(config.dataset_path(version), usecols=["id", "case_type_category", "case_type_mid", "outcome",
@@ -103,8 +103,11 @@ def load_training(version: str = "v5", rules: str = "current") -> pd.DataFrame:
             con.execute("CREATE TEMP TABLE ids(id INTEGER PRIMARY KEY)")
             con.executemany("INSERT INTO ids VALUES (?)", [(int(i),) for i in d.id])
             a = pd.read_sql("""SELECT j.id, j.grant_ratio, j.grant_ratio_source, j.claimed_amount, j.claimed_source,
-                                      j.quality_flags FROM judgments j JOIN ids USING (id)""", con)
-            rule_version = "2.4.0"
+                                      j.quality_flags, j.structuring_version FROM judgments j JOIN ids USING (id)""", con)
+            versions = sorted(a.structuring_version.dropna().astype(str).unique())
+            assert len(versions) == 1, f"資料庫裡的規則版本不只一種：{versions}，請先全量回填"
+            rule_version = versions[0]
+            a = a.drop(columns="structuring_version")
         else:
             a, rule_version = rederive_amounts(d.id, con)
     d = select_sample(d.merge(a, on="id", how="left", validate="1:1"))
@@ -152,6 +155,7 @@ class AmountModel:
     def __init__(self):
         self.vec = self.enc = self.ridge = None
         self.mu = self.sd = None
+        self.claim_range = None    # 訓練資料 log10(請求金額) 的（第 1, 第 99 百分位）
         self.edges = self.q = None
 
     def _dense(self, texts, claim, fit: bool) -> csr_matrix:
@@ -159,6 +163,10 @@ class AmountModel:
         known = np.isfinite(claim) & (claim > 0)
         lc = np.full(len(claim), np.nan)
         lc[known] = np.log10(claim[known])
+        if fit:
+            self.claim_range = tuple(float(x) for x in np.nanpercentile(lc, CLAIM_CLIP)) if known.any() else None
+        if getattr(self, "claim_range", None):
+            lc = np.clip(lc, *self.claim_range)
         if fit:
             self.mu, self.sd = float(np.nanmean(lc)), float(np.nanstd(lc)) + 1e-9
         z = np.where(known, (lc - self.mu) / self.sd, 0.0)       # 沒填的請求金額放平均，另用旗標告訴模型
@@ -252,7 +260,32 @@ def evaluate(d: pd.DataFrame, chunk: int = 500) -> Dict:
     results = {name: metrics(truth, band) for name, band in base.items()}
     results.update({f"模型：{s}": metrics(truth, bands[s]) for s in scenarios})
     results["_baseline_mae_global_median"] = float(np.abs(truth - np.median(truth)).mean())
+    knn = base["相似判決分位數（現行做法的近似）"]
+    results["_bootstrap"] = {
+        "模型（全部填）− 相似判決分位數": paired_bootstrap(truth, bands["全部填"], knn),
+        "模型（都沒填）− 相似判決分位數": paired_bootstrap(truth, bands["都沒填"], knn),
+        "模型（全部填）− 案由分位數": paired_bootstrap(truth, bands["全部填"], base["案由分位數"]),
+    }
     return results
+
+
+def paired_bootstrap(truth: np.ndarray, a: np.ndarray, b: np.ndarray, n: int = 2000, seed: int = SEED) -> Dict:
+    """
+    方法 a 減方法 b 的差：MAE、涵蓋率、平均寬度，各給點估計與 95% 區間。
+    逐件重抽，同一次重抽同時用在兩個方法上（配對），所以兩個方法共同的難易度會抵銷。
+    區間不含 0 才算有差。MAE 是負的代表 a 比較準。
+    """
+    def per_case(band):
+        lo, mid, hi = band[:, 0], band[:, 1], band[:, 2]
+        return np.stack([np.abs(mid - truth), ((truth >= lo) & (truth <= hi)).astype(float), hi - lo])
+    diff = per_case(a) - per_case(b)
+    rng = np.random.default_rng(seed)
+    boots = np.array([diff[:, rng.integers(0, len(truth), len(truth))].mean(1) for _ in range(n)])
+    out = {}
+    for i, key in enumerate(("mae", "coverage", "width")):
+        lo, hi = np.percentile(boots[:, i], [2.5, 97.5])
+        out[key] = {"diff": float(diff[i].mean()), "low": float(lo), "high": float(hi)}
+    return out
 
 
 def report(results: Dict, version: str, flow, rule_version: str = "") -> str:
@@ -271,6 +304,14 @@ def report(results: Dict, version: str, flow, rule_version: str = "") -> str:
     lines.append(f"\n全部猜整體中位數的 MAE：{results['_baseline_mae_global_median']:.3f}。")
     lines.append("模型的範圍用「混合」情境（30% 法院不知道、30% 請求金額沒填）的折外殘差校準，其他情境套用同一組校準，"
                  "所以「全部填」會略高於 80%、「都沒填」會略低。")
+    if "_bootstrap" in results:
+        lines += ["\n## 成對比較（配對 bootstrap 2,000 次，95% 區間）\n",
+                  "區間不含 0 才算有差。MAE 差是負的代表前者比較準；涵蓋率差是正的代表前者的範圍比較常涵蓋到實際比例。\n",
+                  "| 比較 | MAE 差 | 涵蓋率差 | 寬度差 |", "|---|---|---|---|"]
+        fmt = lambda x, pct=False: (f"{x['diff']:+.1%}（{x['low']:+.1%}～{x['high']:+.1%}）" if pct      # noqa: E731
+                                    else f"{x['diff']:+.4f}（{x['low']:+.4f}～{x['high']:+.4f}）")
+        for name, r in results["_bootstrap"].items():
+            lines.append(f"| {name} | {fmt(r['mae'])} | {fmt(r['coverage'], True)} | {fmt(r['width'])} |")
     return "\n".join(lines) + "\n"
 
 
@@ -294,6 +335,10 @@ def train(d: pd.DataFrame, version: str, out: Path, metrics_summary: Optional[Di
     joblib.dump(model, out / "model.joblib", compress=3)
     meta = {"name": MODEL_NAME, "trained_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
             "dataset": f"text_dataset_{version}.csv", "n_cases": int(len(d)), "median_ratio": float(d.ratio.median()),
+            # 後端用：各案由的訓練件數（太少的案由不用模型）、損害子項目的關鍵字（改了沒重訓就不用）、請求金額的範圍
+            "mid_counts": {str(k): int(v) for k, v in d.mid.value_counts().items()},
+            "items": ITEMS,
+            "claim_log10_range": list(model.claim_range) if model.claim_range else None,
             "sample": f"一部勝訴一部敗訴、獲償比例是算出來的（金額欄位規則 {rule_version}）", "amount_rules": rule_version, "features": FEATURES + ["claimed_amount"],
             "unknown_share": UNKNOWN_SHARE, "interval": [LOW, HIGH],
             "description": "TF-IDF（原告主張）＋案由、法院、律師、對方是否為法人、請求金額、損害子項目；若為一部勝訴的獲償比例範圍",
@@ -302,10 +347,25 @@ def train(d: pd.DataFrame, version: str, out: Path, metrics_summary: Optional[Di
     return out
 
 
+class StaleModel(ValueError):
+    """模型檔和目前的程式對不上（舊格式、或關鍵字改了沒重訓），要重新訓練。"""
+
+
 def load(path: Optional[Path] = None):
-    """回傳（模型, meta）。"""
+    """回傳（模型, meta）。meta 缺少後端需要的欄位、或關鍵字表和現在不同時丟 StaleModel。"""
     path = Path(path or artifact_dir())
-    return joblib.load(path / "model.joblib"), json.loads((path / "meta.json").read_text(encoding="utf-8"))
+    model = joblib.load(path / "model.joblib")
+    meta = json.loads((path / "meta.json").read_text(encoding="utf-8"))
+    if "mid_counts" not in meta or "items" not in meta:
+        raise StaleModel("模型檔是舊格式（meta.json 沒有各案由件數或關鍵字表），請重新訓練")
+    if meta["items"] != ITEMS:
+        raise StaleModel("損害子項目的關鍵字和訓練時不同（civil/features.py 改過），請重新訓練")
+    return model, meta
+
+
+def usable_for(meta: Dict, mid: Optional[str], min_cases: int) -> bool:
+    """這個案由的訓練件數夠不夠：太少的案由（例如債務人異議只有 11 件）模型沒學到東西，不用它。"""
+    return bool(mid) and meta.get("mid_counts", {}).get(mid, 0) >= min_cases
 
 
 def main():
@@ -314,7 +374,7 @@ def main():
     ap.add_argument("--version", default="v5")
     ap.add_argument("--out", default=None, help="模型輸出資料夾；預設 artifacts/civil_amount_v1")
     ap.add_argument("--rules", choices=("current", "db"), default="current",
-                    help="金額欄位：current＝用目前的 structuring.py 重新推導（2.5.1，預設）；db＝資料庫的欄位（2.4.0）")
+                    help="金額欄位：current＝用目前的 structuring.py 重新推導（2.5.1，預設）；db＝資料庫的欄位（版本以資料庫為準）")
     a = ap.parse_args()
     t0 = time.time()
     d = load_training(a.version, a.rules)

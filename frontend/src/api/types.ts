@@ -9,6 +9,8 @@ export interface Health {
   criminal: "model" | "mock";
   followup: "rules" | "llm";
   model: string | null;
+  /** 民事金額範圍：有可用的獲償比例模型，或只用相似判決 */
+  amount?: "model" | "similar" | "mock";
 }
 
 export interface MidOption {
@@ -68,7 +70,12 @@ export interface CivilPrediction {
 }
 
 export interface AmountRange {
-  n_cases: number;
+  /** model＝獲償比例模型推估；similar＝相似判決的分位數（沒有模型檔時）。舊版後端沒有這個欄位，視為 similar */
+  source?: "model" | "similar";
+  /** partial_win＝只針對「一部勝訴」；win＝勝訴與一部勝訴 */
+  scope?: "win" | "partial_win";
+  /** buckets 背後的相似判決件數；沒有相似判決時是 null */
+  n_cases?: number | null;
   ratio_low: number;
   ratio_median: number;
   ratio_high: number;
@@ -78,6 +85,9 @@ export interface AmountRange {
   amount_median?: number | null;
   amount_high?: number | null;
   buckets?: { low: number; high: number; count: number }[];
+  /** 相似判決（對審、最多 30 件）裡勝訴與一部勝訴的件數，以及其中全部勝訴的件數 */
+  n_wins?: number | null;
+  n_full_wins?: number | null;
 }
 
 export interface SimilarCase {
