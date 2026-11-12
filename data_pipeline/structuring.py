@@ -23,6 +23,8 @@ import json
 import re
 from typing import Dict, List, Optional, Tuple
 
+from parties import classify_party, parse_party_block, party_block
+
 # ═══════════════════════════════════════════════════════════════════════════
 # 0. 中文數字轉換
 # ═══════════════════════════════════════════════════════════════════════════
@@ -1498,12 +1500,23 @@ def _name_is_corp(name: str) -> bool:
 
 def party_is_corp(names: str, full_text: str) -> int:
     """
-    任一當事人是法人（含政府機關）就是 1。目前只用在 defendant_is_corp（Base 模型的變數）；
-    當事人類型的正式定義是同學的 parties.py，合併後 defendant_is_corp 建議改由它推算。
+    任一當事人是法人（含政府機關）就是 1，看的是解析器的當事人欄位。
+    2.5.2 起 defendant_is_corp 改用 parties.py（defendant_is_corp_of），這裡只在當事人欄解析不出被告時備用。
     """
     head = (full_text or "")[:1500]
     parts = [p.strip() for p in re.split(r"[；;]", names or "") if p.strip()]
     return int(any(_name_is_corp(_restore_name(p, head)) for p in parts))
+
+
+# ── 2.5.2 被告是否為法人：改用 parties.py（同學的當事人解析，兩輪逐筆核對，類型正確率 98–100%）──
+# parties.py 直接從全文開頭的當事人欄重新解析，修掉斷行、括號舊名、「兼」任者等問題；
+# 類型分自然人／公司團體／政府機關，「X即Y」獨資一律是自然人（最高法院 43 台上 601）。
+def defendant_is_corp_of(defendant: str, full_text: str) -> int:
+    """任一被告是公司團體或政府機關就是 1。當事人欄解析不出被告時（裁定、格式特殊），改用解析器欄位判斷。"""
+    _, defendants = parse_party_block(party_block(full_text))
+    if not defendants:
+        return party_is_corp(defendant, full_text)
+    return int(any(classify_party(d["full"]) != "自然人" for d in defendants))
 
 
 # 程序地位。第一審用「原告／被告」，上訴審改用「上訴人／被上訴人」，
@@ -2169,7 +2182,7 @@ SOURCE_COLUMNS = [
 ]
 
 # 規則版本。規則異動時遞增，讓回填過的資料可以辨識是用哪一版規則產生的。
-STRUCTURING_VERSION = "2.5.1"
+STRUCTURING_VERSION = "2.5.2"
 
 
 def derive_structured_fields(row: Dict) -> Dict:
@@ -2372,9 +2385,8 @@ def derive_structured_fields(row: Dict) -> Dict:
         # 上訴審沒有「被告」這一造（被上訴人可能是原審原告），
         # 硬填 0 會讓分析誤以為上訴審的被告都不是法人。留 None 表示不適用。
         "defendant_is_corp":    (None if posture == _POSTURE_APPEAL and not defendant
-                                 else party_is_corp(defendant, full_text)),
-        # 原告的當事人類型（公司團體／政府機關…）以同學 parties.py 的「當事人類型」為準，
-        # 這裡不另外輸出 plaintiff_is_corp，免得同一件事有兩種定義。
+                                 else defendant_is_corp_of(defendant, full_text)),
+        # 原告的當事人類型目前沒有輸出（Base 模型只用被告）；需要時同樣用 parties.py 的 classify_party。
         # 有沒有律師與審級無關，上訴審讀 appellant/appellee 的代理人即可。
         "plaintiff_has_lawyer": _agent_has_lawyer(
             g("plaintiff_agent") or g("appellant_agent"), full_text),

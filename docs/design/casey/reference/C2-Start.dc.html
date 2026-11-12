@@ -1,0 +1,220 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<title>CasEY 第一章：描述案情</title>
+<script src="./support.js"></script>
+<link rel="stylesheet" href="./jd.css">
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;700;800&display=swap" rel="stylesheet">
+<style>body{margin:0}</style>
+</helmet>
+<div class="jd {{theme}}">
+  <dc-import name="CTop" at="{{stage}}" who="a" line="{{line}}" note="{{showNote}}" hint-size="100%,420px"></dc-import>
+
+  <div class="wrap" style="padding-top:28px;padding-bottom:64px">
+    <div style="display:flex;flex-wrap:wrap;gap:28px;align-items:flex-start">
+      <main class="stack-l" style="flex:999 1 560px;min-width:0">
+
+        <!-- 關卡 1 類型 -->
+        <sc-if value="{{s1}}" hint-placeholder-val="{{ true }}">
+          <section class="card stack">
+            <h1 class="h2">第 1 關　這是哪一類的事情？</h1>
+            <div class="menu" role="radiogroup" aria-label="案件類型">
+              <button class="mi {{t.civil}}" type="button" role="radio" aria-checked="{{t.civilOn}}" onClick="{{pickCivil}}"><span><b>民事</b><br><span class="small muted">要求賠償、還錢、履行契約</span></span></button>
+              <button class="mi {{t.crim}}" type="button" role="radio" aria-checked="{{t.crimOn}}" onClick="{{pickCrim}}"><span><b>刑事</b><br><span class="small muted">被警察、檢察官調查，或想告對方犯罪</span></span></button>
+              <button class="mi {{t.unsure}}" type="button" role="radio" aria-checked="{{t.unsureOn}}" onClick="{{pickUnsure}}"><span><b>不確定</b><br><span class="small muted">兩邊都幫我看，結果會有民事、刑事兩個分頁</span></span></button>
+            </div>
+            <sc-if value="{{type}}" hint-placeholder-val="{{ false }}"><div class="note"><span class="ic ic-info"></span><div class="stack-s"><p class="b">選{{typeLabel}}，你會得到：</p><ul class="small" style="margin:0"><sc-for list="{{gets}}" as="g" hint-placeholder-count="3"><li>{{g}}</li></sc-for></ul></div></div></sc-if>
+          </section>
+        </sc-if>
+
+        <!-- 關卡 2 案情 -->
+        <sc-if value="{{s2}}" hint-placeholder-val="{{ false }}">
+          <section class="card stack-l">
+            <h1 class="h2">第 2 關　發生了什麼事？</h1>
+            <div class="field">
+              <label class="b" for="story">用自己的話寫就好</label>
+              <p class="hint">也可以直接貼起訴書的「犯罪事實」或「事實及理由」。</p>
+              <textarea id="story" class="ta" style="min-height:200px" onChange="{{onStory}}">{{story}}</textarea>
+              <div class="row row-sb"><span class="small {{storyCls}}" role="status">{{storyMsg}}</span><span class="xs muted num">{{storyLen}} / 3000 字</span></div>
+            </div>
+            <div class="stack-s"><p class="b small">寫作提示（寫到就會亮起來）</p>
+              <div class="row" style="gap:8px"><sc-for list="{{hints}}" as="h" hint-placeholder-count="4"><span class="chip {{h.cls}}"><sc-if value="{{h.ok}}" hint-placeholder-val="{{ false }}"><span class="ic ic-check" style="width:1em;height:1em"></span></sc-if>{{h.name}}</span></sc-for></div></div>
+            <sc-if value="{{isCrim}}" hint-placeholder-val="{{ false }}">
+              <div class="card card-flat stack-s" style="border-style:dashed"><p class="b">刑事案件怎麼寫</p>
+                <ul class="small muted stack-s" style="margin:0"><li>寫清楚時間、地點、發生了什麼，以及你被指控（或想指控）什麼事。</li><li>有起訴書或傳票，可以直接貼「犯罪事實」那一段。</li><li>不用寫你認為的罪名，系統會從相似判決找出可能的罪名。</li></ul></div>
+            </sc-if>
+            <sc-if value="{{isCivil}}" hint-placeholder-val="{{ true }}">
+              <div class="field">
+                <p class="b">糾紛類型<span class="muted small" style="font-weight:500">　可以選好幾個</span></p>
+                <div style="display:flex;flex-wrap:wrap;gap:24px;align-items:flex-start">
+                  <div class="stack-s" style="flex:1 1 300px;min-width:0">
+                    <sc-for list="{{groups}}" as="g" hint-placeholder-count="5">
+                      <div class="stack-s" style="gap:6px"><p class="small b muted">{{g.name}}</p>
+                        <div class="row" style="gap:8px"><sc-for list="{{g.items}}" as="i" hint-placeholder-count="2"><button class="chip {{i.cls}}" type="button" aria-pressed="{{i.on}}" onClick="{{i.toggle}}" style="min-height:44px;cursor:pointer"><sc-if value="{{i.on}}" hint-placeholder-val="{{ false }}"><span class="ic ic-check" style="width:1em;height:1em"></span></sc-if>{{i.name}}</button></sc-for></div></div>
+                    </sc-for>
+                    <p class="xs muted">共 15 大類、46 類；這裡只示意幾類。正式版是可搜尋、可多選的清單。</p>
+                  </div>
+                  <div class="card card-flat stack-s" style="flex:1 1 260px;min-width:0;background:var(--sunk)">
+                    <p class="b">糾紛類型說明</p>
+                    <sc-for list="{{kindDesc}}" as="k" hint-placeholder-count="2">
+                      <div class="stack-s" style="gap:2px;padding:10px 12px;border-radius:12px;background:var(--surface);border:1.5px solid var(--brand)"><p class="b small"><span class="has" style="margin-right:6px"><span class="ic ic-check"></span>已選</span>{{k.name}}</p><p class="small muted">{{k.desc}}</p></div>
+                    </sc-for>
+                    <sc-if value="{{noKind}}" hint-placeholder-val="{{ false }}"><p class="small muted">還沒選。選到的類型，說明會出現在這裡。</p></sc-if>
+                  </div>
+                </div>
+              </div>
+            </sc-if>
+          </section>
+        </sc-if>
+
+        <!-- 關卡 3 資料 -->
+        <sc-if value="{{s3}}" hint-placeholder-val="{{ false }}">
+          <section class="card stack-l">
+            <h1 class="h2">第 3 關　補幾項資料</h1>
+            <sc-if value="{{isCivil}}" hint-placeholder-val="{{ true }}">
+              <div class="field"><label class="b" for="court">打算在哪個法院？<span class="muted small" style="font-weight:500">　可以不選</span></label>
+                <select id="court" class="sel" style="max-width:360px"><option>不指定</option><option>臺灣臺北地方法院</option><option>臺灣雲林地方法院</option><option>…全國地方法院</option></select></div>
+              <div class="field"><label class="b" for="amt">想請求的金額</label>
+                <div class="row" style="gap:10px"><input id="amt" class="inp num" inputmode="numeric" value="{{amtText}}" onChange="{{onAmt}}" style="max-width:260px"><span class="b">元</span></div>
+                <p class="small {{amtCls}}" role="status">{{amtMsg}}</p>
+                <div class="row" style="gap:8px"><span class="xs muted">快速填入：</span><button class="chip" type="button" onClick="{{amt50}}">50 萬</button><button class="chip" type="button" onClick="{{amt648}}">648,000</button><button class="chip" type="button" onClick="{{amt0}}">還不確定</button></div></div>
+              <div class="field"><p class="b">對方是</p>
+                <div class="seg" role="radiogroup" aria-label="對方"><button type="button" class="{{p.person}}" onClick="{{partyPerson}}">個人</button><button type="button" class="{{p.company}}" onClick="{{partyCompany}}">公司</button><button type="button" class="{{p.gov}}" onClick="{{partyGov}}">政府機關、學校、醫院</button></div></div>
+            </sc-if>
+            <div class="field"><p class="b">有沒有請律師</p>
+              <div class="seg" role="radiogroup" aria-label="有沒有請律師" style="max-width:320px"><button type="button" class="{{l.yes}}" onClick="{{lawyerYes}}">有</button><button type="button" class="{{l.no}}" onClick="{{lawyerNo}}">沒有</button></div></div>
+            <div class="field"><p class="b">證物欄　<span class="muted small" style="font-weight:500">點一下＝手上有。只要勾選，不用上傳。</span></p>
+              <div class="slots" role="group" aria-label="證物"><sc-for list="{{slots}}" as="s" hint-placeholder-count="6"><button class="slot {{s.cls}}" type="button" aria-pressed="{{s.on}}" onClick="{{s.toggle}}"><sc-if value="{{s.on}}" hint-placeholder-val="{{ false }}"><span class="badge"><span class="ic ic-check" style="width:14px;height:14px"></span></span></sc-if><span class="ic {{s.icon}} ic-lg"></span><span class="small">{{s.name}}</span></button></sc-for></div></div>
+          </section>
+        </sc-if>
+
+        <!-- 導覽 -->
+        <div class="stack-s">
+          <div class="row row-sb">
+            <sc-if value="{{canBack}}" hint-placeholder-val="{{ false }}"><button class="btn btn-s" type="button" onClick="{{back}}"><span class="ic ic-back"></span>上一關</button></sc-if>
+            <sc-if value="{{notLast}}" hint-placeholder-val="{{ true }}"><button class="btn btn-p btn-lg" type="button" disabled="{{nextOff}}" onClick="{{next}}">下一關<span class="ic ic-right"></span></button></sc-if>
+            <sc-if value="{{isLast}}" hint-placeholder-val="{{ false }}"><a class="btn btn-p btn-lg" href="C2-Confirm.dc.html">下一章：確認內容<span class="ic ic-right"></span></a></sc-if>
+          </div>
+          <sc-if value="{{nextOff}}" hint-placeholder-val="{{ false }}"><p class="small" role="status"><span class="ic ic-info" style="vertical-align:-4px;margin-right:6px"></span>{{nextWhy}}</p></sc-if>
+          <sc-if value="{{isLast}}" hint-placeholder-val="{{ false }}"><p class="small muted"><span class="ic ic-shield" style="vertical-align:-4px;margin-right:6px"></span>下一章會先讓你預覽，並遮掉姓名、身分證字號、電話。</p></sc-if>
+        </div>
+      </main>
+
+      <aside class="card stack" style="flex:1 1 260px;max-width:340px;min-width:0">
+        <div class="row row-sb"><h2 class="h3">你填的資料</h2><span class="xs muted">目前進度</span></div>
+        <dl class="stack-s small" style="margin:0">
+          <div class="dl-row"><dt class="muted">案件類型</dt><dd class="b">{{fType}}</dd></div>
+          <div class="dl-row"><dt class="muted">案情</dt><dd class="b num">{{fStory}}</dd></div>
+          <div class="dl-row"><dt class="muted">糾紛類型</dt><dd class="b" style="text-align:right">{{fKind}}</dd></div>
+          <div class="dl-row"><dt class="muted">請求金額</dt><dd class="b num">{{fAmt}}</dd></div>
+          <div class="dl-row"><dt class="muted">對方</dt><dd class="b">{{fParty}}</dd></div>
+          <div class="dl-row"><dt class="muted">律師</dt><dd class="b">{{fLawyer}}</dd></div>
+          <div class="dl-row"><dt class="muted">證物</dt><dd class="b" style="text-align:right">{{fEv}}</dd></div>
+        </dl>
+        <p class="xs muted">標「示例」的是後面關卡還沒填的欄位。除了案情是自由文字，其他都是選項或有格式的欄位。</p>
+      </aside>
+    </div>
+  </div>
+
+  <footer class="ftr"><div class="wrap"><p>本服務提供的是過去判決的統計參考，不是法律意見。</p></div></footer>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"dark":{"editor":"boolean","default":false},"startStage":{"editor":"int","default":1,"min":1,"max":3},"$preview":{"width":1280,"height":1900}}'>
+class Component extends DCLogic {
+  parseAmt(s) {
+    const t = String(s || '').replace(/[,，\s元NT$]/g, '');
+    if (!t) return { empty: true };
+    const m = t.match(/^(\d+(?:\.\d+)?)萬(?:(\d+)千)?$/);
+    if (m) return { v: Math.round(parseFloat(m[1]) * 10000 + (m[2] ? parseInt(m[2], 10) * 1000 : 0)) };
+    if (/^\d+$/.test(t)) return { v: parseInt(t, 10) };
+    return { bad: true };
+  }
+  renderVals() {
+    const st = this.state || {};
+    const start = Number(this.props.startStage) || 1;
+    const stage = st.stage !== undefined ? st.stage : start;
+    const type = st.type !== undefined ? st.type : 'civil';
+    const story = st.story !== undefined ? st.story : '今年 7 月下午，我騎機車經過路口，被一輛轉彎的汽車撞倒。右腿骨折，住院兩週，之後復健了兩個月。機車全毀，請了一個月的假沒有領到薪水。對方說是我闖紅燈，但路口有監視器。醫藥費、修車費、薪水損失加起來約 64 萬。';
+    const kinds = st.kinds || ['交通事故'];
+    const amtText = st.amtText !== undefined ? st.amtText : '648000';
+    const party = st.party || 'person';
+    const lawyer = st.lawyer || 'no';
+    const ev = st.ev || [true, true, false, false, false, true];
+    const set = (o) => () => this.setState(o);
+    const o = { theme: this.props.dark ? 'dark' : '', stage };
+    const lines = {
+      1: '你好，我是 CasEY 的整理員。接下來一次只問一件事。先告訴我，你遇到的事比較像哪一種？',
+      2: '請說說發生了什麼事：時間、地點、對方做了什麼、你的損失。寫不完整也沒關係，下面的提示會亮起來。',
+      3: '最後幾項資料。證物欄點一下就是「有」，不用上傳任何東西。'
+    };
+    o.line = lines[stage]; o.showNote = stage === 1;
+    o.s1 = stage === 1; o.s2 = stage === 2; o.s3 = stage === 3;
+    o.isCivil = type !== 'crim'; o.isCrim = type === 'crim';
+
+    const tl = { civil: '民事', crim: '刑事', unsure: '不確定' };
+    const tg = { civil: ['相似判決裡，原告贏的比例', '可能判准的金額範圍', '相似的真實判決、證據對照、對方常見的說法'], crim: ['可能的罪名與法條', '刑期落在哪個範圍', '相似的真實判決'], unsure: ['結果頁有民事、刑事兩個分頁', '兩邊都幫你看'] };
+    o.type = !!type; o.typeLabel = tl[type] || ''; o.gets = tg[type] || [];
+    o.t = { civil: type === 'civil' ? 'on' : '', crim: type === 'crim' ? 'on' : '', unsure: type === 'unsure' ? 'on' : '', civilOn: type === 'civil', crimOn: type === 'crim', unsureOn: type === 'unsure' };
+    o.pickCivil = set({ type: 'civil' }); o.pickCrim = set({ type: 'crim' }); o.pickUnsure = set({ type: 'unsure' });
+
+    o.story = story; o.storyLen = story.length;
+    const okLen = story.length >= 30;
+    o.storyMsg = okLen ? '字數夠了，可以進下一關。' : '再多寫一點：至少 30 字，才找得到相似判決。';
+    o.storyCls = okLen ? 'okmsg' : '';
+    o.onStory = (e) => this.setState({ story: e.target.value });
+    const chk = [['時間', /\d+\s*(年|月|日|號|點)|今天|昨天|去年|今年|上午|下午|晚上/], ['地點', /路|街|店|公司|學校|醫院|路口|家|市|縣/], ['對方做了什麼', /對方|被告|他|她|公司|撞|說/], ['損失（金額或傷勢）', /\d+\s*(元|萬)|受傷|骨折|住院|全毀|損失/]];
+    o.hints = chk.map(([name, re]) => { const ok = re.test(story); return { name, ok, cls: ok ? 'sel' : '' }; });
+
+    const G = [
+      ['侵權', [['交通事故', '因為別人的過失或故意，讓你的身體、財物受傷害，請求對方賠償。'], ['其他侵權', '不是車禍，但別人的行為讓你受到損害。']]],
+      ['契約', [['買賣', '買東西或賣東西，對方沒付錢、沒交貨或貨品有問題。'], ['租賃', '房子、車子等租借，租金、押金或返還出問題。']]],
+      ['民間借貸', [['借款', '借錢給別人或向別人借錢，要求還款。']]],
+      ['勞動', [['工資', '雇主沒給薪水、加班費或其他應得的錢。']]],
+      ['不動產', [['不動產買賣', '買賣房屋、土地時發生的糾紛。']]]
+    ];
+    o.groups = G.map(([name, items]) => ({ name, items: items.map(([n]) => { const on = kinds.includes(n); return { name: n, on, cls: on ? 'sel' : '', toggle: () => this.setState({ kinds: on ? kinds.filter(k => k !== n) : kinds.concat([n]) }) }; }) }));
+    const all = [].concat.apply([], G.map(g => g[1]));
+    o.kindDesc = all.filter(([n]) => kinds.includes(n)).map(([n, d]) => ({ name: n, desc: d }));
+    o.noKind = kinds.length === 0;
+
+    const pa = this.parseAmt(amtText);
+    o.amtText = amtText;
+    o.amtMsg = pa.empty ? '沒填也可以，但就看不到金額範圍，只會顯示比例。' : (pa.bad ? '看不懂這個金額。請輸入數字，例如 50萬 或 648000。' : '我讀成：' + pa.v.toLocaleString('en-US') + ' 元');
+    o.amtCls = pa.bad ? '' : 'okmsg';
+    o.onAmt = (e) => this.setState({ amtText: e.target.value });
+    o.amt50 = set({ amtText: '50萬' }); o.amt648 = set({ amtText: '648000' }); o.amt0 = set({ amtText: '' });
+    o.p = { person: party === 'person' ? 'on' : '', company: party === 'company' ? 'on' : '', gov: party === 'gov' ? 'on' : '' };
+    o.partyPerson = set({ party: 'person' }); o.partyCompany = set({ party: 'company' }); o.partyGov = set({ party: 'gov' });
+    o.l = { yes: lawyer === 'yes' ? 'on' : '', no: lawyer === 'no' ? 'on' : '' };
+    o.lawyerYes = set({ lawyer: 'yes' }); o.lawyerNo = set({ lawyer: 'no' });
+    const evNames = ['診斷證明', '收據', '轉帳紀錄', 'LINE、簡訊、錄音', '契約、借據、本票', '照片、監視器、行車紀錄器'];
+    const evIcons = ['ic-file', 'ic-file', 'ic-db', 'ic-book', 'ic-scale', 'ic-search'];
+    o.slots = evNames.map((name, i) => ({ name, on: !!ev[i], cls: ev[i] ? 'on' : '', icon: evIcons[i], toggle: () => { const n = ev.slice(); n[i] = !n[i]; this.setState({ ev: n }); } }));
+
+    const off = (stage === 1 && !type) || (stage === 2 && !okLen) || (stage === 3 && pa.bad);
+    o.nextOff = off; o.nextWhy = ({ 1: '請先選一種案件類型。', 2: '案情至少要 30 字。', 3: '金額格式不對，請修改。' })[stage];
+    o.canBack = stage > 1; o.notLast = stage < 3; o.isLast = stage === 3;
+    o.next = () => this.setState({ stage: Math.min(3, stage + 1), type });
+    o.back = () => this.setState({ stage: Math.max(1, stage - 1), type });
+
+    const smp = (n, t) => (stage >= n ? t : t + '（示例）');
+    o.fType = tl[type] || '（還沒選）';
+    o.fStory = smp(2, story.length + ' 字');
+    o.fKind = smp(2, kinds.length ? kinds.join('、') : '未選');
+    o.fAmt = smp(3, pa.v ? pa.v.toLocaleString('en-US') + ' 元' : (pa.bad ? '格式錯誤' : '未填'));
+    o.fParty = smp(3, ({ person: '個人', company: '公司', gov: '機關、學校、醫院' })[party]);
+    o.fLawyer = smp(3, lawyer === 'yes' ? '有' : '沒有');
+    const chosen = evNames.filter((n, i) => ev[i]);
+    o.fEv = smp(3, chosen.length + ' 項');
+    return o;
+  }
+}
+</script>
+</body>
+</html>

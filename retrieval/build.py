@@ -13,7 +13,6 @@
 import argparse
 import json
 import sqlite3
-import subprocess
 from contextlib import closing
 from datetime import datetime, timezone
 from pathlib import Path
@@ -40,11 +39,10 @@ def provenance(db: Path) -> dict:
     """這份資料是哪個程式版本、哪個規則、哪份資料庫建出來的（資料不進 Git，要靠這些對回去）。"""
     config.use_data_pipeline()
     from structuring import STRUCTURING_VERSION
-    commit = subprocess.run(["git", "rev-parse", "--short", "HEAD"], cwd=config.ROOT, capture_output=True, text=True)
     with closing(sqlite3.connect(f"file:{db}?mode=ro", uri=True)) as con:
         rows = con.execute("SELECT COUNT(*) FROM judgments").fetchone()[0]
     modified = datetime.fromtimestamp(Path(db).stat().st_mtime, timezone.utc).isoformat(timespec="seconds")
-    return {"git_commit": commit.stdout.strip(), "rule_version": STRUCTURING_VERSION,
+    return {**config.build_info(), "rule_version": STRUCTURING_VERSION,
             "source_rows": rows, "source_modified": modified}
 
 

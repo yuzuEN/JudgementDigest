@@ -1,0 +1,121 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<title>CasEY 結果頁各種狀態</title>
+<script src="./support.js"></script>
+<link rel="stylesheet" href="./jd.css">
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;700;800&display=swap" rel="stylesheet">
+<style>body{margin:0}html{scroll-behavior:smooth}</style>
+</helmet>
+<div class="jd {{theme}}" style="width:1280px">
+  <dc-import name="CTop" at="0" who="b" line="這一頁整理結果頁會遇到的各種狀態：載入、錯誤、資料不足、示例資料。原則是一個區塊出問題，其他區塊照常顯示；文字說清楚發生什麼事、可以做什麼，不嚇人。" note="false" hint-size="100%,420px"></dc-import>
+
+  <div class="wrap stack-l" style="padding-top:32px;padding-bottom:72px;gap:56px">
+
+    <nav class="row" aria-label="狀態目錄" style="gap:8px">
+      <span class="small muted">跳到：</span>
+      <a class="chip" href="#s1" style="text-decoration:none">1 金額來源</a><a class="chip" href="#s2" style="text-decoration:none">2 示例資料</a><a class="chip" href="#s3" style="text-decoration:none">3 載入與錯誤</a><a class="chip" href="#s4" style="text-decoration:none">4 資料不足</a><a class="chip" href="#s5" style="text-decoration:none">5 訊號與極端數字</a>
+    </nav>
+
+    <!-- 1 金額四種來源 -->
+    <section id="s1" class="stack-l">
+      <div class="stack-s"><div class="row"><span class="nbadge">1</span><h2 class="h2">金額區塊：四種來源，標題與說明都不同</h2></div>
+        <p class="muted">差別看三處：標題、來源標籤、範圍條的樣式。模型推估是虛線填色（較不確定），相似判決是實線。</p></div>
+      <div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:24px;align-items:start">
+        <div class="stf"><div class="stf-h"><span>A　模型推估</span><span class="tg">source = model</span></div><div class="stf-b"><dc-import name="Amount" variant="model" hint-size="100%,640px"></dc-import></div></div>
+        <div class="stf"><div class="stf-h"><span>B　相似判決</span><span class="tg">source = similar</span></div><div class="stf-b"><dc-import name="Amount" variant="similar" hint-size="100%,560px"></dc-import></div></div>
+        <div class="stf"><div class="stf-h"><span>C　沒填請求金額</span><span class="tg">source = none</span></div><div class="stf-b"><dc-import name="Amount" variant="noamount" hint-size="100%,640px"></dc-import></div></div>
+        <div class="stf"><div class="stf-h"><span>D　相似判決不夠</span><span class="tg">source = insufficient</span></div><div class="stf-b"><dc-import name="Amount" variant="insufficient" hint-size="100%,320px"></dc-import></div></div>
+      </div>
+    </section>
+
+    <!-- 2 示例資料 -->
+    <section id="s2" class="stack-l">
+      <div class="stack-s"><div class="row"><span class="nbadge">2</span><h2 class="h2">示例資料：明顯，但不嚇人</h2></div>
+        <p class="muted">沒有連到模型時，整頁都是示範用的假資料。紫灰色只用在這個用途，三個位置都標：頁面上方、每個區塊、PDF 每頁頁尾。</p></div>
+      <div style="display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:20px;align-items:start">
+        <div class="stf"><div class="stf-h"><span>頁面上方</span></div><div class="stf-b"><div class="smp"><span class="ic ic-book"></span><div><p class="b">這一頁是示例資料</p><p class="small">目前沒有連到比對模型，下面的數字是示範用的，不是你這個案子的查詢結果。</p></div></div></div></div>
+        <div class="stf"><div class="stf-h"><span>每個區塊</span></div><div class="stf-b"><div class="card sample-card stack-s"><div class="card-h"><h3 class="h3">證據對照</h3><span class="smp-tag"><span class="ic ic-book"></span>示例資料</span></div><p class="small muted">虛線框加標籤。內容照常排版，方便預覽版面。</p></div></div></div>
+        <div class="stf"><div class="stf-h"><span>PDF 頁尾（每頁）</span></div><div class="stf-b"><div style="border:1px solid var(--line2);padding:12px 14px;background:#fff;color:#1C2630;border-radius:4px"><p class="xs" style="color:#362E63;font-weight:700">※ 示例資料，不是真實的查詢結果。</p><p class="xs" style="color:#46515C">CasEY 類案判決參考 · 第 1 頁 · 僅供參考，不是法律意見</p></div></div></div>
+      </div>
+    </section>
+
+    <!-- 3 載入與錯誤 -->
+    <section id="s3" class="stack-l">
+      <div class="stack-s"><div class="row"><span class="nbadge">3</span><h2 class="h2">載入中與錯誤</h2></div>
+        <p class="muted">結果大約要等幾秒。骨架畫面維持最終版面的位置，不會跳動，同時用一句話說明正在做什麼。</p></div>
+      <div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:24px;align-items:start">
+        <div class="stf" aria-busy="true"><div class="stf-h"><span>整頁載入中</span><span class="tg">骨架畫面</span></div>
+          <div class="stf-b">
+            <div class="row" role="status"><span class="ic ic-loader ic-spin" style="color:var(--brand)"></span><p class="b">正在比對相似判決…</p><span class="small muted">大約需要幾秒</span></div>
+            <div class="sk" style="height:22px;width:40%"></div>
+            <div class="sk" style="height:22px;border-radius:11px"></div>
+            <div class="sk" style="height:18px;width:70%"></div>
+            <div class="sk" style="height:18px;width:60%"></div>
+            <div class="sk" style="height:96px"></div>
+          </div></div>
+        <div class="stack-l">
+          <div class="stf"><div class="stf-h"><span>區塊錯誤</span><span class="tg">只影響這一個區塊</span></div>
+            <div class="stf-b"><div class="card err stack">
+              <div class="row"><span class="ic ic-alert ic-lg" style="color:var(--brand-ink)"></span><h3 class="h3">出了點問題</h3></div>
+              <p class="small muted">這個區塊暫時沒有載入成功，不是你填錯了什麼。其他區塊不受影響。</p>
+              <div class="row"><button class="btn btn-p" type="button"><span class="ic ic-retry"></span>再試一次</button><a class="btn btn-g" href="C2-Start.dc.html">回上一步</a></div>
+            </div></div></div>
+          <div class="stf"><div class="stf-h"><span>按鈕載入中</span><span class="tg">保持原寬</span></div>
+            <div class="stf-b"><div class="row" style="gap:14px"><button class="btn btn-p" type="button" disabled><span class="ic ic-loader ic-spin"></span>AI 正在整理…</button><p class="small muted">載入時按鈕寬度不變，不會跳動。</p></div></div></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- 4 資料不足 -->
+    <section id="s4" class="stack-l">
+      <div class="stack-s"><div class="row"><span class="nbadge">4</span><h2 class="h2">資料不足</h2></div>
+        <p class="muted">不留白、不顯示 0，而是說明為什麼沒有，以及可以怎麼辦。</p></div>
+      <div style="display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:20px;align-items:start">
+        <div class="stf"><div class="stf-h"><span>相似的真實判決</span></div><div class="stf-b"><div style="border:2px dashed var(--line2);border-radius:14px;padding:20px;display:grid;gap:6px"><p class="b">相似的判決不多（只找到 4 件）</p><p class="small muted">數量太少，統計不可靠，所以不顯示比例和金額。下面列出找到的判決，可以逐件看。</p></div></div></div>
+        <div class="stf"><div class="stf-h"><span>對方可能會怎麼說</span></div><div class="stf-b"><div style="border:2px dashed var(--line2);border-radius:14px;padding:20px;display:grid;gap:6px"><p class="b">相似判決裡沒有看到明顯的抗辯</p><p class="small muted">不代表對方不會反駁，只是這些判決裡沒有整理出常見的說法。</p></div></div></div>
+        <div class="stf"><div class="stf-h"><span>證據對照</span></div><div class="stf-b"><div style="border:2px dashed var(--line2);border-radius:14px;padding:20px;display:grid;gap:6px"><p class="b">沒有可以對照的證據資料</p><p class="small muted">這類案子的判決很少寫明用了哪些證據。可以直接看「相似的真實判決」。</p></div></div></div>
+      </div>
+    </section>
+
+    <!-- 5 訊號與極端數字 -->
+    <section id="s5" class="stack-l">
+      <div class="stack-s"><div class="row"><span class="nbadge">5</span><h2 class="h2">訊號文案與極端數字</h2></div>
+        <p class="muted">「較強」也不說「會贏」，只說過去類似判決的傾向。數字再極端，版面也不能壞。</p></div>
+      <div style="display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:20px;align-items:start">
+        <div class="stf"><div class="stf-h"><span>參考訊號：較強</span></div><div class="stf-b"><div class="note"><span class="ic ic-info"></span><p class="small">多數相似判決的結果相近，原告大多有拿到賠償。這仍然只是過去判決的傾向，不是你這件的結果。</p></div></div></div>
+        <div class="stf"><div class="stf-h"><span>參考訊號：較弱</span></div><div class="stf-b"><div class="note"><span class="ic ic-info"></span><p class="small">相似判決的結果差很多，或判准金額落差很大，不容易看出傾向。請把重點放在金額範圍和相似判決。</p></div></div></div>
+        <div class="stf"><div class="stf-h"><span>參考訊號：資訊不足</span></div><div class="stf-b"><div class="note"><span class="ic ic-info"></span><p class="small">相似判決太少，不適合下判斷。建議回上一步補充細節，或直接看個別判決。</p></div></div></div>
+      </div>
+      <div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:20px;align-items:start">
+        <div class="stf"><div class="stf-h"><span>全部勝訴 30 件（100%）</span></div><div class="stf-b">
+          <div class="obar" role="img" aria-label="全部勝訴 30 件、一部勝訴 0 件、敗訴 0 件"><div class="seg-full" style="width:100%"></div></div>
+          <div class="lg"><span class="sw full"></span><span class="t">全部勝訴</span><span class="v">30 件</span></div>
+          <div class="lg"><span class="sw part"></span><span class="t">一部勝訴</span><span class="v">0 件</span></div>
+          <div class="lg"><span class="sw lose"></span><span class="t">敗訴</span><span class="v">0 件</span></div></div></div>
+        <div class="stf"><div class="stf-h"><span>敗訴 30 件（沒有勝訴的相似判決）</span></div><div class="stf-b">
+          <div class="obar" role="img" aria-label="全部勝訴 0 件、一部勝訴 0 件、敗訴 30 件"><div class="seg-lose" style="width:100%"></div></div>
+          <div class="lg"><span class="sw full"></span><span class="t">全部勝訴</span><span class="v">0 件</span></div>
+          <div class="lg"><span class="sw part"></span><span class="t">一部勝訴</span><span class="v">0 件</span></div>
+          <div class="lg"><span class="sw lose"></span><span class="t">敗訴</span><span class="v">30 件</span></div>
+          <p class="small muted">「敗訴」用灰褐斜線，不是紅色；0 件的區段不畫，但文字永遠都在。</p></div></div>
+      </div>
+    </section>
+  </div>
+
+  <footer class="ftr"><div class="wrap"><p>本服務提供的是過去判決的統計參考，<b>不是法律意見</b>，也不是對你案子的預測。</p></div></footer>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"dark":{"editor":"boolean","default":false},"$preview":{"width":1280,"height":4300}}'>
+class Component extends DCLogic {
+  renderVals() { return { theme: this.props.dark ? 'dark' : '' }; }
+}
+</script>
+</body>
+</html>

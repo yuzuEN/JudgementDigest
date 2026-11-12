@@ -183,6 +183,7 @@ cd frontend && npm install && npm run dev     # 前端（另開一個終端機�
 ```bash
 python -m civil.models.service evaluate       # 5 折評估
 python -m civil.models.service train          # → artifacts/civil_winloss_v1/
+python -m civil.models.amount_service train   # → artifacts/civil_amount_v1/（選用：金額範圍改用模型推估）
 python -m retrieval.build                     # → artifacts/retrieval_civil_v3/（要有 judgments.db，約 35 分鐘）
 ```
 

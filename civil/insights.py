@@ -143,10 +143,16 @@ def amount_range(ratios: Sequence[float], claimed: Optional[float], low: float =
     lo, mid, hi = np.quantile(r, [low, 0.5, high])
     out = {"n_cases": int(len(r)), "ratio_low": float(lo), "ratio_median": float(mid), "ratio_high": float(hi),
            "coverage": high - low, "buckets": amount_buckets(r)}
-    if claimed and claimed > 0:
-        out.update(amount_low=round(claimed * lo), amount_median=round(claimed * mid),
-                   amount_high=round(claimed * hi), claimed=round(claimed))
+    out.update(amount_fields(lo, mid, hi, claimed))
     return out
+
+
+def amount_fields(lo: float, mid: float, hi: float, claimed: Optional[float]) -> Dict:
+    """獲償比例的範圍 × 使用者請求的金額；沒填請求金額就是空的。"""
+    if not claimed or claimed <= 0:
+        return {}
+    return {"claimed": round(claimed), "amount_low": round(claimed * lo), "amount_median": round(claimed * mid),
+            "amount_high": round(claimed * hi)}
 
 
 # ── 判決導讀：段落與功能（rule-v0）──

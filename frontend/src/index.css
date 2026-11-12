@@ -2,11 +2,16 @@
 @import "tw-animate-css";
 @import "shadcn/tailwind.css";
 
-/* 夜間模式跟著系統（theme.ts 會在 <html> 加上 .dark） */
+/*
+ * CasEY 設計 tokens（來源：docs/design/casey/tokens.css）。
+ * 規則：不寫死色碼、不用 Tailwind 預設的 red-/green- 色階；結果顏色只用靛藍、淺藍、沙灰斜線，一律附文字。
+ * 遮名只用橘色（mask），示例資料只用紫灰色（sample），這兩種顏色不要用在別處。
+ * 夜間模式跟著系統（theme.ts 會在 <html> 加上 .dark）。
+ */
 @custom-variant dark (&:is(.dark *));
 
 @theme inline {
-  --font-sans: "Noto Sans TC", system-ui, sans-serif;
+  --font-sans: "Noto Sans TC", system-ui, -apple-system, "PingFang TC", "Microsoft JhengHei", sans-serif;
   --font-heading: var(--font-sans);
   --color-background: var(--background);
   --color-foreground: var(--foreground);
@@ -26,29 +31,39 @@
   --color-border: var(--border);
   --color-input: var(--input);
   --color-ring: var(--ring);
-  /* 平台自己的語意色 */
-  --color-surface: var(--surface);
-  --color-warn: var(--warn);
-  --color-warn-foreground: var(--warn-foreground);
-  --color-warn-border: var(--warn-border);
-  --color-warn-title: var(--warn-title);
-  --color-info: var(--info);
-  --color-info-foreground: var(--info-foreground);
-  --color-info-border: var(--info-border);
-  --color-success: var(--success);
-  --color-success-soft: var(--success-soft);
-  --color-caution: var(--caution);
-  --color-lose-soft: var(--lose-soft);
-  --color-lose-foreground: var(--lose-foreground);
-  --color-mask: var(--mask);
-  --color-track: var(--track);
-  --color-warm: var(--warm);
-  --color-soft-bar: var(--soft-bar);
-  --color-outcome-win: var(--outcome-win);
-  --color-outcome-partial: var(--outcome-partial);
-  --color-outcome-lose: var(--outcome-lose);
-  --color-jump: var(--jump);
-  --color-jump-foreground: var(--jump-foreground);
+
+  /* CasEY：文字層級、連結 */
+  --color-ink-3: var(--ink-3);
+  --color-link: var(--link);
+  --color-brand-hover: var(--brand-hover);
+
+  /* 結果顏色 */
+  --color-outcome-full: var(--outcome-full);
+  --color-outcome-full-fg: var(--outcome-full-fg);
+  --color-outcome-part: var(--outcome-part);
+  --color-outcome-part-bg: var(--outcome-part-bg);
+  --color-outcome-part-fg: var(--outcome-part-fg);
+  --color-outcome-lose-line: var(--outcome-lose-line);
+  --color-outcome-lose-bg: var(--outcome-lose-bg);
+  --color-outcome-lose-fg: var(--outcome-lose-fg);
+
+  /* 專屬用途色 */
+  --color-mask: var(--mask-bg);
+  --color-mask-fg: var(--mask-fg);
+  --color-mask-line: var(--mask-line);
+  --color-sample: var(--sample-bg);
+  --color-sample-fg: var(--sample-fg);
+  --color-sample-line: var(--sample-line);
+  --color-info: var(--info-bg);
+  --color-info-line: var(--info-line);
+
+  /* 判決導讀五類 */
+  --color-passage-claim: var(--passage-claim);
+  --color-passage-defense: var(--passage-defense);
+  --color-passage-issue: var(--passage-issue);
+  --color-passage-evidence: var(--passage-evidence);
+  --color-passage-court: var(--passage-court);
+
   --radius-sm: calc(var(--radius) * 0.6);
   --radius-md: calc(var(--radius) * 0.8);
   --radius-lg: var(--radius);
@@ -56,149 +71,134 @@
   --radius-2xl: calc(var(--radius) * 1.8);
   --radius-3xl: calc(var(--radius) * 2.2);
   --radius-4xl: calc(var(--radius) * 2.6);
+  --radius-card: 18px;
+  --radius-control: 12px;
+  --shadow-card: var(--card-shadow);
 }
 
 :root {
-  --radius: 0.625rem;
-  --background: #f5f7fa;
-  --foreground: #1b2533;
-  --surface: #ffffff;
-  --card: #ffffff;
-  --card-foreground: #1b2533;
-  --popover: #ffffff;
-  --popover-foreground: #1b2533;
-  --primary: #1d5fb3;
-  --primary-foreground: #ffffff;
-  --secondary: #eef2f7;
-  --secondary-foreground: #1b2533;
-  --muted: #eef2f7;
-  --muted-foreground: #4a5568;
-  --accent: #e8f0fb;
-  --accent-foreground: #12407a;
-  --destructive: #b42318;
-  --border: #dce2ea;
-  --input: #c5cfdb;
-  --ring: #8fb4e6;
-  --warn: #fff4e5;
-  --warn-foreground: #5c2e0c;
-  --warn-border: #f0c99a;
-  --warn-title: #7a3a0b;
-  --info: #e8f0fb;
-  --info-foreground: #1b3a63;
-  --info-border: #b7ccea;
-  --success: #1e6b3a;
-  --success-soft: #e3f1e8;
-  --caution: #a3460f;
-  --lose-soft: #fcebe3;
-  --lose-foreground: #8a3412;
-  --mask: #ffe7c7;
-  --track: #e3e8ef;
-  --warm: #c9772f;
-  --soft-bar: #5b87c5;
-  --outcome-win: #1baf7a;
-  --outcome-partial: #2a78d6;
-  --outcome-lose: #eb6834;
-  --jump: #ffe45c;
-  --jump-foreground: #3d3200;
-  /* 判決導讀的段落底色 */
-  --p-claim: #eef2f7;
-  --p-claim-chip: #dce2ea;
-  --p-claim-ink: #1b2533;
-  --p-defense: #f3eff8;
-  --p-defense-chip: #e2d9ef;
-  --p-defense-ink: #3f2a63;
-  --p-issue: #fff1d6;
-  --p-issue-chip: #f6d79a;
-  --p-issue-ink: #5c3a00;
-  --p-evidence: #e3f0ff;
-  --p-evidence-chip: #bfd8f7;
-  --p-evidence-ink: #12407a;
-  --p-court: #e6f4ea;
-  --p-court-chip: #bfe3cb;
-  --p-court-ink: #1e5a33;
+  --background: #FAF8F3;
+  --foreground: #1C2630;
+  --card: #FFFFFF;
+  --card-foreground: #1C2630;
+  --popover: #FFFFFF;
+  --popover-foreground: #1C2630;
+  --primary: #1B5B6E;
+  --primary-foreground: #FFFFFF;
+  --secondary: #E1EEF2;
+  --secondary-foreground: #144A5A;
+  --muted: #F2EFE6;
+  --muted-foreground: #46515C;      /* 對比 ≥ 4.5:1，不要再調淺 */
+  --accent: #E1EEF2;
+  --accent-foreground: #144A5A;
+  --destructive: #443F30;           /* 不用紅色；錯誤用沙灰系，並附圖示與文字 */
+  --border: #DCD6C8;
+  --input: #B9B3A3;                 /* 輸入框邊框比一般 border 深 */
+  --ring: #1B5B6E;
+  --radius: 0.75rem;
+
+  --ink-3: #5E6872;
+  --link: #14566B;
+  --brand-hover: #144A5A;
+
+  --outcome-full: #25407B;
+  --outcome-full-fg: #FFFFFF;
+  --outcome-part: #4E8FA6;
+  --outcome-part-bg: #DCEBF0;
+  --outcome-part-fg: #10475A;
+  --outcome-lose-line: #8F866F;
+  --outcome-lose-bg: #ECE8DC;
+  --outcome-lose-fg: #443F30;
+  --outcome-lose-pattern: repeating-linear-gradient(45deg, #B3AA94 0 4px, #E9E4D6 4px 8px);
+
+  --mask-bg: #FFE0BA;  --mask-fg: #7A3200;  --mask-line: #E27D12;
+  --sample-bg: #ECE8F7; --sample-fg: #362E63; --sample-line: #A99FD6;
+  --info-bg: #EAF1F5;  --info-line: #AFC6D2;
+
+  --passage-claim: #E2EAF8;
+  --passage-defense: #EEE5F4;
+  --passage-issue: #F5EBC8;
+  --passage-evidence: #DCEEE8;
+  --passage-court: #FFFFFF;
+
+  --card-shadow: 0 1px 2px rgba(28, 38, 48, .06), 0 4px 16px rgba(28, 38, 48, .05);
+  --scene-floor: #8B6340;
 }
 
 /* 放在 screen 裡：列印、存成 PDF 一律是淺色 */
 @media screen {
   .dark {
     color-scheme: dark;
-    --background: #0e1116;
-    --foreground: #e8ecf1;
-    --surface: #171c23;
-    --card: #171c23;
-    --card-foreground: #e8ecf1;
-    --popover: #1c222b;
-    --popover-foreground: #e8ecf1;
-    --primary: #3a7bd2;
-    --primary-foreground: #ffffff;
-    --secondary: #252c36;
-    --secondary-foreground: #e8ecf1;
-    --muted: #252c36;
-    --muted-foreground: #aab4c1;
-    --accent: #1b2a3e;
-    --accent-foreground: #a9cbf7;
-    --destructive: #f0857a;
-    --border: #2c3440;
-    --input: #434e5c;
-    --ring: #3a7bd2;
-    --warn: #33230f;
-    --warn-foreground: #f3d6b4;
-    --warn-border: #6b4a20;
-    --warn-title: #f7c98e;
-    --info: #1b2a3e;
-    --info-foreground: #cfe0f7;
-    --info-border: #2f4a6e;
-    --success: #84d6a0;
-    --success-soft: #17352a;
-    --caution: #f0a67e;
-    --lose-soft: #3d2017;
-    --lose-foreground: #f4b296;
-    --mask: #5c4116;
-    --track: #2c3440;
-    --warm: #e0954f;
-    --soft-bar: #5b87c5;
-    --outcome-win: #199e70;
-    --outcome-partial: #3987e5;
-    --outcome-lose: #d95926;
-    --jump: #e0c22e;
-    --jump-foreground: #1f1a00;
-    --p-claim: #232a33;
-    --p-claim-chip: #36404c;
-    --p-claim-ink: #e8ecf1;
-    --p-defense: #2a2436;
-    --p-defense-chip: #40355a;
-    --p-defense-ink: #dccdf5;
-    --p-issue: #33280f;
-    --p-issue-chip: #5a4615;
-    --p-issue-ink: #f6dfa8;
-    --p-evidence: #182a40;
-    --p-evidence-chip: #264468;
-    --p-evidence-ink: #a9cbf7;
-    --p-court: #182e22;
-    --p-court-chip: #285038;
-    --p-court-ink: #bce8cb;
+    --background: #101519;
+    --foreground: #EAE8E1;
+    --card: #182027;
+    --card-foreground: #EAE8E1;
+    --popover: #182027;
+    --popover-foreground: #EAE8E1;
+    --primary: #8CCBDD;
+    --primary-foreground: #0B2530;
+    --secondary: #1A3641;
+    --secondary-foreground: #A8D9E7;
+    --muted: #0C1115;
+    --muted-foreground: #BCC3CA;
+    --accent: #1A3641;
+    --accent-foreground: #A8D9E7;
+    --destructive: #D9D4C2;
+    --border: #2B3640;
+    --input: #56626D;
+    --ring: #8CCBDD;
+
+    --ink-3: #9AA4AD;
+    --link: #9AD3E3;
+    --brand-hover: #A8D9E7;
+
+    --outcome-full: #9DB2EE;  --outcome-full-fg: #0F1C3D;
+    --outcome-part: #5FA9C0;  --outcome-part-bg: #1B3944;  --outcome-part-fg: #B5E0EE;
+    --outcome-lose-line: #8A8573; --outcome-lose-bg: #29271F; --outcome-lose-fg: #D9D4C2;
+    --outcome-lose-pattern: repeating-linear-gradient(45deg, #6E6958 0 4px, #2C2A22 4px 8px);
+
+    --mask-bg: #4C2C0C;  --mask-fg: #FFCB94;  --mask-line: #E8913A;
+    --sample-bg: #26233F; --sample-fg: #DAD5FF; --sample-line: #6C63A8;
+    --info-bg: #162630;  --info-line: #35505E;
+
+    --passage-claim: #1D2B47; --passage-defense: #2E2442; --passage-issue: #3A3220;
+    --passage-evidence: #173229; --passage-court: #182027;
+    --card-shadow: none;
+    --scene-floor: #4A3524;
+
   }
 }
 
 @layer base {
   * {
-    @apply border-border outline-ring/50;
+    @apply border-border;
   }
   html {
     @apply font-sans;
-    line-height: 1.6;
+    font-size: 16px;
   }
   body {
     @apply bg-background text-foreground antialiased;
     font-size: 16px;
+    line-height: 1.75;                 /* 中文內文行高，別改成 1.5 以下 */
+  }
+  :focus-visible {
+    outline: 3px solid var(--ring);
+    outline-offset: 2px;
+    border-radius: 6px;
   }
   a:not([data-slot]) {
-    @apply text-primary underline underline-offset-3 hover:text-accent-foreground;
+    @apply text-link underline underline-offset-3 hover:text-brand-hover;
   }
   button:not(:disabled),
   [role="button"]:not(:disabled) {
     cursor: pointer;
   }
+}
+
+/* 斜線圖樣：敗訴段落、模型推估的虛線填色 */
+@utility bg-outcome-lose-pattern {
+  background-image: var(--outcome-lose-pattern);
 }
 
 /* 滾動條：沒有底色的細捲軸，不用瀏覽器預設樣式 */
@@ -225,20 +225,14 @@
 }
 
 @layer components {
-  /* 遮名標記 */
+  /* 遮名標記：只用橘色 */
   mark.masked {
-    @apply rounded bg-mask px-1 text-warn-title;
+    @apply rounded-[5px] border-b-2 border-mask-line bg-mask px-1 font-semibold text-mask-fg;
   }
-  /* 從說明頁的 i 跳過來時標黃 */
+  /* 從結果頁的 i 跳到說明頁時，標出那個名詞（點別的地方就消失） */
   .jump-target {
-    @apply -ml-1.5 w-fit rounded bg-jump px-1.5 text-jump-foreground;
+    @apply -ml-1.5 w-fit rounded bg-passage-issue px-1.5 text-foreground;
   }
-  /* 判決導讀：段落的功能 */
-  .para[data-on="true"][data-fn="claim"] { background: var(--p-claim); --chip-bg: var(--p-claim-chip); --chip-ink: var(--p-claim-ink); }
-  .para[data-on="true"][data-fn="defense"] { background: var(--p-defense); --chip-bg: var(--p-defense-chip); --chip-ink: var(--p-defense-ink); }
-  .para[data-on="true"][data-fn="issue"] { background: var(--p-issue); --chip-bg: var(--p-issue-chip); --chip-ink: var(--p-issue-ink); }
-  .para[data-on="true"][data-fn="evidence"] { background: var(--p-evidence); --chip-bg: var(--p-evidence-chip); --chip-ink: var(--p-evidence-ink); }
-  .para[data-on="true"][data-fn="court"] { background: var(--p-court); --chip-bg: var(--p-court-chip); --chip-ink: var(--p-court-ink); }
 }
 
 /* ── 列印／下載 PDF ── */
@@ -261,7 +255,8 @@
   .no-print,
   [data-slot="site-header"],
   [data-slot="site-footer"],
-  [data-slot="stepper"] {
+  [data-slot="stepper"],
+  [data-slot="character-scene"] {
     display: none !important;
   }
   .print-only {
@@ -270,18 +265,32 @@
   [data-slot="card"] {
     break-inside: avoid;
     box-shadow: none;
-    --tw-ring-color: #bbb;
   }
   [data-slot="card"]:has(table),
-  [data-slot="card"]:has([data-slot="collapsible"]) {
+  [data-slot="card"]:has(details) {
     break-inside: auto;
   }
-  /* 收起來的明細在列印時也要印出來 */
-  [data-slot="collapsible-content"][hidden] {
-    display: block !important;
+  /* 結果頁的分頁：列印時每個分頁都印出來 */
+  [data-slot="tabs-content"][hidden] {
+    display: flex !important;
   }
-  [data-print-grid="2"] {
-    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  [data-slot="tabs-content"] {
+    break-before: auto;
+    margin-bottom: 8mm;
+  }
+  /* 每一頁底部的頁尾（position: fixed 在列印時會出現在每一頁） */
+  .print-page-footer {
+    position: fixed;
+    right: 0;
+    bottom: 0;
+    left: 0;
+    border-top: 1px solid #b9b3a3;
+    padding-top: 2mm;
+    background: #fff;
+    color: #46515c;
+  }
+  main {
+    padding-bottom: 14mm !important;
   }
   a {
     color: inherit !important;
@@ -305,15 +314,4 @@
   [data-slot="table-container"] {
     overflow: visible !important;
   }
-}
-
-/* 手機：相似判決表格改成一列一張卡片（只套用在螢幕，不影響列印） */
-@media screen and (max-width: 760px) {
-  table.cases { display: block; }
-  table.cases thead { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
-  table.cases tbody, table.cases tr, table.cases td { display: block; }
-  table.cases tr { padding: 12px 0; }
-  table.cases td { padding: 3px 0; white-space: normal; }
-  table.cases td[data-label] { display: flex; justify-content: space-between; gap: 12px; }
-  table.cases td[data-label]::before { content: attr(data-label); color: var(--muted-foreground); font-size: 14px; }
 }

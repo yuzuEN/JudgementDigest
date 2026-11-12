@@ -46,7 +46,8 @@ def create_app(settings: Optional[Settings] = None) -> FastAPI:
     def health():
         return {"status": "ok", "civil": "mock" if civil.mock else "model", "criminal": "mock" if criminal.mock else "model",
                 "criminal_sentence": None if criminal.mock else ("electra" if criminal.term.available else "svm"),
-                "followup": "llm" if llm_client else "rules", "model": None if civil.mock else civil.meta["name"]}
+                "followup": "llm" if llm_client else "rules", "model": None if civil.mock else civil.meta["name"],
+                "amount": civil.amount_source}
 
     @api.get("/meta/options", response_model=schemas.Options)
     def options():

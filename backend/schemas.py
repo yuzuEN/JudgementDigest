@@ -14,6 +14,8 @@ class Health(BaseModel):
     criminal_sentence: Optional[Literal["electra", "svm"]] = None   # 刑度用哪個模型（刑事是示例資料時為 null）
     followup: Literal["rules", "llm"]
     model: Optional[str] = None
+    amount: Literal["model", "similar", "mock"] = Field(
+        default="similar", description="民事金額範圍：model＝有可用的獲償比例模型（個別案件仍可能退回相似判決）；similar＝只用相似判決")
 
 
 class Option(BaseModel):
@@ -127,7 +129,11 @@ class AmountBucket(BaseModel):
 
 
 class AmountRange(BaseModel):
-    n_cases: int
+    source: Literal["model", "similar"] = Field(
+        default="similar", description="model＝獲償比例模型推估；similar＝相似判決的分位數（沒有模型檔時）")
+    scope: Literal["win", "partial_win"] = Field(
+        default="win", description="partial_win＝只針對「一部勝訴」；win＝勝訴與一部勝訴")
+    n_cases: Optional[int] = Field(default=None, description="buckets 背後的相似判決件數；沒有相似判決時是 null")
     ratio_low: float
     ratio_median: float
     ratio_high: float
@@ -137,6 +143,8 @@ class AmountRange(BaseModel):
     amount_median: Optional[int] = None
     amount_high: Optional[int] = None
     buckets: List[AmountBucket] = Field(default_factory=list, description="獲償比例每兩成一組的件數")
+    n_wins: Optional[int] = Field(default=None, description="相似判決（對審、最多 30 件）裡勝訴與一部勝訴的件數")
+    n_full_wins: Optional[int] = Field(default=None, description="其中全部勝訴（含確認勝訴）的件數")
 
 
 class SimilarCase(BaseModel):

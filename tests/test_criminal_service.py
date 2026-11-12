@@ -148,6 +148,15 @@ class TestTrainedModel(unittest.TestCase):
 
     def test_meta(self):
         self.assertEqual((self.meta["name"], self.meta["charges"], self.meta["n_train"]), ("criminal_v1", 2, 60))
+        import sklearn
+        self.assertEqual(self.meta["sklearn"], sklearn.__version__)
+        self.assertIn("git_commit", self.meta)
+
+    def test_vocabulary_is_not_stored_in_text_order(self):
+        """字典照出現順序存的話，依序讀出來就是訓練判決的原文；存檔前要照欄位編號（字典序）重排。"""
+        vocab = self.model.vec.vocabulary_
+        self.assertEqual(list(vocab), sorted(vocab))
+        self.assertEqual(list(vocab.values()), list(range(len(vocab))))
 
 
 # ── ELECTRA 刑度 ──

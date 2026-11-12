@@ -14,7 +14,7 @@ __pycache__/
 *.pyo
 
 # 資料（不入版控）
-html_cache/
+html_cache*/
 *.db
 *.zip
 judgments.db*

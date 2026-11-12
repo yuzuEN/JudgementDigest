@@ -19,9 +19,11 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from backend.civil_service import MAX_DEFAULT_SHOWN, CivilService  # noqa: E402
 from backend.main import create_app  # noqa: E402
+from backend.schemas import CivilInput  # noqa: E402
 from backend.settings import Settings  # noqa: E402
-from civil.models import service  # noqa: E402
+from civil.models import amount_service, service  # noqa: E402
 from retrieval import build  # noqa: E402
+from tests.test_amount_service import amount_frame  # noqa: E402
 from tests.test_civil_service import LOSE, WIN, synthetic  # noqa: E402
 from tests.test_criminal_service import DRUNK as CRIMINAL_DRUNK, train_artifacts as train_criminal  # noqa: E402
 
@@ -441,6 +443,8 @@ class TestWithModel(unittest.TestCase):
         sims = [c["similarity"] for c in r["similar"]]
         self.assertEqual(sims, sorted(sims, reverse=True))
         self.assertEqual(r["amount_range"]["amount_median"], 120000)   # 合成資料的獲償比例都是 0.6
+        self.assertEqual((r["amount_range"]["source"], r["amount_range"]["scope"]), ("similar", "win"),
+                         "沒有獲償比例模型時，金額範圍和以前一樣是相似判決的分位數")
         medical = next(e for e in r["evidence"] if e["key"] == "medical")
         self.assertTrue(medical["user_has"])
         self.assertEqual(medical["share"], 1.0)
@@ -466,6 +470,163 @@ class TestWithModel(unittest.TestCase):
         r = self.client.post("/api/retrieval/search", json={"type": "civil", "text": WIN[1], "k": 3}).json()
         self.assertFalse(r["mock"])
         self.assertEqual(len(r["civil"]), 3)
+
+
+class TestWithAmountModel(unittest.TestCase):
+    """artifacts 裡多了獲償比例模型（civil_amount_v1）：金額範圍改用模型推估（若為一部勝訴）。"""
+
+    @classmethod
+    def setUpClass(cls):
+        cls.tmp = tempfile.TemporaryDirectory()
+        cls.base = base = Path(cls.tmp.name)
+        build_artifacts(base)
+        amount_service.train(amount_frame(150), "test", amount_service.artifact_dir(base), {}, "2.5.1")
+        cls.client = TestClient(create_app(Settings(artifacts_dir=base)))
+
+    @classmethod
+    def tearDownClass(cls):
+        cls.tmp.cleanup()
+
+    def report(self, **body):
+        # 預設選了案由、填了法院：模型才會用（見 _use_amount_model）
+        r = self.client.post("/api/civil/report", json={"mid": "侵權：交通事故", "court": "臺北", **body})
+        self.assertEqual(r.status_code, 200, r.text)
+        return r.json()["amount_range"]
+
+    def test_range_comes_from_the_model(self):
+        r = self.report(text=WIN[0] * 5, claimed_amount=200000)
+        self.assertEqual((r["source"], r["scope"]), ("model", "partial_win"))
+        self.assertTrue(0 < r["ratio_low"] <= r["ratio_median"] <= r["ratio_high"] <= 1)
+        self.assertEqual(r["coverage"], 0.8)
+        self.assertEqual(r["claimed"], 200000)
+        self.assertEqual(r["amount_median"], round(200000 * r["ratio_median"]))
+        self.assertLessEqual(r["amount_low"], r["amount_median"])
+        self.assertLessEqual(r["amount_median"], r["amount_high"])
+
+    def test_keeps_the_similar_case_distribution_as_supporting_evidence(self):
+        r = self.report(text=WIN[0] * 5, claimed_amount=200000)
+        self.assertGreater(r["n_cases"], 0)
+        self.assertLessEqual(r["n_cases"], 30)                  # 件數是相似判決的（最多 30 件），不是模型的訓練件數（150）
+        self.assertEqual(sum(b["count"] for b in r["buckets"]), r["n_cases"])
+
+    def test_range_follows_the_text(self):
+        win, lose = (self.report(text=t[0] * 5) for t in (WIN, LOSE))
+        self.assertGreater(win["ratio_median"], lose["ratio_median"])
+
+    def test_no_claimed_amount_gives_only_ratios(self):
+        r = self.report(text=WIN[0] * 5)
+        self.assertEqual(r["source"], "model")
+        self.assertIsNone(r["claimed"])
+        self.assertIsNone(r["amount_median"])
+
+    def test_still_gives_a_range_when_there_are_too_few_similar_winners(self):
+        """
+        相似判決的分位數需要至少 5 件勝訴；模型不需要，所以只剩敗訴的鄰居時模型仍給範圍（分布則是空的）。
+        前提是這個案由的訓練件數夠（合成資料的交通事故有 100 件）；不夠的案由見 test_few_training_cases_fall_back。
+        """
+        r = self.report(text=LOSE[0] * 5, claimed_amount=100000)
+        self.assertEqual(r["source"], "model")
+        self.assertIsNone(r["n_cases"])
+        self.assertEqual(r["buckets"], [])
+
+    def test_questionnaire_answers_are_passed_to_the_model(self):
+        """請求金額與問卷答案都要傳給模型（合成資料裡它們對結果幾乎沒影響，所以直接看呼叫的參數）。"""
+        svc = CivilService(self.base)
+        with mock.patch.object(svc.amount_model, "predict_one", wraps=svc.amount_model.predict_one) as spy:
+            svc.report(CivilInput(text=WIN[0] * 5, mid="侵權：交通事故", court="臺北", plaintiff_has_lawyer=True,
+                                  defendant_type="company", claimed_amount=200000))
+        text, answers, claimed = spy.call_args.args
+        self.assertEqual(claimed, 200000)
+        self.assertEqual(answers, {"mid": "侵權：交通事故", "court": "臺北", "plaintiff_has_lawyer": True,
+                                   "defendant_is_corp": True})
+        self.assertNotIn("？", text)
+
+    def test_falls_back_when_the_questionnaire_is_not_filled(self):
+        """沒選案由，或法院和請求金額都沒填：退回相似判決（評估裡這時模型比較差）。"""
+        for body in ({"mid": None, "claimed_amount": 200000}, {"court": None}):
+            r = self.report(text=WIN[0] * 5, **body)
+            self.assertEqual(r["source"], "similar", body)
+        self.assertEqual(self.report(text=WIN[0] * 5, court=None, claimed_amount=200000)["source"], "model")
+
+    def test_few_training_cases_fall_back(self):
+        """這個案由的訓練件數少於門檻（合成資料沒有醫療糾紛）：不用模型。"""
+        r = self.client.post("/api/civil/report", json={"text": WIN[0] * 5, "mid": "侵權：醫療", "court": "臺北",
+                                                       "claimed_amount": 200000}).json()["amount_range"]
+        self.assertEqual(r["source"], "similar")
+
+    def test_model_errors_fall_back_without_breaking_the_report(self):
+        svc = CivilService(self.base)
+        with mock.patch.object(svc.amount_model, "predict_one", side_effect=RuntimeError("壞了")), \
+                self.assertLogs("backend.civil_service", level="WARNING"):
+            r = svc.report(CivilInput(text=WIN[0] * 5, mid="侵權：交通事故", court="臺北", claimed_amount=200000))
+        self.assertEqual(r["amount_range"]["source"], "similar")
+        self.assertIn("win_probability", r["prediction"])
+
+    def test_no_range_when_the_text_is_not_a_dispute(self):
+        self.assertIsNone(self.report(text="今天天氣很好，我去公園散步。" * 5, claimed_amount=200000))
+
+    def test_reports_how_many_similar_winners_won_everything(self):
+        r = self.report(text=WIN[0] * 5, claimed_amount=200000)
+        self.assertGreater(r["n_wins"], 0)
+        self.assertLessEqual(r["n_full_wins"], r["n_wins"])
+
+    def test_health_reports_the_amount_source(self):
+        self.assertEqual(self.client.get("/api/health").json()["amount"], "model")
+
+    def test_win_probability_is_unchanged(self):
+        """第一階段（勝訴機率）和有沒有金額模型無關。"""
+        p = self.client.post("/api/civil/predict", json={"text": WIN[0] * 5, "mid": "侵權：交通事故"}).json()
+        self.assertFalse(p["mock"])
+        self.assertEqual(p["model"]["win_precision"], 0.73)
+
+
+class TestBrokenAmountModel(unittest.TestCase):
+    def test_unreadable_model_file_falls_back_without_breaking_civil(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            base = Path(tmp)
+            build_artifacts(base)
+            broken = amount_service.artifact_dir(base)
+            broken.mkdir(parents=True)
+            (broken / "model.joblib").write_bytes(b"not a joblib file")
+            (broken / "meta.json").write_text("{}", encoding="utf-8")
+            with self.assertLogs("backend.civil_service", level="WARNING") as logs:
+                client = TestClient(create_app(Settings(artifacts_dir=base)))
+            self.assertIn("獲償比例模型", logs.output[0])
+            self.assertEqual(client.get("/api/health").json()["civil"], "model")
+            self.assertEqual(client.get("/api/health").json()["amount"], "similar")
+            r = client.post("/api/civil/report", json={"text": WIN[0] * 5, "mid": "侵權：交通事故",
+                                                       "claimed_amount": 200000}).json()
+            self.assertFalse(r["mock"])
+            self.assertEqual(r["amount_range"]["source"], "similar")
+
+    def test_stale_model_file_is_not_used(self):
+        """舊格式的模型檔（沒有各案由件數）：記警告、不用它，要重新訓練。"""
+        import json
+        with tempfile.TemporaryDirectory() as tmp:
+            base = Path(tmp)
+            build_artifacts(base)
+            out = amount_service.train(amount_frame(100), "test", amount_service.artifact_dir(base), {}, "2.5.1")
+            meta = json.loads((out / "meta.json").read_text(encoding="utf-8"))
+            del meta["mid_counts"]
+            (out / "meta.json").write_text(json.dumps(meta, ensure_ascii=False), encoding="utf-8")
+            with self.assertLogs("backend.civil_service", level="WARNING") as logs:
+                svc = CivilService(base)
+            self.assertIsNone(svc.amount_model)
+            self.assertIn("重新訓練", logs.output[0])
+
+    def test_missing_model_file_is_not_a_problem(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            build_artifacts(Path(tmp))
+            svc = CivilService(Path(tmp))
+            self.assertIsNone(svc.amount_model)
+            self.assertFalse(svc.mock)
+
+    def test_mock_mode_never_loads_it(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            base = Path(tmp)
+            build_artifacts(base)
+            amount_service.train(amount_frame(100), "test", amount_service.artifact_dir(base), {}, "2.5.1")
+            self.assertIsNone(CivilService(base, force_mock=True).amount_model)
 
 
 if __name__ == "__main__":
