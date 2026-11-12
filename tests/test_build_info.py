@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 """config.build_info / warn_if_other_sklearn：模型的 meta.json 記錄程式版本與 scikit-learn 版本，讀模型時比對。"""
 
+import logging
 import subprocess
 import sys
 import unittest
@@ -51,9 +52,11 @@ class TestWarnIfOtherSklearn(unittest.TestCase):
         self.assertIn(sklearn.__version__, logs.output[0])
 
     def test_silent_when_same_or_not_recorded(self):
-        with self.assertNoLogs("config", "WARNING"):
+        # assertNoLogs 要 Python 3.10；CI 是 3.9，改成看 logger 有沒有被呼叫
+        with mock.patch.object(logging.getLogger("config"), "warning") as warning:
             config.warn_if_other_sklearn({"sklearn": sklearn.__version__}, "x")
             config.warn_if_other_sklearn({}, "舊的 meta 沒有記錄版本")
+        warning.assert_not_called()
 
 
 if __name__ == "__main__":
