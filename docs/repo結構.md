@@ -15,18 +15,19 @@
 JudgementDigest/
 ├── README.md              系統介紹
 ├── requirements.txt
-├── config.py              資料庫、資料集、實驗輸出、模型檔的路徑（可用環境變數改）
+├── config.py              資料庫、資料集、實驗輸出、模型檔的路徑（可用環境變數改）；模型 meta 的 git commit 與 scikit-learn 版本（build_info）
 │
 ├── data_pipeline/         ── 資料蒐集與處理（民刑共用，見下方說明）
 │
 ├── civil/                 ── 民事
 │   ├── dataset/           建立文字資料集的程式（原告主張、被告答辯、標籤）；text.py 是建資料集和後端共用的文字清理
-│   ├── models/            勝訴機率、獲償金額模型的訓練與評估；service.py 是平台用的模型
+│   ├── models/            勝訴機率、獲償金額模型的訓練與評估；service.py（勝敗）、amount_service.py（獲償比例）是平台用的模型
+│   ├── features.py        金額的共用特徵（損害子項目）
 │   └── insights.py        證據對照、常見抗辯、金額範圍、判決導讀的段落標示（規則）
 │
 ├── criminal/              ── 刑事
-│   ├── dataset/           犯罪事實取得與遮蔽、產生 CAIL 格式資料集的程式
-│   └── models/            罪名、法條、刑期模型的訓練與評估
+│   ├── dataset/           犯罪事實取得與遮蔽（facts.py）
+│   └── models/            罪名、法條、刑期的基準模型（SVM、fastText、TextCNN、ELECTRA）；service.py 是平台用的模型
 │
 ├── retrieval/             ── 相似判決檢索（民刑共用）
 │   ├── engine.py          建索引、存檔、查前 k 件
@@ -42,12 +43,14 @@ JudgementDigest/
 │   ├── main.py            路由（/api）
 │   ├── schemas.py         輸入輸出格式（前端的 src/api/types.ts 和它一一對應）
 │   ├── civil_service.py   民事：讀模型與檢索資料，組成結果頁的內容
+│   ├── criminal_service.py 刑事：讀模型與檢索資料，算罪名、法條、刑度、相似判決
 │   ├── followup.py        追問的固定題庫
-│   ├── llm/               LLM 介面：廠商（gemini、fake）與任務（tasks.py）
+│   ├── llm/               LLM 介面：廠商（gemini、openai、fake）、用量上限（limits.py）與任務（tasks.py）
 │   ├── quality.py         描述的品質檢查
-│   └── mock.py            示例資料（刑事、沒有模型檔時的民事）
+│   ├── settings.py        環境變數
+│   └── mock.py            示例資料（沒有模型檔時的民事、刑事）
 │
-├── frontend/              ── 網頁（React＋Vite）：首頁、描述案情、確認與遮名、結果、判決導讀
+├── frontend/              ── 網頁（React＋Vite，CasEY 改版）：七關的描述與確認、民事／刑事結果、判決導讀、說明頁
 ├── docker-compose.yml     一行啟動前後端（docker compose up --build）
 ├── scripts/               ── 輔助工具（Datasette 瀏覽資料庫）
 ├── docs/                  ── 文件
@@ -55,7 +58,8 @@ JudgementDigest/
 │   ├── 欄位說明.md         資料庫各欄位的定義
 │   ├── 心證層欄位規格.md
 │   ├── repo結構.md         本文件
-│   ├── 資料版本.md          資料庫與資料集的版本、怎麼產生
+│   ├── 資料版本.md          資料庫與資料集的版本、怎麼產生、結構化規則的版本
+│   ├── design/            介面改版的需求（介面改版spec.md）與 CasEY 設計稿、交接說明（casey/）
 │   └── criminal/          刑事結構化規則（structure.md）、白名單、標準化問題與萃取報告
 └── tests/                 ── 測試
 ```
@@ -76,7 +80,7 @@ JudgementDigest/
 | 爬蟲 | `crawler.py`、`crawl_batched.py`、`crawl_monthly.py`、`crawl_simple_courts.py` |
 | 開放資料（刑事全國） | `opendata_download.py`、`opendata_convert.py` |
 | 解析 | `html_parser.py` |
-| 民事結構化 | `structuring.py`、`backfill_structured.py`、`refresh_judges.py` |
+| 民事結構化 | `structuring.py`、`parties.py`（當事人解析，規則 2.5.2 起用來判斷被告是否為法人）、`backfill_structured.py`、`refresh_judges.py` |
 | 刑事結構化 | `structure_tasks.py`、`appendix_parser.py`、`build_offenses.py`、`normalize.py`、`driving_charge.py`、`law_fallback.py`、`law_frequency.py`、`law_label_validation.py`、`merge.py` |
 | 刑事模型資料 | `build_structured_review.py`、`export_structured_db.py`、`refresh_modeldata.py`、`rebuild_fallback_outputs.py`、`compare_law_extraction.py` |
 | 匯出、一鍵流程 | `export_excel.py`、`pipeline.py` |
@@ -124,7 +128,6 @@ python -m unittest discover -s tests -t .
 
 | 來源 | 檔案 | 搬到 |
 |---|---|---|
-| PR #15 | `model/` | `criminal/models/` |
 | 本機 | CAIL 格式資料集程式（`cail_v2b.py`、`refold_v2.py`、`threshold150_fix.py`） | `criminal/dataset/`（先拿掉寫死的路徑） |
 
 民事的資料集、模型與檢索程式已經搬進 `civil/`、`retrieval/`；實驗輸出、資料、單次比較用的程式不進 repo。資料庫與模型檔的路徑寫在 `config.py`。
