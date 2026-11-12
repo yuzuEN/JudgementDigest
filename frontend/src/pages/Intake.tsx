@@ -30,7 +30,7 @@ export const MAX_STORY = 3000;
 const CASE_TYPES: { value: CaseType; title: string; hint: string }[] = [
   { value: "civil", title: "民事", hint: "要求賠償、還錢、履行契約" },
   { value: "criminal", title: "刑事", hint: "被警察、檢察官調查，或想告對方犯罪" },
-  { value: "unsure", title: "不確定", hint: "兩邊都幫我看，結果會有民事、刑事兩個分頁" },
+  { value: "unsure", title: "不確定", hint: "同時查詢民事與刑事" },
 ];
 
 const TYPE_LABEL: Record<CaseType | "", string> = { "": "還沒選", civil: "民事", criminal: "刑事", unsure: "不確定" };
@@ -39,13 +39,13 @@ const TYPE_LABEL: Record<CaseType | "", string> = { "": "還沒選", civil: "民
 const YOU_GET: Record<CaseType, string[]> = {
   civil: ["相似判決裡，原告贏的比例", "可能判准的金額範圍", "相似的真實判決、證據對照、對方常見的說法"],
   criminal: ["可能的罪名與法條", "刑期落在哪個範圍", "相似的真實判決"],
-  unsure: ["結果頁有民事、刑事兩個分頁", "兩邊都幫你看"],
+  unsure: ["民事與刑事的參考結果，分頁顯示"],
 };
 
 const SCENE_LINES: Record<number, string> = {
-  1: "你好，我是 CasEY 的整理員。接下來一次只問一件事。先告訴我，你遇到的事比較像哪一種？",
-  2: "請說說發生了什麼事：時間、地點、對方做了什麼、你的損失。寫不完整也沒關係，下面的提示會亮起來。",
-  3: "最後幾項資料。證物欄點一下就是「有」，不用上傳任何東西。",
+  1: "如果分不清楚民事和刑事，選「不確定」就能同時查詢。",
+  2: "請描述時間、地點、對方做了什麼，以及你的損失。不必使用法律用語。",
+  3: "接著填寫案件資料，並勾選手上的證據，不需要上傳檔案。",
 };
 
 /** 寫作提示：寫到就亮起來，只是提示，不擋下一關。 */
@@ -144,7 +144,7 @@ export default function Intake() {
           <main className="flex min-w-0 flex-[999_1_560px] flex-col gap-6">
             {stage === 1 && (
               <StageCard>
-                <h1 {...titleProps}>第 1 關　這是哪一類的事情？</h1>
+                <h1 {...titleProps}>第 1 關　選擇案件類型</h1>
                 <RadioCards label="案件類型" value={intake.caseType} options={CASE_TYPES} onChange={(caseType) => update({ caseType })} />
                 {intake.caseType && (
                   <Note>
@@ -172,7 +172,7 @@ export default function Intake() {
 
             {stage === 3 && (
               <StageCard>
-                <h1 {...titleProps}>第 3 關　補幾項資料</h1>
+                <h1 {...titleProps}>第 3 關　填寫案件資料</h1>
                 {error && <ErrorBox message={`選項載入失敗：${error}`} onRetry={load} />}
                 {civil && (
                   <>
@@ -191,7 +191,7 @@ export default function Intake() {
                     items={[{ value: "yes", label: "有" }, { value: "no", label: "沒有" }]}
                     onChange={(v) => update({ lawyer: v as IntakeState["lawyer"] })} />
                 </FieldBlock>
-                <FieldBlock label={<span id="evidence-label">證物欄</span>} hint="點一下＝手上有。只要勾選，不用上傳。">
+                <FieldBlock label={<span id="evidence-label">證物欄</span>} hint="勾選手上有的證據，不需要上傳檔案。">
                   <div role="group" aria-labelledby="evidence-label" className="grid grid-cols-[repeat(auto-fill,minmax(min(130px,100%),1fr))] gap-2.5">
                     {civil
                       ? (options?.evidence ?? []).map((e) => (
@@ -259,7 +259,7 @@ function StoryField({ value, onChange }: { value: string; onChange: (v: string) 
   return (
     <>
       <div className="flex flex-col gap-2">
-        <label htmlFor="story" className="font-bold">用自己的話寫就好</label>
+        <label htmlFor="story" className="font-bold">事情經過</label>
         <p id="story-hint" className="text-[15px] text-muted-foreground">也可以直接貼起訴書的「犯罪事實」或「事實及理由」。</p>
         <Textarea id="story" value={value} maxLength={MAX_STORY} aria-describedby="story-hint story-status"
           onChange={(e) => onChange(e.target.value)} className="min-h-[200px] resize-y"
@@ -272,7 +272,7 @@ function StoryField({ value, onChange }: { value: string; onChange: (v: string) 
         </div>
       </div>
       <div className="flex flex-col gap-2">
-        <p className="text-[15px] font-bold">寫作提示（寫到就會亮起來）</p>
+        <p className="text-[15px] font-bold">可補充的細節（寫到時會標記）</p>
         <ul className="m-0 flex list-none flex-wrap gap-2 p-0">
           {WRITING_HINTS.map(([name, re]) => {
             const hit = re.test(value);

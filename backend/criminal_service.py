@@ -1,5 +1,5 @@
 """
-刑事：罪名、法條、刑度分布、相似判決，以及（目前停用的）ELECTRA 刑期模型。
+刑事：罪名、法條、刑度分布、相似判決。
 
 模型（artifacts/criminal_v1）與檢索資料（artifacts/retrieval_criminal_v1）在啟動時讀進記憶體。
 沒有模型時整個刑事回傳示例資料（mock = true）；有模型、沒有檢索資料時 similar 是空清單，前端顯示「開發中」。
@@ -7,9 +7,9 @@
 每個罪名另外統計相似判決中含這個罪名的案件的宣告刑分布（similar_sentence），和模型推估並列。
 刑事判決沒有判決導讀，列表附司法院的原文網址。
 
-刑期目前用罪名模型（SVM）的 charges[].sentence（6 區間，含拘役、罰金）。
-檔案下半部的 CriminalTermService（法律 ELECTRA，只估有期徒刑）保留著，backend/main.py 裡沒有啟用；
-要換回來時打開 main.py 裡註解掉的幾行，並在 requirements.txt 裝回 torch、transformers。
+刑度（charges[].sentence，6 區間，含拘役、罰金）：有 artifacts/criminal_term（法律 ELECTRA）時用 ELECTRA，
+沒有或沒裝 torch 時用罪名模型（SVM）自己的刑度。整個案件一份分布，每個罪名附同一份。
+ELECTRA 在檔案下半部（CriminalTermService）。
 """
 import json
 import logging
@@ -38,6 +38,7 @@ class CriminalService:
     def __init__(self, artifacts_dir: Path, force_mock: bool = False):
         self.model = self.meta = self.index = None
         self.db_path: Optional[Path] = None
+        self.term = CriminalTermService(artifacts_dir, force_mock)
         if force_mock:
             return
         model_dir = model_service.artifact_dir(artifacts_dir)
@@ -64,8 +65,13 @@ class CriminalService:
 
     def model_info(self) -> Dict:
         m = self.meta.get("metrics", {})
-        return {"name": self.meta["name"], "description": "犯罪事實的 TF-IDF ＋ SVM（機率經過校正）",
+        info = {"name": self.meta["name"], "description": "犯罪事實的 TF-IDF ＋ SVM（機率經過校正）",
                 **{k: m.get(k) for k in ("n_test", "charge_top1", "bucket_accuracy", "bucket_within_one")}}
+        if self.term.available:      # 刑度改用 ELECTRA：刑度的分數換成 ELECTRA 在 2025 年判決上的
+            t = self.term.meta
+            info.update(sentence_description="法律 ELECTRA", sentence_n_test=t.get("n_test"),
+                        sentence_test="2025 年判決", bucket_accuracy=t.get("accuracy"), bucket_within_one=t.get("within_one"))
+        return info
 
     @staticmethod
     def query(text: str) -> str:
@@ -77,6 +83,10 @@ class CriminalService:
             return mock.criminal_report()
         text = self.query(text)
         charges = self.model.predict(text)
+        if self.term.available:
+            sentence = [{"label": b, "share": p} for b, p in zip(model_service.BUCKETS, self.term.predict(text))]
+            for c in charges:
+                c["sentence"] = sentence
         sim = self.index.scores(text) if self.index is not None else None
         for c in charges:
             c.update(self.sentence_stats(sim, c["name"]))
@@ -128,26 +138,25 @@ class CriminalService:
         return out
 
 
+
 # ════════════════════════════════════════════════════════════════════════════
-# 刑期：法律 ELECTRA（目前停用，main.py 沒有建立這個服務）
+# 刑度：法律 ELECTRA（有的話取代 SVM 的刑度分布）
 #
-# 模型檔放在 artifacts/criminal_term/（Kaggle 訓練輸出的 checkpoints/fold_01）：
-#     best.pt          state_dict（訓練時的 FrozenFastTextDualTermModel，beta = 0）
-#     tokenizer/       斷詞器
-#     encoder_config/  ELECTRA 設定，從這裡建 encoder，不連網下載
-#     metrics.json     訓練紀錄（選用 epoch、驗證分數）
-# beta = 0 時罪名／法條向量那條分支對輸出沒有影響，所以只建 encoder 和刑期的頭。
-# 只估有期徒刑，不含拘役、罰金；2025 年判決上最可能區間猜中約六成。
-# 沒有模型檔、或沒有裝 torch 時 available = False。
+# 模型檔放在 artifacts/criminal_term/（Kaggle term-bucket-future-seed42-20261110 的輸出）：
+#     best.pt                  state_dict（encoder.*、mlp.*、head.*）
+#     tokenizer/               斷詞器
+#     encoder_config/          ELECTRA 設定，從這裡建 encoder，不連網下載
+#     experiment_summary.json  訓練紀錄與 test（2025 年判決）的分數
+# 6 個區間和 SVM 相同（拘役、罰金／1～6 個月／7～12 個月／1～3 年／3～10 年／10 年以上）。
+# 沒有模型檔、或沒有裝 torch 時 available = False，刑度改用 SVM。
 # ════════════════════════════════════════════════════════════════════════════
 logger = logging.getLogger(__name__)
 
 TERM_MODEL_DIR = "criminal_term"
 TERM_MAX_LEN = 512
-# 和訓練程式 baseline/evaluate.py 的 BINS 一致（單位：月）；第 7 類「無期／死刑」訓練資料裡沒有，不顯示
-TERM_BUCKETS = ["1–2 個月", "3–6 個月", "7–12 個月", "1–3 年", "3–10 年", "10 年以上"]
+N_TERM_BUCKETS = 6
 
-# 訓練資料的人名是「乙○○」這種寫法，地址、車牌是 ○ 與 0；網站遮名用【姓名】這類標記，模型沒看過。
+# 訓練資料裡地址、門牌是 ○ 與 0；網站遮名用【姓名】這類標記，模型沒看過。
 # 送進模型前換成訓練資料裡的寫法。只影響模型輸入，顯示給使用者的文字不變。
 _TO_TRAINING_STYLE = [
     (re.compile(r"【姓名】|【關係人】|【原告】|【被告】"), "甲○○"),
@@ -164,6 +173,17 @@ def to_training_style(text: str) -> str:
     return text
 
 
+def term_test_scores(summary: Dict) -> Dict:
+    """experiment_summary.json 的 test 混淆矩陣 → 件數、區間猜中、差一區以內。"""
+    cm = (summary.get("evaluations", {}).get("test") or {}).get("confusion_matrix")
+    if not cm:
+        return {}
+    n = sum(map(sum, cm))
+    hit = sum(cm[i][i] for i in range(len(cm)))
+    near = sum(cm[i][j] for i in range(len(cm)) for j in range(len(cm)) if abs(i - j) <= 1)
+    return {"n_test": int(n), "accuracy": hit / n, "within_one": near / n}
+
+
 class CriminalTermService:
     def __init__(self, artifacts_dir: Path, force_mock: bool = False):
         self.available = False
@@ -175,7 +195,7 @@ class CriminalTermService:
             self._load(folder)
             self.available = True
         except ImportError as e:
-            logger.warning("沒有裝 torch／transformers，刑期改回傳示例資料：%s", e)
+            logger.warning("沒有裝 torch／transformers，刑度改用 SVM：%s", e)
 
     def _load(self, folder: Path) -> None:
         import torch
@@ -186,51 +206,38 @@ class CriminalTermService:
         self._torch = torch
         self.tokenizer = AutoTokenizer.from_pretrained(folder / "tokenizer")
 
-        class TermModel(nn.Module):
-            """只留推論需要的部分；屬性名稱和訓練時一樣，權重才對得上。"""
+        class BucketModel(nn.Module):
+            """和訓練程式的 ElectraBucket 相同（屬性名稱一樣，權重才對得上），dropout 在推論時不作用。"""
             def __init__(self, config):
                 super().__init__()
                 self.encoder = ElectraModel(config)
-                hidden = config.hidden_size
-                self.head = nn.Module()
-                self.head.mlp = nn.Sequential(nn.Linear(hidden, 512), nn.ReLU(), nn.Dropout(0.1),
-                                              nn.Linear(512, 256), nn.ReLU(), nn.Dropout(0.1))
-                self.head.bin = nn.Linear(256, 7)
+                self.mlp = nn.Sequential(nn.Linear(config.hidden_size, 512), nn.ReLU(), nn.Dropout(0.1),
+                                         nn.Linear(512, 256), nn.ReLU(), nn.Dropout(0.1))
+                self.head = nn.Linear(256, N_TERM_BUCKETS)
 
             def forward(self, input_ids, attention_mask):
                 cls = self.encoder(input_ids=input_ids, attention_mask=attention_mask).last_hidden_state[:, 0]
-                return self.head.bin(self.head.mlp(cls))
+                return self.head(self.mlp(cls))
 
-        model = TermModel(ElectraConfig.from_pretrained(folder / "encoder_config"))
+        model = BucketModel(ElectraConfig.from_pretrained(folder / "encoder_config"))
         state = torch.load(folder / "best.pt", map_location="cpu", weights_only=True)
-        beta = float(state.get("beta", torch.tensor(0.0)))
-        if beta != 0.0:
-            raise ValueError(f"這個 checkpoint 的 beta = {beta}，需要罪名／法條向量，不能只用 ELECTRA 推論")
         wanted = model.state_dict().keys()
         missing = [k for k in wanted if k not in state]
         if missing:
-            raise ValueError(f"checkpoint 少了 {len(missing)} 個權重，例如 {missing[:3]}")
+            raise ValueError(f"checkpoint 少了 {len(missing)} 個權重，例如 {missing[:3]}（是不是舊版的刑期模型？）")
         model.load_state_dict({k: state[k] for k in wanted})
         model.eval()
         self.model = model
 
-        metrics_path = folder / "metrics.json"
-        metrics = json.loads(metrics_path.read_text(encoding="utf-8")) if metrics_path.exists() else {}
-        self.meta = {"name": "legal-electra-term",
-                     "description": "法律 ELECTRA 刑期模型（有期徒刑區間）",
-                     "selected_epoch": metrics.get("selected_epoch")}
+        summary_path = folder / "experiment_summary.json"
+        summary = json.loads(summary_path.read_text(encoding="utf-8")) if summary_path.exists() else {}
+        self.meta = {"name": "legal-electra-bucket", "selected_epoch": summary.get("selected_epoch"),
+                     **term_test_scores(summary)}
 
-    def predict_buckets(self, text: str) -> List[Dict]:
-        """有期徒刑六個區間的機率，加總為 1。"""
+    def predict(self, text: str) -> List[float]:
+        """6 個刑度區間的機率，加總為 1。"""
         torch = self._torch
         enc = self.tokenizer([to_training_style(text)], truncation=True, max_length=TERM_MAX_LEN, return_tensors="pt")
         with torch.inference_mode():
-            logits = self.model(enc["input_ids"], enc["attention_mask"])[0, :len(TERM_BUCKETS)]
-        probs = logits.float().softmax(-1).tolist()
-        return [{"label": label, "share": round(p, 4)} for label, p in zip(TERM_BUCKETS, probs)]
-
-    def sentence(self, text: str) -> Optional[Dict]:
-        if not self.available:
-            return None
-        return {"buckets": self.predict_buckets(text), "mock": False,
-                "model": {"name": self.meta["name"], "description": self.meta["description"]}}
+            logits = self.model(enc["input_ids"], enc["attention_mask"])[0]
+        return [round(p, 4) for p in logits.float().softmax(-1).tolist()]

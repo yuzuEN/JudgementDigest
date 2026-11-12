@@ -16,7 +16,7 @@ describe("首頁", () => {
     const starts = screen.getAllByRole("link", { name: "開始查詢" });
     expect(starts.length).toBeGreaterThan(0);
     starts.forEach((a) => expect(a).toHaveAttribute("href", "/start"));
-    expect(screen.getByRole("heading", { name: "這不是法律意見" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "結果的使用限制" })).toBeInTheDocument();
     expect(screen.getByLabelText("結果預覽（示例）")).toHaveTextContent("示例");
     // 角色說明只在首頁和關卡 1：不是律師或法官
     expect(screen.getByRole("region", { name: "CasEY 角色說明" })).toHaveTextContent("不是律師或法官");
@@ -58,14 +58,14 @@ describe("描述案情（關卡 1–3）", () => {
     const user = userEvent.setup();
     renderApp("/start?stage=2");
     const next = screen.getByRole("button", { name: "下一關" });
-    await user.type(screen.getByLabelText("用自己的話寫就好"), "今年7月在路口被汽車撞");
+    await user.type(screen.getByLabelText("事情經過"), "今年7月在路口被汽車撞");
     expect(next).toBeDisabled();
     expect(screen.getByText("案情至少要 30 字。")).toBeInTheDocument();
     expect(screen.getByText(/再多寫一點：至少 30 字/)).toBeInTheDocument();
     expect(screen.getByText("時間").closest("li")).toHaveTextContent("已寫到");
     expect(screen.getByText("損失（金額或傷勢）").closest("li")).toHaveTextContent("還沒寫到");
 
-    await user.type(screen.getByLabelText("用自己的話寫就好"), "，右腿骨折住院兩週，醫藥費和薪水損失加起來約64萬元。");
+    await user.type(screen.getByLabelText("事情經過"), "，右腿骨折住院兩週，醫藥費和薪水損失加起來約64萬元。");
     expect(next).toBeEnabled();
     expect(screen.getByText("字數夠了，可以進下一關。")).toBeInTheDocument();
     expect(screen.getByText("損失（金額或傷勢）").closest("li")).toHaveTextContent("已寫到");
@@ -166,11 +166,11 @@ describe("描述案情（關卡 1–3）", () => {
     window.sessionStorage.setItem(STORAGE_KEY, JSON.stringify({ caseType: "civil" }));   // 第 1 關選過民事
     const page = () => render(<MemoryRouter initialEntries={["/start?stage=2"]}><IntakeProvider><App /></IntakeProvider></MemoryRouter>);
     const first = page();
-    await user.type(screen.getByLabelText("用自己的話寫就好"), "被車撞");
+    await user.type(screen.getByLabelText("事情經過"), "被車撞");
     expect(JSON.parse(window.sessionStorage.getItem(STORAGE_KEY)!)).toMatchObject({ caseType: "civil", text: "被車撞" });
     first.unmount();
     page();
-    expect(screen.getByLabelText("用自己的話寫就好")).toHaveValue("被車撞");
+    expect(screen.getByLabelText("事情經過")).toHaveValue("被車撞");
   });
 
   it("還沒選類型就直接開後面的關卡或確認頁、結果頁，回到第 1 關", async () => {
@@ -385,7 +385,7 @@ describe("結果頁的民事、刑事切換", () => {
     const nav = screen.getByRole("navigation", { name: "結果類型" });
     expect(within(nav).getByRole("link", { name: "刑事" })).toHaveAttribute("href", "/result/criminal");
     expect(within(nav).getByText("民事")).toHaveAttribute("aria-current", "page");
-    expect(nav).toHaveTextContent("你選了「不確定」，兩邊都幫你看。");
+    expect(nav).toHaveTextContent("你選了「不確定」，可切換查看民事與刑事結果。");
   });
 
   it("選民事時，直接開刑事網址會回到民事，也不查刑事", async () => {
@@ -615,7 +615,7 @@ describe("第 5 關：補充細節", () => {
     expect(sent.filter((b) => b.allow_llm)).toHaveLength(1);
   });
 
-  it("AI 失敗時說不是你填錯，可以重試或改用固定題目", async () => {
+  it("AI 失敗時提示重試或改用固定題目", async () => {
     let fail = true;
     setup((b) => {
       if (!b.allow_llm) return rulesReply;
@@ -625,8 +625,8 @@ describe("第 5 關：補充細節", () => {
     const user = userEvent.setup();
     renderAt("/confirm", <Confirm />, at5, { text: "內容" });
     await user.click(await openAi(user));
-    expect(await screen.findByText("這次沒有成功")).toBeInTheDocument();
-    expect(screen.getByText("出了點問題，不是你填錯。")).toBeInTheDocument();
+    expect(await screen.findByText("無法產生補充問題")).toBeInTheDocument();
+    expect(screen.getByText("請再試一次，或改用固定題目。")).toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: "再試一次" }));
     expect(await screen.findByLabelText("對方怎麼說？")).toBeInTheDocument();
   });
@@ -647,7 +647,7 @@ describe("第 5 關：補充細節", () => {
     renderAt("/confirm", <Confirm />, at5, { text: "今天天氣很好" });
     await user.click(await openAi(user));
     expect(await screen.findByText("這看起來不像法律糾紛")).toBeInTheDocument();
-    expect(screen.queryByText("這次沒有成功")).not.toBeInTheDocument();
+    expect(screen.queryByText("無法產生補充問題")).not.toBeInTheDocument();
   });
 
   it("有敏感個資時，傳給 AI 前要先同意；沒同意按鈕不能按", async () => {
@@ -719,9 +719,9 @@ describe("民事結果", () => {
       expect(screen.getByRole("tab", { name: "整體結果" })).toHaveAttribute("aria-selected", "true");
       const scene = screen.getByRole("region", { name: "CasEY 角色說明" });
       expect(scene).toHaveTextContent("解說員");
-      expect(scene).toHaveTextContent("不會預測你這件的結果");
+      expect(scene).toHaveTextContent("相似判決的結果");
       await openTab("對方的說法");
-      expect(scene).toHaveTextContent("先看過，到時比較不會慌");
+      expect(scene).toHaveTextContent("展開各項說法");
       expect(screen.getByText(/比對了 30 件案由相同的真實判決/)).toBeInTheDocument();
       expect(calls[0].body).toMatchObject({ text: TRAFFIC, mid: "侵權：交通事故", claimed_amount: 500000, evidence: ["medical"] });
     });
@@ -962,12 +962,12 @@ describe("民事結果", () => {
     expect(printed).toHaveTextContent("和解、撤回");
   });
 
-  it("錯誤時說不是你填錯，可以重試", async () => {
+  it("錯誤時提示重新載入，可以重試", async () => {
     mockApi({ "POST /civil/report": { status: 500 } });
     renderAt("/result/civil", <CivilResult />, "/result/civil", intake);
     const alert = await screen.findByRole("alert");
     expect(alert).toHaveTextContent("伺服器發生錯誤");
-    expect(alert).toHaveTextContent("不是你填錯了什麼");
+    expect(alert).toHaveTextContent("請重新載入結果");
     expect(within(alert).getByRole("button", { name: "再試一次" })).toBeInTheDocument();
   });
 
@@ -979,7 +979,7 @@ describe("民事結果", () => {
 
   it("沒有內容就回到第一步", () => {
     renderApp("/result/civil");
-    expect(screen.getByRole("heading", { name: /這是哪一類的事情/ })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: /選擇案件類型/ })).toBeInTheDocument();
   });
 });
 
@@ -1000,9 +1000,9 @@ describe("刑事結果", () => {
     await show({ mock: false });
     expect(screen.getAllByRole("tab").map((t) => t.textContent)).toEqual(["可能的罪名", "刑期範圍", "相似判決"]);
     const scene = screen.getByRole("region", { name: "CasEY 角色說明" });
-    expect(scene).toHaveTextContent("可能的罪名是什麼");
+    expect(scene).toHaveTextContent("選擇罪名後");
     await openTab("刑期範圍");
-    expect(scene).toHaveTextContent("放在一起比較");
+    expect(scene).toHaveTextContent("方便比較");
     expect(screen.getAllByRole("tabpanel", { hidden: true })).toHaveLength(3);
   });
 
@@ -1063,10 +1063,18 @@ describe("刑事結果", () => {
     expect(within(panel).getByRole("img", { name: "1～6 個月：模型推估 62%，最相似 50 件實際宣告刑 80%" })).toBeInTheDocument();
   });
 
+  it("刑期用 ELECTRA 時，罪名和刑期的測試成績分開寫", async () => {
+    await show({ mock: false,
+      model: { name: "criminal_v1", description: "TF-IDF ＋ SVM", n_test: 10000, charge_top1: 0.93, bucket_accuracy: 0.76, bucket_within_one: 0.97,
+        sentence_description: "法律 ELECTRA", sentence_n_test: 15369, sentence_test: "2025 年判決" } });
+    expect(screen.getByText(/罪名模型：TF-IDF ＋ SVM，用 10,000 件沒參與訓練的判決測試時，第一個罪名猜中 93%/)).toBeInTheDocument();
+    expect(screen.getByText(/刑期模型：法律 ELECTRA，用 15,369 件 2025 年判決測試時，\s*刑期區間猜中 76%，差一格以內 97%/)).toBeInTheDocument();
+  });
+
   it("真模型沒有相似判決時說明，不出現表格", async () => {
     await show({ similar: [], mock: false });
     const panel = await openTab("相似判決");
-    expect(within(panel).getByText("刑事的相似判決檢索開發中。")).toBeInTheDocument();
+    expect(within(panel).getByText("刑事相似判決檢索尚未開放")).toBeInTheDocument();
     expect(within(panel).queryByRole("table")).not.toBeInTheDocument();
   });
 
@@ -1092,11 +1100,11 @@ describe("刑事結果", () => {
     expect(await screen.findByText("看不出可能的罪名")).toBeInTheDocument();
   });
 
-  it("錯誤時說不是你填錯，可以重試", async () => {
+  it("錯誤時提示重新載入，可以重試", async () => {
     mockApi({ "POST /criminal/predict": { status: 500 } });
     renderAt("/result/criminal", <CriminalResult />, "/result/criminal", intake);
     const alert = await screen.findByRole("alert");
-    expect(alert).toHaveTextContent("不是你填錯了什麼");
+    expect(alert).toHaveTextContent("請重新載入結果");
     expect(within(alert).getByRole("button", { name: "再試一次" })).toBeInTheDocument();
   });
 });
@@ -1117,13 +1125,13 @@ describe("判決導讀", () => {
     expect(toggle).toHaveAttribute("aria-pressed", "false");
     expect(claim).toHaveAttribute("data-on", "false");
     expect(claim).toHaveTextContent("原告主張");   // 關掉也還有文字標籤
-    expect(screen.getByText(/規則初步標示/)).toBeInTheDocument();
+    expect(screen.getByText(/依文字規則標示/)).toBeInTheDocument();
   });
 
   it("基本資料、判准比例與回結果", async () => {
     mockApi({ "GET /judgments/civil/11/guide": () => GUIDE });
     renderAt("/judgment/:source/:caseId", <Reading />, "/judgment/civil/11");
-    await screen.findByRole("heading", { name: "判決的基本資料" });
+    await screen.findByRole("heading", { name: "判決資料" });
     expect(screen.getByText("一部勝訴")).toBeInTheDocument();
     expect(screen.getByRole("img", { name: "判准金額約占請求金額的 65%" })).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "回結果" })).toHaveAttribute("href", "/result/civil?tab=cases");

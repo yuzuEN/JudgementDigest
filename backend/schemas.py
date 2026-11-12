@@ -11,6 +11,7 @@ class Health(BaseModel):
     status: str
     civil: Literal["model", "mock"]
     criminal: Literal["model", "mock"]          # 罪名、法條、刑度、相似判決
+    criminal_sentence: Optional[Literal["electra", "svm"]] = None   # 刑度用哪個模型（刑事是示例資料時為 null）
     followup: Literal["rules", "llm"]
     model: Optional[str] = None
     amount: Literal["model", "similar", "mock"] = Field(
@@ -233,24 +234,14 @@ class CriminalModelInfo(BaseModel):
     description: str
     n_test: Optional[int] = None
     charge_top1: Optional[float] = None                   # 第一個罪名猜中的比例
-    bucket_accuracy: Optional[float] = None               # 刑度區間猜中的比例
+    bucket_accuracy: Optional[float] = None               # 刑度區間猜中的比例（刑度用 ELECTRA 時是 ELECTRA 的）
     bucket_within_one: Optional[float] = None             # 刑度區間差一格以內的比例
-
-
-class SentenceModel(BaseModel):
-    name: str
-    description: str
-
-
-class SentenceDistribution(BaseModel):
-    """ELECTRA 刑期模型（目前停用）的輸出：有期徒刑落在各區間的機率（只估有期徒刑，不含拘役、罰金）。"""
-    buckets: List[SentenceBucket]
-    mock: bool
-    model: SentenceModel
+    sentence_description: Optional[str] = None            # 刑度另用別的模型時：模型名稱（例如「法律 ELECTRA」）
+    sentence_n_test: Optional[int] = None                 # 刑度模型的測試件數
+    sentence_test: Optional[str] = None                   # 刑度模型的測試資料（例如「2025 年判決」）
 
 
 class CriminalReport(BaseModel):
-    sentence: Optional[SentenceDistribution] = None      # ELECTRA 刑期，目前停用、不回傳
     charges: List[Charge]
     similar: List[SimilarCase]
     model: Optional[CriminalModelInfo] = None

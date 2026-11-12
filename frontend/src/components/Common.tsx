@@ -16,8 +16,8 @@ export function InfoLink({ to, label }: { to: string; label: string }) {
 
 export const SIMILARITY_NOTE = "相似度是用字接近的程度（0 到 1），只用來排列結果，不是百分比，也不代表案情或結果相同。";
 
-/** 出錯時：說清楚不是使用者填錯，給重試。只影響出錯的那一個區塊。 */
-export function ErrorBox({ message, onRetry, hint = "暫時沒有載入成功，不是你填錯了什麼。", children }: {
+/** 出錯時：說明恢復方式，提供重試。只影響出錯的那一個區塊。 */
+export function ErrorBox({ message, onRetry, hint = "請稍後再試。", children }: {
   message: string;
   onRetry?: () => void;
   hint?: string;
@@ -26,7 +26,7 @@ export function ErrorBox({ message, onRetry, hint = "暫時沒有載入成功，
   return (
     <div role="alert" className="flex flex-col gap-3 rounded-[18px] border-[1.5px] border-input bg-card p-5">
       <p className="flex items-center gap-3 text-xl font-bold">
-        <TriangleAlertIcon className="size-7 flex-none text-secondary-foreground" aria-hidden="true" />出了點問題
+        <TriangleAlertIcon className="size-7 flex-none text-secondary-foreground" aria-hidden="true" />無法載入資料
       </p>
       <p className="text-[15px] text-muted-foreground">{hint}</p>
       <p className="text-sm text-muted-foreground">（{message}）</p>

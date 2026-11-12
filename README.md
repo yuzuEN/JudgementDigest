@@ -16,7 +16,7 @@
 | **證據對照、常見抗辯** | 相似判決＋使用者有的證據 | 相似判決提到哪些證據（提到 ≠ 採信）、被告常見的抗辯 | 🟢 關鍵字規則 |
 | **輸入補全** | 案情描述 | 固定問卷＋追問缺漏的事實，送出前遮名預覽；把描述整理成判決書寫法，確認後用來搜尋 | 🟢 固定題庫；使用者同意後可用 LLM 追問與整理（Gemini） |
 | **判決導讀** | 相似判決 | 標出爭點、證據、法院判斷等段落 | 🟡 規則初步標示；待段落功能標註 |
-| **刑事** | 犯罪事實 | 罪名、法條、刑期區間 | 🟢 TF-IDF＋LinearSVC＋機率校正（`criminal/models/service.py`）；刑度另有 ELECTRA 版，目前停用 |
+| **刑事** | 犯罪事實 | 罪名、法條、刑期區間 | 🟢 TF-IDF＋LinearSVC＋機率校正（`criminal/models/service.py`）；刑度用法律 ELECTRA（`artifacts/criminal_term`，沒有時用 SVM） |
 | **說明與報告** | 結果頁 | 名詞與糾紛類型說明、下載 PDF | 🟢 |
 | **法官論理傾向分析** | 段落功能標註 | 法官事實認定與論理的傾向（民眾版不呈現） | ⬜ 規劃中 |
 
@@ -129,6 +129,36 @@ docker compose up --build
 | 把分享的 `artifacts/` 放在 repo 根目錄 | 真實的模型與判決 | 測試真實結果、部署 |
 
 不用改設定，後端啟動時會自己判斷。
+
+#### 模型檔（Hugging Face）
+
+模型檔放在 Hugging Face 的私人 repo [`yunn030123/judgementdigest-artifacts`](https://huggingface.co/yunn030123/judgementdigest-artifacts)，每個資料夾對應 `artifacts/` 底下的同名資料夾。目前有：
+
+| 資料夾 | 內容 | 同步指令 |
+|---|---|---|
+| `criminal_term/` | 刑度 ELECTRA（約 410 MB） | `scripts/sync_criminal_term.sh` |
+
+其他資料夾（民事模型、民事檢索、刑事 SVM、刑事檢索）還在組內另外傳。上傳方式見 [`docs/模型檔上傳.md`](docs/模型檔上傳.md)。
+
+第一次使用：
+
+1. 請管理者把你加進 repo 所在的 HF 組織（repo 是私人的，組織成員才看得到）。
+2. 安裝 Hugging Face CLI 並登入（token 在 https://huggingface.co/settings/tokens 建立，選 Read 權限）：
+   ```bash
+   pip install -U "huggingface_hub[cli]"
+   hf auth login
+   ```
+3. 在 repo 根目錄執行：
+   ```bash
+   scripts/sync_criminal_term.sh
+   ```
+   檔案會下載到 `artifacts/criminal_term/`。再執行一次只會下載有改過的檔案，所以模型更新後重跑同一個指令就好。
+
+要固定某一版時，把版本傳進去（可以是 commit、tag 或分支）：`scripts/sync_criminal_term.sh --revision <commit>`。只想看會下載什麼：`scripts/sync_criminal_term.sh --dry-run`。
+
+下載完要重啟後端才會讀到新模型：`docker compose up -d --force-recreate backend`（本機開發則重開 `uvicorn`）。`/api/health` 的 `criminal_sentence` 是 `electra` 表示有讀到。
+
+更新模型的人：上傳到同一個 repo 的同名資料夾（`hf upload yunn030123/judgementdigest-artifacts <本機資料夾> criminal_term --commit-message "..."`），並在 PR 或群組說明換了什麼、分數多少。
 
 要用 LLM 追問時，把 `.env.example` 複製成 `.env` 並填入自己的 key；沒有 `.env` 時追問會用固定題庫。
 

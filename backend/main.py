@@ -14,7 +14,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from backend import followup, llm, mock, schemas
 from backend.civil_service import CivilService
-from backend.criminal_service import CriminalService  # , CriminalTermService  ← ELECTRA 刑期，目前停用
+from backend.criminal_service import CriminalService
 from backend.llm.limits import UsageLimiter
 from backend.llm.tasks import followup_questions, rewrite_claim
 from backend.quality import looks_like_dispute
@@ -34,7 +34,6 @@ def create_app(settings: Optional[Settings] = None) -> FastAPI:
     settings = settings or Settings.from_env()
     civil = CivilService(settings.artifacts_dir, force_mock=settings.mode == "mock")
     criminal = CriminalService(settings.artifacts_dir, force_mock=settings.mode == "mock")       # 罪名、法條、刑度、相似判決
-    # term = CriminalTermService(settings.artifacts_dir, force_mock=settings.mode == "mock")   # ELECTRA 刑期，目前停用
     llm_client = llm.create_client(settings.llm_provider, settings.llm_model, settings.llm_api_key)
     llm_limit = UsageLimiter(settings.llm_per_ip_hour, settings.llm_per_day)
     app = FastAPI(title="類案判決參考平台 API", version="0.1.0",
@@ -46,6 +45,7 @@ def create_app(settings: Optional[Settings] = None) -> FastAPI:
     @api.get("/health", response_model=schemas.Health)
     def health():
         return {"status": "ok", "civil": "mock" if civil.mock else "model", "criminal": "mock" if criminal.mock else "model",
+                "criminal_sentence": None if criminal.mock else ("electra" if criminal.term.available else "svm"),
                 "followup": "llm" if llm_client else "rules", "model": None if civil.mock else civil.meta["name"],
                 "amount": civil.amount_source}
 
@@ -115,11 +115,9 @@ def create_app(settings: Optional[Settings] = None) -> FastAPI:
         """
         刑事：罪名、法條、刑度分布、相似判決。
         模型 artifacts/criminal_v1（TF-IDF＋SVM）、檢索 artifacts/retrieval_criminal_v1；沒有模型時回傳示例資料（mock）。
-        刑度在 charges[].sentence（6 區間，含拘役、罰金）。
+        刑度在 charges[].sentence（6 區間，含拘役、罰金）：有 artifacts/criminal_term 時用法律 ELECTRA，沒有時用 SVM。
         """
-        report = criminal.report(req.text)
-        # report["sentence"] = term.sentence(req.text)   # ELECTRA 刑期（只估有期徒刑），目前停用
-        return report
+        return criminal.report(req.text)
 
     @api.post("/retrieval/search", response_model=schemas.SearchResponse)
     def search(req: schemas.SearchRequest):

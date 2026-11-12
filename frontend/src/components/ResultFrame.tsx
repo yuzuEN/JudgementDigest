@@ -42,7 +42,7 @@ function CaseSwitch({ active }: { active: "civil" | "criminal" }) {
   return (
     <nav aria-label="結果類型" className="no-print flex flex-wrap items-center gap-2">
       {tab("civil", "民事")}{tab("criminal", "刑事")}
-      <span className="text-[15px] text-muted-foreground">你選了「不確定」，兩邊都幫你看。</span>
+      <span className="text-[15px] text-muted-foreground">你選了「不確定」，可切換查看民事與刑事結果。</span>
     </nav>
   );
 }
@@ -101,7 +101,7 @@ export function ResultFrame({ active, title, lead, mock, maskedText, searchText,
       {/* 列印時固定在每一頁底部 */}
       <div className="print-only print-page-footer text-xs">
         {mock && <p className="font-bold text-sample-fg">※ 示例資料，不是真實的查詢結果。</p>}
-        <p>{BRAND} 類案判決參考 · 僅供參考，不是法律意見</p>
+        <p>{BRAND} 類案判決參考（非法律意見）</p>
       </div>
     </Layout>
   );

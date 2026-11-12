@@ -18,12 +18,11 @@ const SECTIONS = [
   ["next", "接下來可以怎麼做"],
 ] as const;
 
-const READING_TIPS: [string, string][] = [
-  ["看件數，不看保證。", "CasEY 告訴你「相似判決有幾件、結果怎麼樣」。範圍一定搭配「10 件約有 8 件」這類說明。"],
-  ["範圍很寬時，請保守看待。", "相似判決不多、金額落差大時，結果只能當粗略的參考。"],
-  ["勝訴、一部勝訴、敗訴不分好壞。", "用深靛、淺藍、斜線區分，都附文字。「敗訴」只是結果的一種，不是警告。"],
-  ["模型的機率收在「模型細節」。", "它是輔助，不是你會贏的機率。"],
-  ["相似度是 0 到 1 之間的小數，不是百分比。", "數字越大越相似；大多數判決的數字不會很高，這是正常的。"],
+const READING_TIPS = [
+  "看金額範圍時，也要看判決件數，以及有多少案件落在範圍內，例如「10 件約有 8 件」。",
+  "相似判決較少或金額落差較大時，結果只能當作粗略參考。",
+  "「模型細節」中的機率是輔助資訊，不代表你的案件會勝訴的機率。",
+  "相似度介於 0 到 1，數字越大代表用字越接近。大多數數值不高，請搭配判決內容閱讀。",
 ];
 
 function Section({ id, n, title, children }: { id: string; n: number; title: string; children: ReactNode }) {
@@ -77,7 +76,7 @@ export default function Guide() {
   }, [hash]);
 
   return (
-    <Layout scene={{ who: "explainer", line: "這裡是說明與法律小知識。我用白話解釋常見的名詞，也告訴你怎麼看結果。看不懂的地方，可以從結果頁的「i」連到這裡。" }}>
+    <Layout scene={{ who: "explainer", line: "在結果頁點選名詞旁的「i」，就能跳到這裡查看說明。" }}>
       <div className={cn(PAGE, "pt-8 pb-16")}>
         <div className="flex flex-wrap items-start gap-9">
           <nav aria-label="本頁目錄" className="w-full min-w-0 flex-[1_1_240px] sm:sticky sm:top-5 sm:max-w-[300px]">
@@ -99,7 +98,7 @@ export default function Guide() {
           <article className="flex min-w-0 max-w-[760px] flex-[999_1_520px] flex-col gap-12">
             <header className="flex flex-col gap-2">
               <h1 className="text-[26px] leading-[1.4] font-extrabold sm:text-[32px]">說明與法律小知識</h1>
-              <p className="text-lg leading-[1.8] text-muted-foreground">幾分鐘讀完。你不需要懂法律，也能看懂 CasEY 的結果。這些是一般性的說明，不是法律意見。</p>
+              <p className="text-lg leading-[1.8] text-muted-foreground">了解案件類型、結果中的數字與常見法律名詞。內容為一般說明，不是法律意見。</p>
             </header>
 
             <Section id="basics" n={1} title="民事和刑事有什麼不一樣？">
@@ -125,7 +124,7 @@ export default function Guide() {
                           </dt>
                           <dd className="m-0 flex flex-col gap-1 text-[15px]">
                             <span>{t.summary}</span>
-                            <span className="text-sm text-muted-foreground">例如　{t.example}</span>
+                            <span className="text-sm text-muted-foreground">例如：{t.example}</span>
                           </dd>
                         </div>
                       ))}
@@ -137,7 +136,7 @@ export default function Guide() {
 
             <Section id="results" n={3} title="怎麼看結果">
               <ul className="m-0 flex list-disc flex-col gap-2 pl-5">
-                {READING_TIPS.map(([title, text]) => <li key={title}><b>{title}</b>{text}</li>)}
+                {READING_TIPS.map((text) => <li key={text}>{text}</li>)}
               </ul>
               <TermList terms={RESULT_TERMS} />
             </Section>
@@ -148,10 +147,10 @@ export default function Guide() {
 
             <Section id="next" n={5} title="接下來可以怎麼做？">
               <ol className="m-0 flex list-decimal flex-col gap-2 pl-5">
-                <li><b>下載 PDF，帶去給專業人士看。</b>律師或法律扶助基金會可以根據你的實際情況給意見。</li>
-                <li><b>先把手上的證物整理好。</b>診斷證明、收據、轉帳紀錄、對話紀錄、照片，依時間排好並備份。</li>
-                <li><b>先試著協商或調解。</b>很多糾紛不用走到判決。</li>
-                <li><b>有些事情有期限。</b>建議儘早詢問專業人士，不要等到最後。</li>
+                <li>下載結果 PDF，與律師或法律扶助基金會討論，取得符合實際情況的建議。</li>
+                <li>將診斷證明、收據、轉帳紀錄、對話紀錄與照片依時間整理，並保留備份。</li>
+                <li>可以先嘗試協商或調解，許多糾紛能在判決前解決。</li>
+                <li>部分程序有期限，建議儘早向專業人士確認。</li>
               </ol>
               <p className="text-[15px] text-muted-foreground">
                 需要協助可以洽詢<a href={LAF_URL} target="_blank" rel="noreferrer" className="inline-flex items-center gap-0.5">法律扶助基金會<ExternalLinkIcon className="size-4" aria-hidden="true" /></a>。
