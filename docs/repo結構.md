@@ -52,7 +52,7 @@ JudgementDigest/
 │
 ├── frontend/              ── 網頁（React＋Vite，CasEY 改版）：七關的描述與確認、民事／刑事結果、判決導讀、說明頁
 ├── docker-compose.yml     一行啟動前後端（docker compose up --build）
-├── scripts/               ── 輔助工具（Datasette 瀏覽資料庫）
+├── scripts/               ── 輔助工具：Datasette 瀏覽資料庫（browse_db.py）、從 Hugging Face 同步模型（sync_*.sh）
 ├── docs/                  ── 文件
 │   ├── crawler.md         爬蟲與資料處理的完整用法
 │   ├── 欄位說明.md         資料庫各欄位的定義
