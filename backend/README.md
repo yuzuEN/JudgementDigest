@@ -1,6 +1,6 @@
 # backend/：API 伺服器
 
-Python、FastAPI。接收瀏覽器遮名後的描述，追問缺少的事實，再呼叫民事模型與相似判決檢索，組成結果回傳。
+Python、FastAPI。接收瀏覽器遮名後的描述，追問缺少的事實，再呼叫民事、刑事模型與相似判決檢索，組成結果回傳。
 
 ```bash
 uvicorn backend.main:app --reload      # 在 repo 根目錄執行
@@ -99,7 +99,8 @@ API 文件（可以直接在網頁上試）：http://127.0.0.1:8000/docs
 | 檔案 | 內容 |
 |---|---|
 | `llm/base.py` | 共用介面 `generate_json` 與 `LLMError` |
-| `llm/gemini.py`、`llm/fake.py` | 各廠商的實作；`fake` 不連線、不花錢 |
+| `llm/gemini.py`、`llm/openai_client.py`、`llm/fake.py` | 各廠商的實作；`fake` 不連線、不花錢 |
+| `llm/limits.py` | 用量上限（見下） |
 | `llm/__init__.py` | 依 `JD_LLM_PROVIDER` 選擇廠商 |
 | `llm/tasks.py` | 任務的 prompt 與結果檢查，不綁廠商；送出的文字都先遮名 |
 
