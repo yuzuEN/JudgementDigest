@@ -7,6 +7,7 @@ civil/models 的離線測試：合併權重、precision／recall 指標、TF-IDF
 
 import importlib
 import importlib.util
+import os
 import sys
 import subprocess
 import unittest
@@ -88,7 +89,8 @@ for name in ('civil.models.train_bert', 'civil.models.train_bert_amount', 'civil
     importlib.import_module(name)
 """
         result = subprocess.run([sys.executable, "-c", code], cwd=Path(__file__).resolve().parents[1],
-                                capture_output=True, text=True, timeout=60)
+                                capture_output=True, text=True, encoding="utf-8",
+                                env=dict(os.environ, PYTHONIOENCODING="utf-8"), timeout=60)
         self.assertEqual(result.returncode, 0, result.stderr)
 
     def test_help_without_transformers(self):
@@ -96,7 +98,8 @@ for name in ('civil.models.train_bert', 'civil.models.train_bert_amount', 'civil
             with self.subTest(module=name):
                 code = "import runpy, sys; sys.modules['transformers'] = None; sys.argv = ['train', '--help']; runpy.run_module(%r, run_name='__main__')" % name
                 result = subprocess.run([sys.executable, "-c", code], cwd=Path(__file__).resolve().parents[1],
-                                        capture_output=True, text=True, timeout=60)
+                                        capture_output=True, text=True, encoding="utf-8",
+                                env=dict(os.environ, PYTHONIOENCODING="utf-8"), timeout=60)
                 self.assertEqual(result.returncode, 0, result.stderr)
                 self.assertIn('usage:', result.stdout)
 
