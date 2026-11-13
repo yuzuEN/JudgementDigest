@@ -25,7 +25,7 @@ import config
 from civil.insights import defense_types, evidence_mentions
 from retrieval.civil import load_expanded
 from retrieval.engine import TfidfIndex
-from retrieval.masking import mask_parties, third_party_names, usable_person_names
+from retrieval.masking import by_appearance, mask_parties, third_party_names, usable_person_names
 
 NAME = "retrieval_civil_v3"
 VOCAB_SAMPLE = 60_000     # 字典與 IDF 只用這麼多筆建（完整語料的字元 n-gram 字典太吃記憶體）
@@ -52,7 +52,7 @@ def write_artifacts(corpus: pd.DataFrame, sections: pd.DataFrame, out: Path, ver
     """
     corpus：id、字號、案由、結果、金額、原告主張，以及 default_judgment、in_stats（沒有時視為對審、納入統計）。
     sections：id ＋ 三段文字與當事人欄位（見 retrieval.civil.expanded_row）。
-    ner_names：人名辨識找到的名字（retrieval.ner），和稱謂規則找到的第三人一起換成【關係人】。
+    ner_names：人名辨識找到的名字（retrieval.ner），和稱謂規則找到的第三人一起換成【關係人】（多人時編號）。
     """
     corpus = corpus.reset_index(drop=True)
     if "default_judgment" not in corpus:
@@ -62,8 +62,10 @@ def write_artifacts(corpus: pd.DataFrame, sections: pd.DataFrame, out: Path, ver
     others = [third_party_names("\n".join(parts)) for parts in
               zip(corpus.plaintiff_claim_text, s.plaintiff_claim_text, s.defendant_defense_text, s.court_reasoning_text)]
     if ner_names is not None:
-        others = [sorted(set(o) | set(usable_person_names(ner_names.get(int(i), []))))
-                  for o, i in zip(others, corpus.id)]
+        others = [set(o) | set(usable_person_names(ner_names.get(int(i), []))) for o, i in zip(others, corpus.id)]
+    # 【關係人1】【關係人2】依導讀的閱讀順序（原告主張、被告答辯、法院判斷）第一次出現的位置編號
+    others = [by_appearance(o, "\n".join(parts)) for o, parts in
+              zip(others, zip(s.plaintiff_claim_text, s.defendant_defense_text, s.court_reasoning_text))]
     masked = {col: [mask_parties(t, p, d, (pa, da), o) for t, p, d, pa, da, o in
                     zip(s[col], s.plaintiff, s.defendant, s.plaintiff_agent, s.defendant_agent, others)]
               for col in ("plaintiff_claim_text", "defendant_defense_text", "court_reasoning_text")}

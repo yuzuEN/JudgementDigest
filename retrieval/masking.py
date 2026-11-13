@@ -142,7 +142,9 @@ _CJK_NAME = re.compile(r"[一-鿿]{2,4}")
 # 人名辨識在判決裡常見的誤判（100 件實測）：判決用語黏到名字上（「利云云」「固可認」「卷可佐」「伊前夫」「主張渠等」→「張渠」），
 # 以及計算方法等專有名詞。開頭是虛詞、或姓氏之後出現這些字的，都不當人名。
 _NER_BAD_FIRST = set("伊渠其於自更固卷上又詎該本此並另嗣經即")
-_NER_BAD_INNER = set("云伊渠其可卷之於無庸開僅參尚")
+_NER_BAD_INNER = set("伊渠其可卷之於無庸開僅參尚")     # 「云」不放：「曾湘云」是真名，只排除「云云」
+# 法院給未成年人或匿名者的代稱（「蘇童」＝姓蘇的兒童、「王姓」「陳某」「林女」），不是真名，不用遮
+_PSEUDONYM_SECOND = set("童姓某氏男女")
 _NOT_PERSON = {"霍夫曼", "萊布尼茲", "萊布尼滋"}
 
 
@@ -160,7 +162,9 @@ def usable_person_names(names: Iterable[str]) -> List[str]:
             continue
         if len(n) == 2 and (n[0] not in _SURNAMES or n[1] in "一二三四五六七八九十百千"):
             continue          # 「張一」會把「主張一部」也遮掉
-        if n in _NOT_PERSON or n[0] in _NER_BAD_FIRST or _NER_BAD_INNER & set(n[1:]):
+        if n in _NOT_PERSON or n[0] in _NER_BAD_FIRST or _NER_BAD_INNER & set(n[1:]) or "云云" in n:
+            continue
+        if len(n) == 2 and n[1] in _PSEUDONYM_SECOND:
             continue
         if re.match(_NOT_NAME, n) is None:   # _NOT_NAME 是否定預查，比對失敗＝開頭是常見詞
             continue
@@ -168,22 +172,37 @@ def usable_person_names(names: Iterable[str]) -> List[str]:
     return sorted(kept)
 
 
+def by_appearance(names: Iterable[str], text: str) -> List[str]:
+    """名字依在 text 裡第一次出現的位置排序（給【關係人1】【關係人2】編號用）；沒出現的排最後。"""
+    names = list(dict.fromkeys(n for n in names if n))
+    return sorted(names, key=lambda n: (text.find(n) if n in text else len(text), n))
+
+
+def _role_tags(names: Iterable[str], role: str) -> dict:
+    """同一個角色只有一個人時是【被告】；多個人時依順序編號【被告1】【被告2】，讀者才分得出誰是誰。"""
+    names = list(dict.fromkeys(n.strip() for n in names if n and n.strip()))
+    if len(names) == 1:
+        return {names[0]: f"【{role}】"}
+    return {n: f"【{role}{k}】" for k, n in enumerate(names, 1)}
+
+
+def _replace_names(text: str, tags: dict) -> str:
+    pattern = _name_pattern(tags)
+    return pattern.sub(lambda m: tags[m.group()], text) if pattern else text
+
+
 def mask_parties(text: str, plaintiffs: Optional[str], defendants: Optional[str],
                  agents: Iterable[Optional[str]] = (), others: Iterable[str] = ()) -> str:
     """
     顯示判決時用：原告、被告、代理人的名字換成角色，其餘個資用 mask() 的規則。
-    others：這件判決裡的第三人（third_party_names），換成【關係人】。要用整件判決找出來的名字，
-    同一個人在別的段落可能沒有寫稱謂。
+    同一個角色有多人時編號（【被告1】【被告2】），編號依當事人欄位的順序。
+    others：這件判決裡的第三人（third_party_names、人名辨識），換成【關係人】或【關係人1】【關係人2】，
+    編號依 others 的順序（用 by_appearance 排成在判決裡出現的順序）。要用整件判決找出來的名字，
+    同一個人在別的段落可能沒有寫稱謂；同一件判決的每一段都要傳同樣的 others，編號才會一致。
     """
     text = text or ""
     for role, field in (("原告", plaintiffs), ("被告", defendants)):
-        pattern = _name_pattern(party_names(field))
-        if pattern:
-            text = pattern.sub(f"【{role}】", text)
-    pattern = _name_pattern(party_names(*agents))
-    if pattern:
-        text = pattern.sub("【代理人】", text)
-    pattern = _name_pattern(others)
-    if pattern:
-        text = pattern.sub("【關係人】", text)
+        text = _replace_names(text, _role_tags(party_names(field), role))
+    text = _replace_names(text, _role_tags(party_names(*agents), "代理人"))
+    text = _replace_names(text, _role_tags(others, "關係人"))
     return mask(text)[0]

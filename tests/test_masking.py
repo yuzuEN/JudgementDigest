@@ -11,7 +11,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from retrieval.masking import (find_spans, mask, mask_parties, party_names, third_party_names,  # noqa: E402
+from retrieval.masking import (by_appearance, find_spans, mask, mask_parties, party_names, third_party_names,  # noqa: E402
                                usable_person_names)
 
 
@@ -120,6 +120,20 @@ class TestParties(unittest.TestCase):
         out = mask_parties("被告住臺中市西區民權路99號", "", "", [])
         self.assertEqual(out, "被告住【地址】")
 
+    def test_several_people_in_a_role_are_numbered(self):
+        """多個被告、多個關係人時要分得出誰是誰；只有一個人時不加編號。"""
+        text = "被告陳大華、林小美、王建國應連帶給付，林小美並向證人簡建祥借款，簡建祥轉交洪瑞斌"
+        out = mask_parties(text, "王小明", "陳大華；林小美；王建國", [], ["簡建祥", "洪瑞斌"])
+        self.assertEqual(out, "被告【被告1】、【被告2】、【被告3】應連帶給付，【被告2】並向證人【關係人1】借款，"
+                              "【關係人1】轉交【關係人2】")
+
+    def test_numbers_consistent_across_sections(self):
+        """同一件判決的每一段用同樣的名單，同一個人在每一段都是同一個編號。"""
+        others = by_appearance(["洪瑞斌", "簡建祥"], "證人簡建祥到庭\n洪瑞斌未到")
+        self.assertEqual(others, ["簡建祥", "洪瑞斌"])
+        self.assertEqual(mask_parties("洪瑞斌未到", "", "", [], others), "【關係人2】未到")
+        self.assertEqual(mask_parties("證人簡建祥到庭", "", "", [], others), "證人【關係人1】到庭")
+
     def test_mask_parties_masks_plates(self):
         out = mask_parties("原告騎乘971-KNM號機車，與被告駕駛之車牌號碼AUC-2222號自小客車碰撞", "", "", [])
         self.assertEqual(out, "原告騎乘【車牌】號機車，與被告駕駛之車牌號碼【車牌】號自小客車碰撞")
@@ -138,14 +152,14 @@ class TestPersonNames(unittest.TestCase):
     """人名辨識（CKIP）的結果要篩過才拿來全文取代，否則會把一般用語一起遮掉。"""
 
     def test_keeps_full_names(self):
-        self.assertEqual(usable_person_names(["李惠明", "歐陽美華", "盧新璋"]), ["李惠明", "歐陽美華", "盧新璋"])
+        self.assertEqual(usable_person_names(["李惠明", "歐陽美華", "盧新璋", "曾湘云"]), ["曾湘云", "李惠明", "歐陽美華", "盧新璋"])
 
     def test_two_characters_need_a_common_surname(self):
         self.assertEqual(usable_person_names(["林文", "建國", "美華"]), ["林文"])
 
     def test_drops_non_names(self):
         for bad in ("王", "王○明", "王〇明", "John", "王小明先生是", "陳述", "簡易", "曾經", "", None,
-                    "利云云", "固可認", "卷可佐", "伊前夫", "張渠", "許北之", "霍夫曼", "張一"):
+                    "利云云", "固可認", "卷可佐", "伊前夫", "張渠", "許北之", "霍夫曼", "張一", "蘇童", "王姓", "陳某"):
             self.assertEqual(usable_person_names([bad]), [], bad)
 
     def test_replaced_everywhere_as_third_party(self):
