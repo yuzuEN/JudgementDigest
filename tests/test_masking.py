@@ -11,8 +11,8 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from retrieval.masking import (by_appearance, find_spans, listed_with, mask, mask_parties, party_names,  # noqa: E402
-                               third_party_names,
+from retrieval.masking import (by_appearance, find_spans, listed_with, mask, mask_parties, party_names, party_roles,  # noqa: E402
+                               rare_two_char_names, third_party_names,
                                usable_person_names)
 
 
@@ -142,6 +142,22 @@ class TestParties(unittest.TestCase):
         self.assertEqual(mask_parties("洪瑞斌未到", "", "", [], others), "【關係人2】未到")
         self.assertEqual(mask_parties("證人簡建祥到庭", "", "", [], others), "證人【關係人1】到庭")
 
+    def test_role_words_in_party_fields(self):
+        """
+        人工抽查：代理人欄位解析成「被告兼下一人；陳晁遠」，清掉「兼…」後的「被告」被當成名字，
+        全文的「被告」都被換掉，還換進已經放好的【被告】裡變成【【代理人3】】；陳晁遠也被當成代理人。
+        """
+        self.assertEqual(party_names("被告葉麗玉；上被告；王大明；被告兼下一人"), ["葉麗玉", "王大明"])
+        p, d, a = party_roles("邱嚴樟", "陳信宇", ["林君鴻；被告兼下一人；陳晁遠"])
+        self.assertEqual((p, d, a), (["邱嚴樟"], ["陳信宇", "陳晁遠"], ["林君鴻"]))
+        out = mask_parties("被告陳信宇持股18萬股，被告陳晁遠為被告陳信宇之父親", "邱嚴樟", "陳信宇",
+                           ["林君鴻；被告兼下一人；陳晁遠"])
+        self.assertEqual(out, "被告【被告1】持股18萬股，被告【被告2】為被告【被告1】之父親")
+
+    def test_short_names_never_replaced_inside_tags(self):
+        out = mask_parties("被告陳信宇與證人林文", "", "陳信宇", [], ["林文", "被告"])
+        self.assertEqual(out, "【關係人2】【被告】與證人【關係人1】")
+
     def test_mask_parties_masks_plates(self):
         out = mask_parties("原告騎乘971-KNM號機車，與被告駕駛之車牌號碼AUC-2222號自小客車碰撞", "", "", [])
         self.assertEqual(out, "原告騎乘【車牌】號機車，與被告駕駛之車牌號碼【車牌】號自小客車碰撞")
@@ -162,8 +178,28 @@ class TestPersonNames(unittest.TestCase):
     def test_keeps_full_names(self):
         self.assertEqual(usable_person_names(["李惠明", "歐陽美華", "盧新璋", "曾湘云"]), ["曾湘云", "李惠明", "歐陽美華", "盧新璋"])
 
-    def test_two_characters_need_a_common_surname(self):
-        self.assertEqual(usable_person_names(["林文", "建國", "美華"]), ["林文"])
+    def test_two_character_results_not_used(self):
+        """兩個字的辨識結果多半是一般詞（人工抽查：「馬達」被遮掉），不拿來全文取代；有稱謂的仍由規則遮。"""
+        self.assertEqual(usable_person_names(["林文", "建國", "馬達", "陳情", "周全", "李敖"]), [])
+        self.assertIn("林文", third_party_names("證人林文到庭"))
+
+    def test_rare_two_character_names(self):
+        """兩個字的名字只在全部判決裡很少出現時才遮：「陳情」出現在很多判決，「張蕾」只有一件。"""
+        texts = ["原告陳情如下"] * 20 + ["證人張蕾到庭陳情"]
+        rare = rare_two_char_names(["陳情", "張蕾", "王陳", "孫鄭"], texts, max_df=10)
+        self.assertEqual(rare, {"張蕾"})
+        self.assertEqual(usable_person_names(["陳情", "張蕾", "馬達"], rare), ["張蕾"])
+        self.assertEqual(usable_person_names(["張蕾"]), [], "沒給頻率資料時不收兩個字的")
+
+    def test_glued_characters_removed(self):
+        self.assertEqual(usable_person_names(["查張德滿", "王怡文固", "陳國輝代", "林蔡貴蘭"]),
+                         ["張德滿", "林蔡貴蘭", "王怡文", "陳國輝"])
+        self.assertEqual(usable_person_names(["三樓馬達", "張冠李戴"]), [])
+
+    def test_rare_characters(self):
+        """「陳奕𤋱」的「𤋱」在 Unicode 擴充 B 區（人工抽查發現漏遮）。"""
+        self.assertEqual(usable_person_names(["陳奕𤋱"]), ["陳奕𤋱"])
+        self.assertEqual(mask_parties("補償給陳雯菁、陳奕𤋱", "", "", [], ["陳雯菁", "陳奕𤋱"]), "補償給【關係人1】、【關係人2】")
 
     def test_drops_non_names(self):
         for bad in ("王", "王○明", "王〇明", "John", "王小明先生是", "陳述", "簡易", "曾經", "", None,

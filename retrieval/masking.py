@@ -101,20 +101,55 @@ def mask(text: str, names: Iterable[str] = ()) -> "tuple[str, List[Span]]":
     return "".join(out), spans
 
 
+# 中文字：常用字以外也要包含擴充區的罕用字（「陳奕𤋱」的「𤋱」在擴充 B 區）
+_HAN = "一-鿿㐀-䶿\U00020000-\U0003134F"
+
 # 判決的當事人欄位：多人以「；」「、」分隔，可能帶稱謂（「即○○商行」「兼法定代理人」）
 _PARTY_SPLIT = re.compile(r"[；;、,，\s]+")
 _PARTY_NOISE = re.compile(r"即.*$|兼.*$|（.*?）|\(.*?\)")
+# 當事人欄位解析不完整時會混進角色詞：代理人欄位出現「被告兼下一人；陳晁遠」（原文是「被告兼下一人之法定代理人 陳晁遠」），
+# 清掉「兼…」後只剩「被告」。角色詞不能當名字，否則全文的「被告」都會被換掉
+_ROLE_WORD = re.compile(r"原告|被告|代理人|上訴人|參加人|聲請人|相對人|債務人|債權人|下一人")
+
+
+def _party_parts(field: Optional[str]):
+    """當事人欄位 → [(角色或 None, 名字或 None)]：「被告兼下一人」只有角色，「被告葉麗玉」兩者都有。"""
+    out = []
+    for raw in _PARTY_SPLIT.split(field or ""):
+        role = None
+        m = re.match(r"^(原告|被告)", raw)
+        if m:
+            role = m.group(1)
+            raw = raw[m.end():]
+        part = _PARTY_NOISE.sub("", raw).strip()
+        if _ROLE_WORD.search(part) or not (2 <= len(part) <= 30) or "○" in part or "〇" in part:
+            part = None
+        if role or part:
+            out.append((role, part))
+    return out
 
 
 def party_names(*fields: Optional[str]) -> List[str]:
-    """從判決的原告、被告、代理人欄位取出可以遮的名字（含「○」的已經遮過，不必再遮）。"""
-    names = []
-    for field in fields:
-        for part in _PARTY_SPLIT.split(field or ""):
-            part = _PARTY_NOISE.sub("", part).strip()
-            if 2 <= len(part) <= 30 and "○" not in part and "〇" not in part:
-                names.append(part)
-    return names
+    """從判決的原告、被告、代理人欄位取出可以遮的名字（含「○」的已經遮過，不必再遮；角色詞不算名字）。"""
+    return [name for field in fields for _, name in _party_parts(field) if name]
+
+
+def party_roles(plaintiffs: Optional[str], defendants: Optional[str],
+                agents: Iterable[Optional[str]] = ()) -> "tuple[List[str], List[str], List[str]]":
+    """
+    （原告, 被告, 代理人）的名字。代理人欄位裡寫明是原告或被告的人歸到當事人：
+    「被告兼下一人；陳晁遠」的陳晁遠、「被告葉麗玉」的葉麗玉是被告，不是代理人。
+    """
+    found = {"原告": party_names(plaintiffs), "被告": party_names(defendants)}
+    agent_names = []
+    for field in agents:
+        pending = None
+        for role, name in _party_parts(field):
+            role = role or pending
+            pending = role if name is None else None        # 只有角色的那一格，角色給下一個名字
+            if name:
+                (found[role] if role else agent_names).append(name)
+    return found["原告"], found["被告"], agent_names
 
 
 # 判決裡的第三人（訴外人、證人、親屬）不在當事人欄位，只能從稱謂後面找。
@@ -128,10 +163,10 @@ _THIRD_PARTY_RE = re.compile(
     r"(?:訴外人|證人|鑑定人|受僱人|配偶|之子|之女|之妻|之夫|父親|母親|兒子|女兒|胞兄|胞弟|胞姊|胞妹|之孫|曾孫|孫女|孫子|"
     r"友人|朋友|同事|鄰居|女友|男友|前妻|前夫|同居人|房東|房客)"
     r"(?!方面|任何|連同|高度|金額|程度|石油)"
-    r"([" + _SURNAMES + r"](?:(?![" + _NAME_STOP + r"])[一-鿿]){1,2})")
+    r"([" + _SURNAMES + r"](?:(?![" + _NAME_STOP + r"])[" + _HAN + r"]){1,2})")
 
 
-_NAME = r"[" + _SURNAMES + r"](?:(?![" + _NAME_STOP + r"])[一-鿿]){1,2}"
+_NAME = r"[" + _SURNAMES + r"](?:(?![" + _NAME_STOP + r"])[" + _HAN + r"]){1,2}"
 _NOT_NAME = (r"(?!何人|何者|何以|何時|何處|高雄|高等|高院|方式|方法|方面|任何|任意|連同|連帶|金額|金融|程度|石油|江蘇|馬祖|連江|新北|白天|"
              r"田地|古蹟|陳報|陳述|陳明|施作|施加|施工|施行|董事|曾經|曾匯|曾於|曾向|曾與|簡易|簡稱)")
 # 「原名林朝文」「繼承人即蔡淑智」「前所有權人為蔡志陽」：沒有寫訴外人，但前面的字足以判斷是人名
@@ -176,7 +211,7 @@ def listed_with(text: str, known: Iterable[str]) -> List[str]:
     return sorted(found - known)
 
 
-_CJK_NAME = re.compile(r"[一-鿿]{2,4}")
+_CJK_NAME = re.compile(r"[" + _HAN + r"]{2,4}")
 # 人名辨識在判決裡常見的誤判（100 件實測）：判決用語黏到名字上（「利云云」「固可認」「卷可佐」「伊前夫」「主張渠等」→「張渠」），
 # 以及計算方法等專有名詞。開頭是虛詞、或姓氏之後出現這些字的，都不當人名。
 _NER_BAD_FIRST = set("伊渠其於自更固卷上又詎該本此並另嗣經即")
@@ -186,29 +221,67 @@ _NER_BAD_INNER = set("伊可卷於無庸僅參尚")
 _KINSHIP_FIRST = set("孫子女妻夫父母兄弟姊妹姪甥媳婿")
 # 法院給未成年人或匿名者的代稱（「蘇童」＝姓蘇的兒童、「王姓」「陳某」「林女」），不是真名，不用遮
 _PSEUDONYM_SECOND = set("童姓某氏男女")
-_NOT_PERSON = {"霍夫曼", "萊布尼茲", "萊布尼滋"}
+_NOT_PERSON = {"霍夫曼", "萊布尼茲", "萊布尼滋", "張冠李戴", "烏克麗麗", "亞帝芬奇", "三樓馬達", "卓見", "毛遂", "余裕"}
+# 四個字的辨識結果常是三個字的名字多黏了一個字：「經查張德滿」→「查張德滿」、「王怡文固」「陳國輝代」。去掉黏上的字
+_GLUED_FIRST = set("查代姊兄弟妹母父")
+_GLUED_LAST = set("固業代公斯君等")
 
 
-def usable_person_names(names: Iterable[str]) -> List[str]:
+_TOP_SURNAMES = set("陳林黃張李王吳劉蔡楊")
+RARE_MAX_DF = 10      # 兩個字的名字：在全部判決裡出現的件數不超過這個才算人名
+
+
+def _two_char_candidate(n: str) -> bool:
+    """兩個字的辨識結果，排除一看就不是名字的；是不是一般詞要再看 rare_two_char_names。"""
+    return (len(n) == 2 and n[0] in _SURNAMES and n[1] not in "一二三四五六七八九十百千伊渠其"
+            and n[1] not in _PSEUDONYM_SECOND and n[1] not in _TOP_SURNAMES
+            and not (n[0] in _KINSHIP_FIRST and n[1] in _SURNAMES))
+
+
+def rare_two_char_names(candidates: Iterable[str], texts: Iterable[str], max_df: int = RARE_MAX_DF) -> set:
+    """
+    兩個字的候選名字裡，在 texts（全部判決）出現不超過 max_df 件的。
+    一般詞會出現在很多判決（15.8 萬件裡「陳情」1,016 件、「馬達」687 件、「周全」204 件），
+    人名通常只有一兩件（「劉旭」3 件、「張蕾」2 件），用出現的件數分開。
+    """
+    cands = {n for n in candidates if _two_char_candidate(n)}
+    if not cands:
+        return set()
+    firsts = {n[0] for n in cands}
+    df = {}
+    for t in texts:
+        t = t or ""
+        for b in {t[i:i + 2] for i in range(len(t) - 1) if t[i] in firsts} & cands:
+            df[b] = df.get(b, 0) + 1
+    return {n for n in cands if df.get(n, 0) <= max_df}
+
+
+def usable_person_names(names: Iterable[str], rare_two_char: Optional[set] = None) -> List[str]:
     """
     人名辨識（retrieval/ner.py）找到的名字，挑出可以拿來全文取代的。
-    取代是整件判決找同樣的字串，太短或不像人名的會把一般用語一起遮掉，所以：
-    只收 2–4 個中文字；兩個字的要以常見姓氏開頭（「建國」可能是人名，也會出現在「建國路」）；
-    已經遮過（含「○」）的、和 _NOT_NAME 的常見詞（「陳述」「簡易」）開頭相同的不收。
+    取代是整件判決找同樣的字串，不像人名的會把一般用語一起遮掉，所以：
+    - 3–4 個中文字（含罕用字）。四個字的去掉黏上的字（「查張德滿」→「張德滿」）
+    - 兩個字的只收 rare_two_char 裡的（rare_two_char_names：在全部判決裡很少出現的）；沒給就不收。
+      人工抽查時「馬達」被當成人名遮掉，兩個字的辨識結果多半是一般詞（「陳情」「周全」）
+    - 已經遮過（含「○」）的、和 _NOT_NAME 的常見詞（「陳述」「簡易」）開頭相同的不收
     """
     kept = set()
     for n in names:
         n = (n or "").strip()
-        if not _CJK_NAME.fullmatch(n):
+        if len(n) == 2:
+            if (rare_two_char and n in rare_two_char and n not in _NOT_PERSON and _two_char_candidate(n)
+                    and re.match(_NOT_NAME, n)):
+                kept.add(n)
             continue
-        if len(n) == 2 and (n[0] not in _SURNAMES or n[1] in "一二三四五六七八九十百千"):
-            continue          # 「張一」會把「主張一部」也遮掉
+        if len(n) == 4 and n[0] in _GLUED_FIRST and n[1] in _SURNAMES:
+            n = n[1:]
+        elif len(n) == 4 and n[3] in _GLUED_LAST:
+            n = n[:3]
+        if not _CJK_NAME.fullmatch(n) or len(n) < 3:
+            continue
         if n in _NOT_PERSON or n[0] in _NER_BAD_FIRST or _NER_BAD_INNER & set(n[1:]) or "云云" in n:
             continue
         if n.endswith("之"):        # 「余梅之出資」「許北之」：後面的字黏上來
-            continue
-        if len(n) == 2 and (n[1] in _PSEUDONYM_SECOND or n[1] in "伊渠其"
-                            or (n[0] in _KINSHIP_FIRST and n[1] in _SURNAMES)):
             continue
         if re.match(_NOT_NAME, n) is None:   # _NOT_NAME 是否定預查，比對失敗＝開頭是常見詞
             continue
@@ -245,12 +318,16 @@ def mask_parties(text: str, plaintiffs: Optional[str], defendants: Optional[str]
     同一個人在別的段落可能沒有寫稱謂；同一件判決的每一段都要傳同樣的 others，編號才會一致。
     """
     text = text or ""
+    p, d, a = party_roles(plaintiffs, defendants, agents)
     tags = {}
-    for names, role in ((party_names(plaintiffs), "原告"), (party_names(defendants), "被告"),
-                        (party_names(*agents), "代理人"), (list(others), "關係人")):
+    for names, role in ((p, "原告"), (d, "被告"), (a, "代理人"), (list(others), "關係人")):
         for name, tag in _role_tags(names, role).items():
             tags.setdefault(name, tag)        # 同一個名字出現在兩種角色時，以前面的角色為準
-    # 長的名字先全部換掉，再換短的：「曾孫鄭宇峰」裡，誤判的「孫鄭」不會比「鄭宇峰」先換掉而切斷它
+    # 長的名字先全部換掉，再換短的：「曾孫鄭宇峰」裡，誤判的「孫鄭」不會比「鄭宇峰」先換掉而切斷它。
+    # 換的時候先放私用區的記號，最後才換成標籤：否則後面換短名字時，會換到前面已經放進去的標籤裡（「【被告】」裡的「被告」）
+    codes = {name: f"{k}" for k, name in enumerate(tags)}
     for length in sorted({len(n) for n in tags}, reverse=True):
-        text = _replace_names(text, {n: t for n, t in tags.items() if len(n) == length})
+        text = _replace_names(text, {n: c for n, c in codes.items() if len(n) == length})
+    order = list(tags)
+    text = re.sub("([0-9]+)", lambda m: tags[order[int(m.group(1))]], text)
     return mask(text)[0]
