@@ -47,7 +47,7 @@ API 文件（可以直接在網頁上試）：http://127.0.0.1:8000/docs
 - `retrieval_civil_v3/`：`python -m retrieval.build` 產生
 - `civil_amount_v1/`（選用）：`python -m civil.models.amount_service train` 產生
 - `civil_winloss_v1/`、`civil_amount_v1/` 也可以從 Hugging Face 下載：`scripts/sync_civil_models.sh`（見根目錄 README 的「模型檔」）
-- `criminal_v1/`、`retrieval_criminal_v1/`：刑事罪名、法條模型與相似判決檢索（PR #39，`python -m criminal.models.service`、`python -m retrieval.criminal` 產生）
+- `criminal_v1/`、`retrieval_criminal_v1/`：刑事罪名、法條模型與相似判決檢索（PR #39，`python -m criminal.models.service`、`python -m retrieval.criminal` 產生）；`criminal_v1/` 可以從 Hugging Face 下載：`scripts/sync_criminal_models.sh`
 - `criminal_term/`：刑度 ELECTRA（6 區間，和 SVM 相同），Kaggle `term-bucket-future-seed42-20261110` 的輸出（`best.pt`、`tokenizer/`、`encoder_config/`、`experiment_summary.json`）；沒有時刑度用 SVM。從 Hugging Face 下載：`scripts/sync_criminal_term.sh`（見根目錄 README 的「模型檔」）
 
 `civil_winloss_v1/`、`retrieval_civil_v3/` 任一個不存在時，民事改回傳示例資料；沒有 `criminal_v1/` 時罪名、法條、刑度、相似判決改回傳示例資料。伺服器照樣能啟動。
@@ -120,7 +120,7 @@ API 文件（可以直接在網頁上試）：http://127.0.0.1:8000/docs
 
 ## 接上其他組的功能
 
-- **刑事**：罪名、法條、刑度、相似判決都在 `criminal_service.py`（TF-IDF＋SVM，PR #39）；刑度用同一檔的 ELECTRA（2025 年判決測試：區間 0.763、差一區 0.973），沒有模型檔時用 SVM；`criminal_term/` 從 Hugging Face 下載（`scripts/sync_criminal_term.sh`），`criminal_v1/`、`retrieval_criminal_v1/` 還是另外傳，放進 `artifacts/`
+- **刑事**：罪名、法條、刑度、相似判決都在 `criminal_service.py`（TF-IDF＋SVM，PR #39）；刑度用同一檔的 ELECTRA（2025 年判決測試：區間 0.763、差一區 0.973），沒有模型檔時用 SVM；`criminal_term/` 從 Hugging Face 下載（`scripts/sync_criminal_term.sh`），`criminal_v1/` 從 Hugging Face 下載（`scripts/sync_criminal_models.sh`），`retrieval_criminal_v1/` 還是另外傳，放進 `artifacts/`
 - **LLM 追問**：已接上，見上面的「LLM」；送出的文字一律先經過 `retrieval.masking.mask()`
 - **段落功能標註**：`civil.insights.guide_paragraphs()` 換成標註模型，`labeler` 改成模型名稱
 
