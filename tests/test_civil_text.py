@@ -86,5 +86,20 @@ class TestLeakAndCaseNumbers(unittest.TestCase):
         self.assertEqual(n_case_numbers("標題\n112年度訴字第1號\n原告 甲\n113年度訴字第3號"), 1)
 
 
+
+class TestV6SameTextRulesAsV5(unittest.TestCase):
+    """v6 只換樣本母體與結構化變數的來源，文字的處理要和 v5 一模一樣。"""
+    SAMPLES = ["原告主張：㊀被告於民國112年間借款Ａ１萬元。並聲明：被告應給付原告新臺幣10萬元。願供擔保請准宣告假執行。",
+               "經查證屬實，被告未清償。", "本院認原告之請求為有理由。", "  原告 ，主張 ㈠ 車禍\n受傷  "]
+
+    def test_same_as_v5(self):
+        for t in self.SAMPLES:
+            with self.subTest(t=t):
+                self.assertEqual(normalize_text(t, "v6"), normalize_text(t, "v5"))
+                self.assertEqual(strip_for_version(t, "v6"), strip_for_version(t, "v5"))
+                self.assertEqual(bool(leak_re("v6").search(t)), bool(leak_re("v5").search(t)))
+                self.assertEqual(prepare_input(t, "v6"), prepare_input(t, "v5"))
+
+
 if __name__ == "__main__":
     unittest.main()

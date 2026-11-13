@@ -5,7 +5,7 @@
     JD_MAIN_DB        正式資料庫（judgments.db，含簡易庭；相似判決檢索用）
     JD_WORK_DB        分析用資料庫（judgments_work_20261112.db，規則 2.5.2 的固定副本；舊的 20261108、20261014 保留）
     JD_DATASET_DIR    文字資料集 text_dataset_{版本}.csv 所在的資料夾
-    JD_FIELDS_PKL     analysis_fields.pkl（v5 的樣本母體與結構化變數，見 docs/資料版本.md）
+    JD_FIELDS_PKL     analysis_fields.pkl（v5 以前的樣本母體與結構化變數；v6 起改用 DATASET_DIR 的 fields_v6.csv，見 docs/資料版本.md）
     JD_OUTPUT_DIR     實驗輸出（metrics、預測、報告）
     JD_ARTIFACTS_DIR  上線用的模型與檢索索引（後端讀這裡）
 

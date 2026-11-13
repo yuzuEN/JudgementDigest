@@ -10,7 +10,8 @@
 | 檔案 | 內容 |
 |---|---|
 | `text.py` | 清理文字的規則（刪聲明、正規化、洩漏用語）。**建資料集和後端處理使用者輸入共用這一份** |
-| `build_dataset.py` | 產生 `text_dataset_{版本}.csv`：`python -m civil.dataset.build_dataset v5` |
+| `fields.py` | 樣本母體與結構化變數（法院、律師、被告是否為法人、反訴、請求權、程序）。v6 起從分析用資料庫直接算：`python -m civil.dataset.fields v6` → `fields_v6.csv`；v5 以前用 `analysis_fields.pkl` |
+| `build_dataset.py` | 產生 `text_dataset_{版本}.csv`：`python -m civil.dataset.build_dataset v6`（要先有 `fields_v6.csv`） |
 | `leak_check.py` | 資料集的自動洩漏檢查：`python -m civil.dataset.leak_check` |
 
 ## models/：模型的訓練與評估
