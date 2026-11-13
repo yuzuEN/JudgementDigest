@@ -11,7 +11,8 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from retrieval.masking import (by_appearance, find_spans, mask, mask_parties, party_names, third_party_names,  # noqa: E402
+from retrieval.masking import (by_appearance, find_spans, listed_with, mask, mask_parties, party_names,  # noqa: E402
+                               third_party_names,
                                usable_person_names)
 
 
@@ -168,6 +169,22 @@ class TestPersonNames(unittest.TestCase):
         for bad in ("王", "王○明", "王〇明", "John", "王小明先生是", "陳述", "簡易", "曾經", "", None,
                     "利云云", "固可認", "卷可佐", "伊前夫", "張渠", "許北之", "霍夫曼", "張一", "蘇童", "王姓", "陳某"):
             self.assertEqual(usable_person_names([bad]), [], bad)
+
+    def test_real_names_with_function_characters(self):
+        self.assertEqual(usable_person_names(["張之瑋", "吳渭渠", "儲開軒", "陳其邁"]), ["儲開軒", "吳渭渠", "張之瑋", "陳其邁"])
+        self.assertEqual(usable_person_names(["余梅之", "上開二", "孫鄭"]), [])
+
+    def test_longer_names_replaced_first(self):
+        """誤判的「孫鄭」不能比「鄭宇峰」先換掉而切斷它，露出「宇峰」。"""
+        out = mask_parties("曾孫鄭宇峰、曾孫女鄭宇真", "", "", [], ["孫鄭", "鄭宇峰", "鄭宇真"])
+        self.assertEqual(out, "曾孫【關係人2】、曾孫女【關係人3】")
+
+    def test_names_listed_after_known_names(self):
+        self.assertEqual(listed_with("陳大同、吳渭渠、林美美等8人", ["陳大同"]), ["吳渭渠", "林美美"])
+        self.assertEqual(listed_with("陳大同、被告到場", ["陳大同"]), [])
+
+    def test_more_titles(self):
+        self.assertEqual(third_party_names("友人杜英達之帳戶，同事林小美到場"), ["杜英達", "林小美"])
 
     def test_replaced_everywhere_as_third_party(self):
         names = usable_person_names(["李惠明"])
