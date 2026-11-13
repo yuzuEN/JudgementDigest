@@ -121,7 +121,7 @@ docker compose up --build
 
 開 http://localhost:8080 。8080 被占用時改用別的 port：`JD_PORT=8180 docker compose up --build`。
 
-模型與檢索資料（`artifacts/`）不在 repo 裡。民事的兩個模型從 Hugging Face 下載（`bash scripts/sync_civil_models.sh`，見 [civil/README.md](civil/README.md)），檢索資料由組內另外分享：
+模型與檢索資料（`artifacts/`）不在 repo 裡。模型從 Hugging Face 下載（見下面的「模型檔（Hugging Face）」），檢索資料由組內另外分享：
 
 | 情況 | 民事顯示 | 適合 |
 |---|---|---|
@@ -132,13 +132,15 @@ docker compose up --build
 
 #### 模型檔（Hugging Face）
 
-模型檔放在 Hugging Face 的私人 repo [`yunn030123/judgementdigest-artifacts`](https://huggingface.co/yunn030123/judgementdigest-artifacts)，每個資料夾對應 `artifacts/` 底下的同名資料夾。目前有：
+模型檔放在 Hugging Face 的私人 repo [`JudgementDigest/judgementdigest-artifacts`](https://huggingface.co/JudgementDigest/judgementdigest-artifacts)，每個資料夾對應 `artifacts/` 底下的同名資料夾。目前有：
 
 | 資料夾 | 內容 | 同步指令 |
 |---|---|---|
 | `criminal_term/` | 刑度 ELECTRA（約 410 MB） | `scripts/sync_criminal_term.sh` |
+| `civil_winloss_v1/` | 民事勝敗模型（約 9 MB） | `scripts/sync_civil_models.sh` |
+| `civil_amount_v1/` | 民事獲償比例模型（約 8 MB） | 同上（兩個民事模型一起下載） |
 
-其他資料夾（民事模型、民事檢索、刑事 SVM、刑事檢索）還在組內另外傳。上傳方式見 [`docs/模型檔上傳.md`](docs/模型檔上傳.md)。
+其他資料夾（民事檢索、刑事 SVM、刑事檢索）還在組內另外傳。上傳方式見 [`docs/模型檔上傳.md`](docs/模型檔上傳.md)。
 
 第一次使用：
 
@@ -151,14 +153,15 @@ docker compose up --build
 3. 在 repo 根目錄執行：
    ```bash
    scripts/sync_criminal_term.sh
+   scripts/sync_civil_models.sh
    ```
-   檔案會下載到 `artifacts/criminal_term/`。再執行一次只會下載有改過的檔案，所以模型更新後重跑同一個指令就好。
+   檔案會下載到 `artifacts/` 底下的同名資料夾。再執行一次只會下載有改過的檔案，所以模型更新後重跑同一個指令就好。
 
-要固定某一版時，把版本傳進去（可以是 commit、tag 或分支）：`scripts/sync_criminal_term.sh --revision <commit>`。只想看會下載什麼：`scripts/sync_criminal_term.sh --dry-run`。
+要固定某一版時，把版本傳進去（可以是 commit、tag 或分支）：`scripts/sync_criminal_term.sh --revision <commit>`。只想看會下載什麼：`scripts/sync_criminal_term.sh --dry-run`。民事的腳本用法相同。
 
-下載完要重啟後端才會讀到新模型：`docker compose up -d --force-recreate backend`（本機開發則重開 `uvicorn`）。`/api/health` 的 `criminal_sentence` 是 `electra` 表示有讀到。
+下載完要重啟後端才會讀到新模型：`docker compose up -d --force-recreate backend`（本機開發則重開 `uvicorn`）。`/api/health` 的 `criminal_sentence` 是 `electra` 表示讀到 ELECTRA，`amount` 是 `model` 表示讀到獲償比例模型（`civil` 要民事檢索資料也在才會是 `model`）。
 
-更新模型的人：上傳到同一個 repo 的同名資料夾（`hf upload yunn030123/judgementdigest-artifacts <本機資料夾> criminal_term --commit-message "..."`），並在 PR 或群組說明換了什麼、分數多少。
+更新模型的人：上傳到同一個 repo 的同名資料夾（`hf upload JudgementDigest/judgementdigest-artifacts <本機資料夾> criminal_term --commit-message "..."`），並在 PR 或群組說明換了什麼、分數多少。
 
 要用 LLM 追問時，把 `.env.example` 複製成 `.env` 並填入自己的 key；沒有 `.env` 時追問會用固定題庫。
 
