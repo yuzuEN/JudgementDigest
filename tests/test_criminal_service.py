@@ -148,6 +148,12 @@ class TestTrainedModel(unittest.TestCase):
 
     def test_meta(self):
         self.assertEqual((self.meta["name"], self.meta["charges"], self.meta["n_train"]), ("criminal_v1", 2, 60))
+
+    def test_vocabulary_stored_in_feature_order(self):
+        # 依出現順序存放的話，照順序讀得回第一份訓練判決的開頭
+        vocab = self.model.vec.vocabulary_
+        self.assertEqual(list(vocab.values()), sorted(vocab.values()))
+        self.assertNotIn("stop_words_", vars(self.model.vec))
         import sklearn
         self.assertEqual(self.meta["sklearn"], sklearn.__version__)
         self.assertIn("git_commit", self.meta)

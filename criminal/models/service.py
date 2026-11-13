@@ -35,6 +35,7 @@ from sklearn.preprocessing import MultiLabelBinarizer
 from sklearn.svm import LinearSVC
 
 import config
+from retrieval.engine import sort_vocabulary
 
 MODEL_NAME = "criminal_v1"
 BUCKETS = ["拘役、罰金", "1～6 個月", "7～12 個月", "1～3 年", "3～10 年", "10 年以上"]
@@ -348,6 +349,7 @@ def train(rows: List[Dict], out: Path, source: str, jobs: int = 1) -> Path:
     # 用 python -m 執行時這個檔案是 __main__，直接用 CriminalModel 會存成 __main__.CriminalModel，後端讀不到
     from criminal.models.service import CriminalModel as Model
     model = Model("svm_cal", jobs).fit(rows)
+    sort_vocabulary(model.vec)                    # 詞彙依編號重排，模型檔才讀不回訓練判決的內容
     out.mkdir(parents=True, exist_ok=True)
     joblib.dump(model, out / "model.joblib", compress=3)
     meta = {"name": MODEL_NAME, "trained_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),

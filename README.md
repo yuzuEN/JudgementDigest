@@ -139,11 +139,12 @@ docker compose up --build
 | 資料夾 | 內容 | 同步指令 |
 |---|---|---|
 | `criminal_term/` | 刑度 ELECTRA（約 410 MB） | `scripts/sync_criminal_term.sh` |
+| `criminal_v1/` | 刑事罪名、法條 SVM（約 220 MB） | `scripts/sync_criminal_models.sh` |
 | `civil_winloss_v1/` | 民事勝敗模型（約 9 MB） | `scripts/sync_civil_models.sh` |
 | `civil_amount_v1/` | 民事獲償比例模型（約 8 MB） | 同上（民事三個資料夾一起下載） |
 | `retrieval_civil_v3/` | 民事相似判決檢索（約 2.6 GB） | 同上 |
 
-其他資料夾（刑事 SVM、刑事檢索）還在組內另外傳。上傳方式見 [`docs/模型檔上傳.md`](docs/模型檔上傳.md)。
+其他資料夾（刑事檢索）還在組內另外傳。上傳方式見 [`docs/模型檔上傳.md`](docs/模型檔上傳.md)。
 
 第一次使用：
 
@@ -156,11 +157,12 @@ docker compose up --build
 3. 在 repo 根目錄執行：
    ```bash
    scripts/sync_criminal_term.sh
+   scripts/sync_criminal_models.sh
    scripts/sync_civil_models.sh
    ```
    檔案會下載到 `artifacts/` 底下的同名資料夾。再執行一次只會下載有改過的檔案，所以模型更新後重跑同一個指令就好。
 
-要固定某一版時，把版本傳進去（可以是 commit、tag 或分支）：`scripts/sync_criminal_term.sh --revision <commit>`。只想看會下載什麼：`scripts/sync_criminal_term.sh --dry-run`。民事的腳本用法相同。
+要固定某一版時，把版本傳進去（可以是 commit、tag 或分支）：`scripts/sync_criminal_term.sh --revision <commit>`。只想看會下載什麼：`scripts/sync_criminal_term.sh --dry-run`。其他腳本用法相同。
 
 下載完要重啟後端才會讀到新模型：`docker compose up -d --force-recreate backend`（本機開發則重開 `uvicorn`）。`/api/health` 的 `criminal_sentence` 是 `electra` 表示讀到 ELECTRA，`amount` 是 `model` 表示讀到獲償比例模型（`civil` 要民事檢索資料也在才會是 `model`）。
 
