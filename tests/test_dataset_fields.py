@@ -4,6 +4,7 @@ import sqlite3
 import sys
 import tempfile
 import unittest
+from contextlib import closing
 from pathlib import Path
 from unittest import mock
 
@@ -55,10 +56,12 @@ KEEP = [1, 2, 3, 4, 5]
 
 
 def make_db(path: Path, rows=ROWS):
-    with sqlite3.connect(path) as con:
+    # sqlite3 的 with 只會 commit、不會關閉連線；Windows 上沒關的檔案刪不掉，暫存資料夾會清不掉
+    with closing(sqlite3.connect(path)) as con:
         con.execute(f"CREATE TABLE judgments ({', '.join(COLS)})")
         con.executemany(f"INSERT INTO judgments VALUES ({', '.join('?' * len(COLS))})",
                         [[r[c] for c in COLS] for r in rows])
+        con.commit()
 
 
 class TestProcType(unittest.TestCase):
