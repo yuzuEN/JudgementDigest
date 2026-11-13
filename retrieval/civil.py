@@ -77,7 +77,7 @@ def expanded_row(row: Dict, derived: Dict) -> Optional[Tuple[Dict, Dict]]:
             "case_type_mid": derived["case_type_mid"], "outcome": derived["outcome"],
             "y": int(derived["outcome"] != "敗訴"), "plaintiff_claim_text": claim,
             "claimed_amount": derived["claimed_amount"], "awarded_amount": derived["awarded_amount"],
-            "grant_ratio": derived["grant_ratio"], "default_judgment": int(default),
+            "grant_ratio": derived["grant_ratio"], "default_judgment": int(default), "url": row.get("source_url") or "",
             "in_stats": int(not default and len(defense) >= MIN_DEFENSE and not absent)}
     section = {"id": row["id"], "plaintiff_claim_text": claim_raw, "defendant_defense_text": defense_raw,
                "court_reasoning_text": derived["court_reasoning_text"] or "", "plaintiff": row.get("plaintiff") or "",
@@ -101,7 +101,9 @@ def load_expanded(db=None, chunk: int = 5000, only: Optional[Iterable[int]] = No
         if only is not None:
             wanted = {int(i) for i in only}
             ids = [i for i in ids if i in wanted]
-        cols = ", ".join(["id"] + S.SOURCE_COLUMNS)
+        # 司法院的原文網址：結果頁和導讀附「原文」連結（舊的資料庫沒有這一欄時留空）
+        has_url = any(r[1] == "source_url" for r in con.execute("PRAGMA table_info(judgments)"))
+        cols = ", ".join(["id"] + S.SOURCE_COLUMNS + (["source_url"] if has_url else []))
         cases, sections = [], []
         for start in range(0, len(ids), chunk):
             part = ids[start:start + chunk]

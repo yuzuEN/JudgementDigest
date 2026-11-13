@@ -216,7 +216,9 @@ class CivilService:
         return {"source": "civil", "case_id": r["id"], "case_number": r["case_number"], "court": r["court"],
                 "year": r["year"], "mid": r["mid"] or "", "outcome": r["outcome"], "similarity": round(similarity, 3),
                 "summary": r["summary"], "claimed_amount": r["claimed_amount"], "awarded_amount": r["awarded_amount"],
-                "default_judgment": bool(r["default_judgment"])}
+                "default_judgment": bool(r["default_judgment"]),
+                # 11/13 以前建的檢索資料沒有 url 欄，照樣能用，只是不顯示原文連結
+                "url": (r["url"] or None) if "url" in r.keys() else None}
 
     def search(self, text: str, mid: Optional[str], k: int) -> List[Dict]:
         if self.mock:

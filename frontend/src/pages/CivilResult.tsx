@@ -1,4 +1,4 @@
-import { CheckIcon, CircleMinusIcon, InfoIcon } from "lucide-react";
+import { CheckIcon, CircleMinusIcon, ExternalLinkIcon, InfoIcon } from "lucide-react";
 import { useCallback, useEffect, useState, type ReactNode } from "react";
 import { Link, Navigate } from "react-router-dom";
 import { cn } from "@/lib/utils";
@@ -359,7 +359,13 @@ function CasesPanel({ report, onlyWin, setOnlyWin, rewritten }: {
               </TableCell>
               <TableCell className="py-3.5 text-right align-top font-bold tabular-nums">{c.similarity.toFixed(2)}</TableCell>
               <TableCell className="no-print py-3.5 align-top">
-                <LinkButton variant="outline" size="sm" to={`/judgment/civil/${c.case_id}`}>判決導讀</LinkButton>
+                <span className="flex flex-col items-start gap-1">
+                  <LinkButton variant="outline" size="sm" to={`/judgment/civil/${c.case_id}`}>判決導讀</LinkButton>
+                  {c.url && (
+                    <a href={c.url} target="_blank" rel="noreferrer" aria-label={`${c.case_number} 判決原文`}
+                      className="inline-flex min-h-11 items-center gap-1 text-sm font-semibold">原文<ExternalLinkIcon className="size-4" aria-hidden="true" /></a>
+                  )}
+                </span>
               </TableCell>
             </TableRow>
           ))}

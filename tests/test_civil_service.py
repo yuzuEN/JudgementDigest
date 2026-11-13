@@ -199,6 +199,36 @@ class TestRetrievalArtifacts(unittest.TestCase):
         self.assertEqual(meta["n_cases"], 30)
         self.assertEqual(meta["masking"], "規則")
 
+    def test_original_judgment_url(self):
+        """司法院的原文網址存進 cases.url；不是司法院網域的不收（前端直接當連結）。"""
+        d = synthetic(30)
+        urls = ["https://judgment.judicial.gov.tw/FJUD/data.aspx?ty=JD&id=TPDV%2c113", "https://evil.example/x"] + [""] * 28
+        corpus = pd.DataFrame({"id": d.id, "case_number": "第 1 號", "court": "臺北", "year": "2024",
+                               "case_type_category": "侵權", "case_type_mid": d.mid, "outcome": "勝訴", "y": 1,
+                               "plaintiff_claim_text": d.text, "claimed_amount": 1, "awarded_amount": 1,
+                               "grant_ratio": 1.0, "url": urls})
+        sections = pd.DataFrame({"id": d.id, "plaintiff_claim_text": "", "defendant_defense_text": "",
+                                 "court_reasoning_text": "", "plaintiff": "", "defendant": "",
+                                 "plaintiff_agent": "", "defendant_agent": ""})
+        with tempfile.TemporaryDirectory() as tmp:
+            out = write_artifacts(corpus, sections, Path(tmp) / "r", "test")
+            con = sqlite3.connect(out / "cases.sqlite")
+            con.row_factory = sqlite3.Row
+            rows = con.execute("SELECT * FROM cases ORDER BY row LIMIT 3").fetchall()
+            con.close()
+        self.assertEqual([r["url"] for r in rows], [urls[0], None, None])
+        from backend.civil_service import CivilService
+        self.assertEqual(CivilService._case(rows[0], 0.5)["url"], urls[0])
+
+    def test_old_artifacts_without_url_still_work(self):
+        con = sqlite3.connect(":memory:")
+        con.row_factory = sqlite3.Row
+        con.execute("CREATE TABLE cases (id, case_number, court, year, mid, outcome, summary, claimed_amount, "
+                    "awarded_amount, default_judgment)")
+        con.execute("INSERT INTO cases VALUES (1, '第 1 號', '臺北', '2024', '', '勝訴', '', 1, 1, 0)")
+        from backend.civil_service import CivilService
+        self.assertIsNone(CivilService._case(con.execute("SELECT * FROM cases").fetchone(), 0.5)["url"])
+
     def test_write_artifacts_with_ner_names(self):
         """人名辨識找到、但沒有稱謂的名字也要遮；不像人名的結果不拿來取代。"""
         d = synthetic(30)
