@@ -197,6 +197,30 @@ class TestRetrievalArtifacts(unittest.TestCase):
         self.assertNotIn("陳大華", sec[0] + sec[1])
         self.assertNotIn("簡建祥", sec[0], "別的段落寫了稱謂，這段也要遮")
         self.assertEqual(meta["n_cases"], 30)
+        self.assertEqual(meta["masking"], "規則")
+
+    def test_write_artifacts_with_ner_names(self):
+        """人名辨識找到、但沒有稱謂的名字也要遮；不像人名的結果不拿來取代。"""
+        d = synthetic(30)
+        corpus = pd.DataFrame({"id": d.id, "case_number": "第 1 號", "court": "臺北", "year": "2024",
+                               "case_type_category": "侵權", "case_type_mid": d.mid, "outcome": "勝訴", "y": 1,
+                               "plaintiff_claim_text": "原告主張李惠明於當日陳述" + d.text, "claimed_amount": 1,
+                               "awarded_amount": 1, "grant_ratio": 1.0})
+        sections = pd.DataFrame({"id": d.id, "plaintiff_claim_text": "李惠明於當日交付款項", "defendant_defense_text": "",
+                                 "court_reasoning_text": "李惠明之陳述可採", "plaintiff": "", "defendant": "",
+                                 "plaintiff_agent": "", "defendant_agent": ""})
+        ner = {int(i): ["李惠明", "陳述"] for i in d.id}
+        with tempfile.TemporaryDirectory() as tmp:
+            out = write_artifacts(corpus, sections, Path(tmp) / "r", "test", ner_names=ner)
+            con = sqlite3.connect(out / "cases.sqlite")
+            summary = con.execute("SELECT summary FROM cases WHERE row = 0").fetchone()[0]
+            claim, court = con.execute("SELECT claim, court FROM sections WHERE id = 1").fetchone()
+            con.close()
+            meta = json.loads((out / "meta.json").read_text(encoding="utf-8"))
+        self.assertEqual(claim, "【關係人】於當日交付款項")
+        self.assertEqual(court, "【關係人】之陳述可採")
+        self.assertTrue(summary.startswith("原告主張【關係人】於當日陳述"))
+        self.assertEqual(meta["masking"], "規則＋人名辨識（CKIP）")
 
 
 class TestProvenance(unittest.TestCase):

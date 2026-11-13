@@ -9,7 +9,9 @@
 | `civil.py` | 民事設定：用原告主張建索引（使用者只能提供自己這一方的說法），可限定同一案由中類，附勝敗與金額 |
 | `evaluate.py` | 民事檢索的評估：`python -m retrieval.evaluate` |
 | `build.py` | 建立上線用的檢索資料：`python -m retrieval.build` → `artifacts/retrieval_civil_v3/`（索引、遮名後的案件清單、每件判決提到的證據與抗辯類型） |
-| `masking.py` | 遮名：顯示判決時把當事人姓名換成【原告】【被告】；使用者輸入送出前遮掉身分證字號、電話、電子郵件、地址與指定的名字 |
+| `masking.py` | 遮名：顯示判決時把當事人姓名換成【原告】【被告】、第三人換成【關係人】；使用者輸入送出前遮掉身分證字號、電話、電子郵件、地址、車牌與指定的名字 |
+| `ner.py` | 用 CKIP 人名辨識找出沒有稱謂的人名，存成檔案給 `build.py --ner-names` 用（需要 torch，另外的環境，見 [docs/遮名.md](../docs/遮名.md)） |
+| `masking_audit.py` | 遮名抽查：匯出人工標註表、計算漏遮率（見 [docs/遮名.md](../docs/遮名.md)） |
 | `criminal.py` | 刑事設定：用犯罪事實前 600 字建索引，每個主要罪名最多 1,500 件、新的判決優先；遮被告與有稱謂的人名，附宣告刑與司法院原文網址。`python -m retrieval.criminal --data <CAIL 格式 .jsonl>` → `artifacts/retrieval_criminal_v1/`（目前 88,376 件） |
 
 `evaluate.py` 的評估（文字資料集 v5，隨機 3,000 件當查詢，前 10 件）：鄰居勝訴比例的 AUC 0.732（全部案件）、

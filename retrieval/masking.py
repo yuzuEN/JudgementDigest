@@ -9,7 +9,7 @@
 import re
 from typing import Iterable, List, NamedTuple, Optional
 
-TAGS = {"id": "身分證字號", "phone": "電話", "email": "電子郵件", "address": "地址", "name": "姓名"}
+TAGS = {"id": "身分證字號", "phone": "電話", "email": "電子郵件", "address": "地址", "plate": "車牌", "name": "姓名"}
 
 _NUM = r"[0-9０-９一二三四五六七八九十百之-]"
 # 地址一定要從縣市開始：不限定的話「住在臺北市…」會從「在」開始遮，把前面的字吃掉。
@@ -23,6 +23,13 @@ PATTERNS = [
     ("address", re.compile(_CITY + r"(?:[一-鿿]{1,3}?[區鄉鎮市])?"
                            r"[一-鿿]{1,6}?[路街道大道](?:" + _NUM + r"+段)?(?:" + _NUM + r"+巷)?"
                            r"(?:" + _NUM + r"+弄)?" + _NUM + r"+號(?:之" + _NUM + r"+)?(?:" + _NUM + r"+樓)?")),
+    # 車牌有兩種寫法。一看就是車牌的格式直接遮：汽車 ABC-1234、AB-1234、1234-AB、A1-2345，機車 ABC-123、123-ABC。
+    # 前後不能再接英數字或「-」，「7345-ST-A03」這類圖號才不會被切出一段。ISO-9001 這類標準編號除外。
+    # 其他格式（AB-123、123-AB、法院遮過的 000-0000）要前面寫了「車牌」「車號」才遮；值放在 v 群組，只遮車牌本身。
+    ("plate", re.compile(r"(?<![A-Za-z0-9-])(?!ISO|CNS|SOP|IEC|RFC)"
+                         r"(?:[A-Z]{3}-[0-9]{3,4}|[0-9]{3}-[A-Z]{3}|[0-9]{4}-[A-Z]{2}|[A-Z]{2}-[0-9]{4}"
+                         r"|[A-Z][0-9]-[0-9]{4}|[0-9]{4}-[A-Z][0-9])(?![A-Za-z0-9-])"
+                         r"|(?:車牌|車號|牌照|號牌)(?:號碼|號)?[：:為是即]?\s?(?P<v>[A-Z0-9]{2,4}-?[A-Z0-9]{2,4})(?![A-Za-z0-9-])")),
 ]
 
 
@@ -49,7 +56,8 @@ def find_spans(text: str, names: Iterable[str] = ()) -> List[Span]:
     half = text.translate(_HALF_WIDTH)
     for kind, rx in PATTERNS:
         for m in rx.finditer(half):
-            found.append(Span(m.start(), m.end(), kind, text[m.start():m.end()]))
+            start, end = m.span("v") if "v" in rx.groupindex and m.group("v") else m.span()
+            found.append(Span(start, end, kind, text[start:end]))
     pattern = _name_pattern(names)
     if pattern:
         for m in pattern.finditer(text):
@@ -128,6 +136,36 @@ def third_party_names(text: str) -> List[str]:
             names.add(item.group(1))
             end = item.end()
     return sorted(names)
+
+
+_CJK_NAME = re.compile(r"[一-鿿]{2,4}")
+# 人名辨識在判決裡常見的誤判（100 件實測）：判決用語黏到名字上（「利云云」「固可認」「卷可佐」「伊前夫」「主張渠等」→「張渠」），
+# 以及計算方法等專有名詞。開頭是虛詞、或姓氏之後出現這些字的，都不當人名。
+_NER_BAD_FIRST = set("伊渠其於自更固卷上又詎該本此並另嗣經即")
+_NER_BAD_INNER = set("云伊渠其可卷之於無庸開僅參尚")
+_NOT_PERSON = {"霍夫曼", "萊布尼茲", "萊布尼滋"}
+
+
+def usable_person_names(names: Iterable[str]) -> List[str]:
+    """
+    人名辨識（retrieval/ner.py）找到的名字，挑出可以拿來全文取代的。
+    取代是整件判決找同樣的字串，太短或不像人名的會把一般用語一起遮掉，所以：
+    只收 2–4 個中文字；兩個字的要以常見姓氏開頭（「建國」可能是人名，也會出現在「建國路」）；
+    已經遮過（含「○」）的、和 _NOT_NAME 的常見詞（「陳述」「簡易」）開頭相同的不收。
+    """
+    kept = set()
+    for n in names:
+        n = (n or "").strip()
+        if not _CJK_NAME.fullmatch(n):
+            continue
+        if len(n) == 2 and (n[0] not in _SURNAMES or n[1] in "一二三四五六七八九十百千"):
+            continue          # 「張一」會把「主張一部」也遮掉
+        if n in _NOT_PERSON or n[0] in _NER_BAD_FIRST or _NER_BAD_INNER & set(n[1:]):
+            continue
+        if re.match(_NOT_NAME, n) is None:   # _NOT_NAME 是否定預查，比對失敗＝開頭是常見詞
+            continue
+        kept.add(n)
+    return sorted(kept)
 
 
 def mask_parties(text: str, plaintiffs: Optional[str], defendants: Optional[str],

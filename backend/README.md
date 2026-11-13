@@ -28,7 +28,7 @@ API 文件（可以直接在網頁上試）：http://127.0.0.1:8000/docs
 |---|---|---|
 | `GET /api/health` | 各部分是真的模型還是示例資料 | |
 | `GET /api/meta/options` | 問卷選項：糾紛類型（案由中類）、法院、證據 | 來自模型的訓練資料 |
-| `POST /api/intake/mask` | 遮掉身分證字號、電話、電子郵件、地址、指定的名字 | 規則；網站改在瀏覽器遮名，這個 API 留給其他用途 |
+| `POST /api/intake/mask` | 遮掉身分證字號、電話、電子郵件、地址、車牌、指定的名字 | 規則；網站改在瀏覽器遮名，這個 API 留給其他用途 |
 | `POST /api/intake/followup` | 追問描述裡缺少的事實 | 固定題庫；`allow_llm: true` 且有設定 LLM 時用 LLM |
 | `POST /api/intake/rewrite` | 把描述整理成判決書寫法：民事是原告主張，`case_type: criminal` 是犯罪事實 | LLM；不能用時回傳 `source: none` |
 | `POST /api/civil/predict` | 民事勝訴機率 | 模型 |

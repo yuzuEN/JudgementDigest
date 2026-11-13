@@ -12,7 +12,7 @@
 """
 import re
 import sqlite3
-from typing import Dict, Optional, Tuple
+from typing import Dict, Iterable, Optional, Tuple
 
 import pandas as pd
 
@@ -86,8 +86,11 @@ def expanded_row(row: Dict, derived: Dict) -> Optional[Tuple[Dict, Dict]]:
     return case, section
 
 
-def load_expanded(db=None, chunk: int = 5000) -> Tuple[pd.DataFrame, pd.DataFrame]:
-    """從正式資料庫取第一審的給付、確認案件，用目前的規則在記憶體裡重新推導段落（資料庫不寫入）。"""
+def load_expanded(db=None, chunk: int = 5000, only: Optional[Iterable[int]] = None) -> Tuple[pd.DataFrame, pd.DataFrame]:
+    """
+    從正式資料庫取第一審的給付、確認案件，用目前的規則在記憶體裡重新推導段落（資料庫不寫入）。
+    only：只取這些 id（例如遮名抽查的 200 件），不用讀整個資料庫。
+    """
     config.use_data_pipeline()
     import structuring as S
     con = sqlite3.connect(f"file:{db or config.MAIN_DB}?mode=ro", uri=True)
@@ -95,6 +98,9 @@ def load_expanded(db=None, chunk: int = 5000) -> Tuple[pd.DataFrame, pd.DataFram
     try:
         ids = [r[0] for r in con.execute("SELECT id FROM judgments WHERE party_posture = '第一審對審' "
                                          "AND case_kind_category = '給付確認' ORDER BY id")]
+        if only is not None:
+            wanted = {int(i) for i in only}
+            ids = [i for i in ids if i in wanted]
         cols = ", ".join(["id"] + S.SOURCE_COLUMNS)
         cases, sections = [], []
         for start in range(0, len(ids), chunk):

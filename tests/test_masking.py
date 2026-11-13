@@ -11,7 +11,8 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from retrieval.masking import find_spans, mask, mask_parties, party_names, third_party_names  # noqa: E402
+from retrieval.masking import (find_spans, mask, mask_parties, party_names, third_party_names,  # noqa: E402
+                               usable_person_names)
 
 
 class TestPatterns(unittest.TestCase):
@@ -118,6 +119,38 @@ class TestParties(unittest.TestCase):
     def test_mask_parties_also_masks_patterns(self):
         out = mask_parties("被告住臺中市西區民權路99號", "", "", [])
         self.assertEqual(out, "被告住【地址】")
+
+    def test_mask_parties_masks_plates(self):
+        out = mask_parties("原告騎乘971-KNM號機車，與被告駕駛之車牌號碼AUC-2222號自小客車碰撞", "", "", [])
+        self.assertEqual(out, "原告騎乘【車牌】號機車，與被告駕駛之車牌號碼【車牌】號自小客車碰撞")
+
+
+class TestPlates(unittest.TestCase):
+    def test_plate_span_is_only_the_plate(self):
+        (span,) = find_spans("車號：XY-123")
+        self.assertEqual((span.kind, span.text), ("plate", "XY-123"))
+
+    def test_item_codes_in_a_series_are_not_split(self):
+        self.assertEqual(mask("依結構圖7345-ST-A03施工")[0], "依結構圖7345-ST-A03施工")
+
+
+class TestPersonNames(unittest.TestCase):
+    """人名辨識（CKIP）的結果要篩過才拿來全文取代，否則會把一般用語一起遮掉。"""
+
+    def test_keeps_full_names(self):
+        self.assertEqual(usable_person_names(["李惠明", "歐陽美華", "盧新璋"]), ["李惠明", "歐陽美華", "盧新璋"])
+
+    def test_two_characters_need_a_common_surname(self):
+        self.assertEqual(usable_person_names(["林文", "建國", "美華"]), ["林文"])
+
+    def test_drops_non_names(self):
+        for bad in ("王", "王○明", "王〇明", "John", "王小明先生是", "陳述", "簡易", "曾經", "", None,
+                    "利云云", "固可認", "卷可佐", "伊前夫", "張渠", "許北之", "霍夫曼", "張一"):
+            self.assertEqual(usable_person_names([bad]), [], bad)
+
+    def test_replaced_everywhere_as_third_party(self):
+        names = usable_person_names(["李惠明"])
+        self.assertEqual(mask_parties("李惠明於當日將款項交付", "", "", [], names), "【關係人】於當日將款項交付")
 
 
 if __name__ == "__main__":
