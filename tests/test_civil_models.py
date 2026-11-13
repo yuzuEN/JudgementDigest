@@ -8,6 +8,7 @@ civil/models 的離線測試：合併權重、precision／recall 指標、TF-IDF
 import importlib
 import importlib.util
 import sys
+import subprocess
 import unittest
 from pathlib import Path
 from unittest import mock
@@ -74,9 +75,30 @@ class TestNoArgvAtImport(unittest.TestCase):
                      "需要 torch 與 transformers（.venv-bert）")
 class TestTransformerScriptsImport(unittest.TestCase):
     def test_import(self):
-        for name in ("civil.models.train_bert", "civil.models.train_bert_amount", "civil.models.train_longformer"):
+        for name in ('civil.models.train_bert', 'civil.models.train_bert_amount', 'civil.models.train_longformer'):
             with self.subTest(module=name):
-                importlib.import_module(name)
+                importlib.reload(importlib.import_module(name))
+
+    def test_helpers_do_not_load_transformers(self):
+        # An installed, incompatible optional PEFT package must not affect helper imports.
+        code = """
+import importlib, sys
+sys.modules['transformers'] = None
+for name in ('civil.models.train_bert', 'civil.models.train_bert_amount', 'civil.models.train_longformer'):
+    importlib.import_module(name)
+"""
+        result = subprocess.run([sys.executable, "-c", code], cwd=Path(__file__).resolve().parents[1],
+                                capture_output=True, text=True, timeout=60)
+        self.assertEqual(result.returncode, 0, result.stderr)
+
+    def test_help_without_transformers(self):
+        for name in ('civil.models.train_bert', 'civil.models.train_bert_amount', 'civil.models.train_longformer'):
+            with self.subTest(module=name):
+                code = "import runpy, sys; sys.modules['transformers'] = None; sys.argv = ['train', '--help']; runpy.run_module(%r, run_name='__main__')" % name
+                result = subprocess.run([sys.executable, "-c", code], cwd=Path(__file__).resolve().parents[1],
+                                        capture_output=True, text=True, timeout=60)
+                self.assertEqual(result.returncode, 0, result.stderr)
+                self.assertIn('usage:', result.stdout)
 
 
 if __name__ == "__main__":
