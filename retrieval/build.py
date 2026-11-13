@@ -25,7 +25,8 @@ import config
 from civil.insights import defense_types, evidence_mentions
 from retrieval.civil import load_expanded
 from retrieval.engine import TfidfIndex
-from retrieval.masking import by_appearance, mask_parties, third_party_names, usable_person_names
+from retrieval.masking import (by_appearance, listed_with, mask_parties, party_names, third_party_names,
+                               usable_person_names)
 
 NAME = "retrieval_civil_v3"
 VOCAB_SAMPLE = 60_000     # 字典與 IDF 只用這麼多筆建（完整語料的字元 n-gram 字典太吃記憶體）
@@ -67,6 +68,10 @@ def write_artifacts(corpus: pd.DataFrame, sections: pd.DataFrame, out: Path, ver
               zip(corpus.plaintiff_claim_text, s.plaintiff_claim_text, s.defendant_defense_text, s.court_reasoning_text)]
     if ner_names is not None:
         others = [set(o) | set(usable_person_names(ner_names.get(int(i), []))) for o, i in zip(others, corpus.id)]
+    # 列舉裡夾在已知名字之間、人名辨識漏掉的名字（「【關係人80】、吳渭渠、【關係人83】」）
+    others = [set(o) | set(listed_with("\n".join(parts), set(o) | set(party_names(p, d))))
+              for o, parts, p, d in zip(others, zip(s.plaintiff_claim_text, s.defendant_defense_text,
+                                                    s.court_reasoning_text), s.plaintiff, s.defendant)]
     # 【關係人1】【關係人2】依導讀的閱讀順序（原告主張、被告答辯、法院判斷）第一次出現的位置編號
     others = [by_appearance(o, "\n".join(parts)) for o, parts in
               zip(others, zip(s.plaintiff_claim_text, s.defendant_defense_text, s.court_reasoning_text))]

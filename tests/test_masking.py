@@ -34,9 +34,16 @@ class TestPatterns(unittest.TestCase):
         self.assertMasked("新北市板橋區文化路1段21巷5號", "【地址】")
         self.assertMasked("寄到台中市西區民權路99號之1", "寄到【地址】")
 
-    def test_address_without_city_is_left_for_the_user(self):
-        """沒有縣市的地址不自動遮（否則會把前面的字一起吃掉），由使用者在預覽時補遮。"""
-        self.assertMasked("住大安區和平東路106號", "住大安區和平東路106號")
+    def test_address_without_city(self):
+        """沒有縣市、但有門牌號碼的地址也遮；前面的「住」「因當時」「系爭」不能被吃進去。"""
+        self.assertMasked("住大安區和平東路106號", "住【地址】")
+        self.assertMasked("因當時東門街68號房屋", "因當時【地址】房屋")
+        self.assertMasked("系爭中山路二段5號房屋", "系爭【地址】房屋")
+        self.assertMasked("坐落永靖鄉同安村永福路1段664號建物", "坐落【地址】建物")
+
+    def test_road_without_house_number_untouched(self):
+        for text in ("沿中山路往南行駛", "民法第184條第1項", "本院卷第12號", "行經該路三段"):
+            self.assertMasked(text, text)
 
     def test_given_names(self):
         self.assertMasked("王小明開車撞到我，王小明的太太也在車上", "【姓名】開車撞到我，【姓名】的太太也在車上",

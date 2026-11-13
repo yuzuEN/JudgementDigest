@@ -9,12 +9,25 @@
 import re
 from typing import Iterable, List, NamedTuple, Optional
 
-TAGS = {"id": "身分證字號", "phone": "電話", "email": "電子郵件", "address": "地址", "plate": "車牌", "name": "姓名"}
+TAGS = {"id": "身分證字號", "phone": "電話", "email": "電子郵件", "address": "地址", "plate": "車牌", "birth": "出生日期", "name": "姓名"}
 
 _NUM = r"[0-9０-９一二三四五六七八九十百之-]"
-# 地址一定要從縣市開始：不限定的話「住在臺北市…」會從「在」開始遮，把前面的字吃掉。
-# 只寫區、路的地址不會自動遮，使用者可以在預覽時補上。
+# 地址有兩條規則：從縣市開始的完整地址，以及沒寫縣市、但有門牌號碼的地址（「中庄街71巷56號」）。
+# 沒寫縣市的地址一律遮，不看前後文（2026-11-13 改）：只看「門牌」「房屋」這類前後文時，
+# 「承租富宜路270號」「不動產所在地：楊梅鎮高獅路711號」都會漏掉。代價是車禍地點也會遮（「停於【地址】前」），句子仍讀得懂。
+# 路名不能含「時、於、在、因」這類虛詞：「住在…」「因當時東門街68號」才會從路名開始遮，不會把前面的字吃掉。
 _CITY = r"(?:[臺台](?:北|中|南|東)|新北|桃園|高雄|基隆|新竹|嘉義|苗栗|彰化|南投|雲林|屏東|宜蘭|花蓮|澎湖|金門|連江)[市縣]"
+# 單字：幾乎不會出現在路名裡的虛詞與動詞；詞：「經」「由」「前」「開」可能是路名（經國路、自由路、前鎮區、開元路），
+# 只擋判決常見的詞（「經查」「由於」「之前」「當時」）
+_ROAD_STOP_WORDS = "當時|前往|之前|以前|先前|經查|經過|經由|由於|開設|開始|自行|向來|至於|後來|前開|上開|嗣後"
+_ROAD_STOP_CHARS = "時於在因即為將之與及等坐落住址號的係而並其該已爭稱到寄搬去送回從赴往位系本沿"
+# 詞的第二個字也要擋（「經查」的「查」），否則會從「查」開始遮，留下「經【地址】」
+_ROAD_STOP_SECOND = "|".join(f"(?<={w[0]}){w[1]}" for w in _ROAD_STOP_WORDS.split("|"))
+_ROAD_CHAR = (r"(?:(?!" + _ROAD_STOP_WORDS + r")(?!" + _ROAD_STOP_SECOND + r")(?![" + _ROAD_STOP_CHARS + r"])[一-鿿])")
+_ADDR_NO_CITY = (r"(?:" + _ROAD_CHAR + r"{1,3}[區鄉鎮市])?(?:" + _ROAD_CHAR + r"{1,3}[村里])?"
+                 + _ROAD_CHAR + r"{1,5}(?:路|街|大道)"
+                 r"(?:" + _NUM + r"+段)?(?:" + _NUM + r"+巷)?(?:" + _NUM + r"+弄)?" + _NUM + r"+號"
+                 r"(?:之" + _NUM + r"+)?(?:" + _NUM + r"+樓)?(?:之" + _NUM + r"+)?")
 PATTERNS = [
     ("id", re.compile(r"(?<![A-Za-z0-9])[A-Z][12489]\d{8}(?![0-9])")),
     ("email", re.compile(r"[\w.+-]+@[\w-]+(?:\.[\w-]+)+")),
@@ -23,9 +36,13 @@ PATTERNS = [
     ("address", re.compile(_CITY + r"(?:[一-鿿]{1,3}?[區鄉鎮市])?"
                            r"[一-鿿]{1,6}?[路街道大道](?:" + _NUM + r"+段)?(?:" + _NUM + r"+巷)?"
                            r"(?:" + _NUM + r"+弄)?" + _NUM + r"+號(?:之" + _NUM + r"+)?(?:" + _NUM + r"+樓)?")),
+    ("address", re.compile(_ADDR_NO_CITY)),
     # 車牌有兩種寫法。一看就是車牌的格式直接遮：汽車 ABC-1234、AB-1234、1234-AB、A1-2345，機車 ABC-123、123-ABC。
     # 前後不能再接英數字或「-」，「7345-ST-A03」這類圖號才不會被切出一段。ISO-9001 這類標準編號除外。
     # 其他格式（AB-123、123-AB、法院遮過的 000-0000）要前面寫了「車牌」「車號」才遮；值放在 v 群組，只遮車牌本身。
+    # 出生年月日（法院公開判決時不含，但偶爾漏掉）：「89年4月6日生，」「民國41年1月15日出生」。
+    # 後面要接標點或結尾，「112年1月4日生送達效力」「…日生效」才不會被遮。
+    ("birth", re.compile(r"(?:民國)?(?<![0-9])[0-9]{2,3}年[0-9]{1,2}月[0-9]{1,2}日(?:出生|生)(?=[，,。、；;（(）)\s]|$)")),
     ("plate", re.compile(r"(?<![A-Za-z0-9-])(?!ISO|CNS|SOP|IEC|RFC)"
                          r"(?:[A-Z]{3}-[0-9]{3,4}|[0-9]{3}-[A-Z]{3}|[0-9]{4}-[A-Z]{2}|[A-Z]{2}-[0-9]{4}"
                          r"|[A-Z][0-9]-[0-9]{4}|[0-9]{4}-[A-Z][0-9])(?![A-Za-z0-9-])"
@@ -108,7 +125,8 @@ _SURNAMES = ("陳林黃張李王吳劉蔡楊許鄭謝郭洪曾邱廖賴徐周葉
              "于譚駱熊任甘秦顧毛賀史")
 _NAME_STOP = "於和與及等到之的為在表稱證並則就係已曾亦是向對將把被有無不所以而但"
 _THIRD_PARTY_RE = re.compile(
-    r"(?:訴外人|證人|鑑定人|受僱人|配偶|之子|之女|之妻|之夫|父親|母親|兒子|女兒|胞兄|胞弟|胞姊|胞妹)"
+    r"(?:訴外人|證人|鑑定人|受僱人|配偶|之子|之女|之妻|之夫|父親|母親|兒子|女兒|胞兄|胞弟|胞姊|胞妹|之孫|曾孫|孫女|孫子|"
+    r"友人|朋友|同事|鄰居|女友|男友|前妻|前夫|同居人|房東|房客)"
     r"(?!方面|任何|連同|高度|金額|程度|石油)"
     r"([" + _SURNAMES + r"](?:(?![" + _NAME_STOP + r"])[一-鿿]){1,2})")
 
@@ -124,25 +142,48 @@ _NAMED_AS_RE = re.compile(
 _NAME_LIST_RE = re.compile(r"、" + _NOT_NAME + r"(" + _NAME + r")(?=[、，。）)及與和等共合均]|$)")
 
 
+def _follow_list(text: str, end: int, names: set) -> None:
+    """從 end 開始往後找「、王大明、謝新潭」這種列舉，找到的名字加進 names。"""
+    while True:
+        item = _NAME_LIST_RE.match(text, end)
+        if not item:
+            return
+        names.add(item.group(1))
+        end = item.end()
+
+
 def third_party_names(text: str) -> List[str]:
     text = text or ""
     names = set(_THIRD_PARTY_RE.findall(text)) | set(_NAMED_AS_RE.findall(text))
     for found in list(_THIRD_PARTY_RE.finditer(text)) + list(_NAMED_AS_RE.finditer(text)):
-        end = found.end()
-        while True:
-            item = _NAME_LIST_RE.match(text, end)
-            if not item:
-                break
-            names.add(item.group(1))
-            end = item.end()
+        _follow_list(text, found.end(), names)
     return sorted(names)
+
+
+def listed_with(text: str, known: Iterable[str]) -> List[str]:
+    """
+    列舉裡跟在已知名字後面的名字（「【關係人80】、吳渭渠、【關係人83】」原文是一串人名，
+    人名辨識漏掉其中一個時，靠前一個已知的名字補上）。回傳新找到的名字。
+    """
+    text = text or ""
+    known = {n for n in known if n}
+    pattern = _name_pattern(known)
+    if not pattern:
+        return []
+    found = set()
+    for m in pattern.finditer(text):
+        _follow_list(text, m.end(), found)
+    return sorted(found - known)
 
 
 _CJK_NAME = re.compile(r"[一-鿿]{2,4}")
 # 人名辨識在判決裡常見的誤判（100 件實測）：判決用語黏到名字上（「利云云」「固可認」「卷可佐」「伊前夫」「主張渠等」→「張渠」），
 # 以及計算方法等專有名詞。開頭是虛詞、或姓氏之後出現這些字的，都不當人名。
 _NER_BAD_FIRST = set("伊渠其於自更固卷上又詎該本此並另嗣經即")
-_NER_BAD_INNER = set("伊渠其可卷之於無庸開僅參尚")     # 「云」不放：「曾湘云」是真名，只排除「云云」
+# 「之、渠、其、開」不放：「張之瑋」「吳渭渠」「陳其邁」「儲開軒」是真名；「云」也不放（「曾湘云」），只排除「云云」
+_NER_BAD_INNER = set("伊可卷於無庸僅參尚")
+# 「之孫鄭維德」會被辨識出「孫鄭」：親屬稱謂接姓氏的兩個字不是人名（取代時還會切斷後面的「鄭宇峰」）
+_KINSHIP_FIRST = set("孫子女妻夫父母兄弟姊妹姪甥媳婿")
 # 法院給未成年人或匿名者的代稱（「蘇童」＝姓蘇的兒童、「王姓」「陳某」「林女」），不是真名，不用遮
 _PSEUDONYM_SECOND = set("童姓某氏男女")
 _NOT_PERSON = {"霍夫曼", "萊布尼茲", "萊布尼滋"}
@@ -164,7 +205,10 @@ def usable_person_names(names: Iterable[str]) -> List[str]:
             continue          # 「張一」會把「主張一部」也遮掉
         if n in _NOT_PERSON or n[0] in _NER_BAD_FIRST or _NER_BAD_INNER & set(n[1:]) or "云云" in n:
             continue
-        if len(n) == 2 and n[1] in _PSEUDONYM_SECOND:
+        if n.endswith("之"):        # 「余梅之出資」「許北之」：後面的字黏上來
+            continue
+        if len(n) == 2 and (n[1] in _PSEUDONYM_SECOND or n[1] in "伊渠其"
+                            or (n[0] in _KINSHIP_FIRST and n[1] in _SURNAMES)):
             continue
         if re.match(_NOT_NAME, n) is None:   # _NOT_NAME 是否定預查，比對失敗＝開頭是常見詞
             continue
@@ -201,8 +245,12 @@ def mask_parties(text: str, plaintiffs: Optional[str], defendants: Optional[str]
     同一個人在別的段落可能沒有寫稱謂；同一件判決的每一段都要傳同樣的 others，編號才會一致。
     """
     text = text or ""
-    for role, field in (("原告", plaintiffs), ("被告", defendants)):
-        text = _replace_names(text, _role_tags(party_names(field), role))
-    text = _replace_names(text, _role_tags(party_names(*agents), "代理人"))
-    text = _replace_names(text, _role_tags(others, "關係人"))
+    tags = {}
+    for names, role in ((party_names(plaintiffs), "原告"), (party_names(defendants), "被告"),
+                        (party_names(*agents), "代理人"), (list(others), "關係人")):
+        for name, tag in _role_tags(names, role).items():
+            tags.setdefault(name, tag)        # 同一個名字出現在兩種角色時，以前面的角色為準
+    # 長的名字先全部換掉，再換短的：「曾孫鄭宇峰」裡，誤判的「孫鄭」不會比「鄭宇峰」先換掉而切斷它
+    for length in sorted({len(n) for n in tags}, reverse=True):
+        text = _replace_names(text, {n: t for n, t in tags.items() if len(n) == length})
     return mask(text)[0]
