@@ -1,13 +1,16 @@
 """
 文字預測（TF-IDF／BERT）用的資料集。
 
+    python -m civil.dataset.fields v6                     # v6 先產生 fields_v6.csv（樣本母體與結構化變數）
+    python -m civil.dataset.build_dataset v6              # 產生 text_dataset_v6.csv
     python -m civil.dataset.build_dataset v5              # 產生 text_dataset_v5.csv
     python -m civil.dataset.build_dataset v5 _試建        # 輸出 text_dataset_v5_試建.csv，不覆蓋正式檔
 
 輸入（路徑見 config.py，資料版本見 docs/資料版本.md）：
   - 分析用資料庫 judgments_work_20261112.db（規則 2.5.2 的固定副本，唯讀；和 20261014、20261108 的 id 相同）
-  - analysis_fields.pkl：A2 對審樣本（is_default_judgment=0、結果為四類之一）
-  - v5 另讀 text_dataset_v4.csv，沿用 v4 案件的折別
+  - 樣本母體：v6 讀 fields_v6.csv（civil/dataset/fields.py 從分析用資料庫算），v5 以前讀 analysis_fields.pkl；
+    取 A2 對審樣本（is_default_judgment=0、結果為四類之一）
+  - v5 另讀 text_dataset_v4.csv，沿用 v4 案件的折別；v6 讀 text_dataset_v5.csv，沿用 v5 的折別
 母體：A2 對審樣本，再：
   排除（樣本定義）
     - 一造辯論被換行切開而漏抓的案件（去空白後含「由其一造辯論／一造辯論而為判決」）
@@ -38,6 +41,11 @@ v5（2026-10-25，規則 2.5.0）：
   - 聲明整段刪；段尾的段落編號刪掉；正規化同 v4b，另把 ㊀–㊉ 轉成 ㈠–㈩
   - 法院用語的排除規則同 v4，只有「經查證」不算「經查」
   - 折別：v4 有的案件沿用 v4 的 fold、val_half；新案件併進同模板組所在的折，其餘重新分層分組
+
+v6（2026-11-13，規則 2.5.2）：
+  - 樣本母體與結構化變數改從分析用資料庫（judgments_work_20261112.db）直接算（fields.py），不再讀
+    analysis_fields.pkl；母體定義不變。文字規則同 v5
+  - 折別：v5 有的案件沿用 v5 的 fold、val_half（in_v5 欄），新案件的處理同 v5
 """
 import argparse
 import re
@@ -48,28 +56,30 @@ import pandas as pd
 from sklearn.model_selection import StratifiedGroupKFold, StratifiedKFold
 
 import config
+from civil.dataset.fields import load_fields
 from civil.dataset.text import (ABSENT_RE, DEFAULT_RE, PLAINTIFF_PRAYER_END_RE, PROC_HEAD_RE, VERSIONS,
-                                leak_re, n_case_numbers, normalize_text, strip_for_version)
+                                leak_re, n_case_numbers, normalize_text, strip_for_version, v5_rules)
 
 SEED = 42
 OUTCOMES = ["勝訴", "一部勝訴一部敗訴", "敗訴", "確認勝訴"]
+PREV = {"v5": "v4", "v6": "v5"}     # 沿用哪一版的折別
 
 
 def build(version: str, suffix: str = "") -> pd.DataFrame:
-    assert version in VERSIONS, "只支援 v3、v4、v4b、v5（v0–v2 的規則已併入 v3）"
-    v4 = version in ("v4", "v4b", "v5")
-    v5 = version == "v5"
+    assert version in VERSIONS, "只支援 v3、v4、v4b、v5、v6（v0–v2 的規則已併入 v3）"
+    v4 = version in ("v4", "v4b", "v5", "v6")
+    v5 = v5_rules(version)           # v5 起：在記憶體裡用目前的規則重新推導、沿用上一版的折別
     tag = version + suffix
     config.use_data_pipeline()
     import structuring as S
 
-    base = pd.read_pickle(config.FIELDS_PKL)
+    base = load_fields(version)
     a2 = base[base.is_default_judgment == 0]
     con = sqlite3.connect(f"file:{config.WORK_DB}?mode=ro", uri=True)
     con.execute("CREATE TEMP TABLE ids(id INTEGER PRIMARY KEY)")
     con.executemany("INSERT INTO ids VALUES (?)", [(int(i),) for i in a2.id])
     if v5:
-        # 資料庫是 2.4.0；v5 用目前的 structuring.py（2.5.0）在記憶體裡重新推導，不寫回資料庫
+        # 用目前的 structuring.py 在記憶體裡重新推導，不寫回資料庫（v5 建立時資料庫還是 2.4.0）
         src = ", ".join(f"j.{c}" for c in S.SOURCE_COLUMNS)
         df = pd.read_sql(f"SELECT j.id, {src} FROM judgments j JOIN ids USING (id)", con)
         derived = pd.DataFrame([S.derive_structured_fields(r) for r in
@@ -137,7 +147,7 @@ def build(version: str, suffix: str = "") -> pd.DataFrame:
         df[col] = df[col].fillna("").map(lambda t: strip_for_version(t, version))
     n_before = len(df)
     df = df[(df.plaintiff_claim_text.str.len() >= 50) & (df.defendant_defense_text.str.len() >= 30)].copy()
-    short = "v5" if v5 else ("v4" if v4 else "v3")
+    short = version if v5 else ("v4" if v4 else "v3")
     flow.append((f"（{short}）刪除聲明句後，原告主張少於 50 字或答辯少於 30 字", -(n_before - len(df))))
     if v4:   # 正規化放在所有篩選之後：㈠→(一) 會讓字數變多，放在前面會改變長度門檻的結果
         for col in ("plaintiff_claim_text", "defendant_defense_text"):
@@ -157,29 +167,36 @@ def build(version: str, suffix: str = "") -> pd.DataFrame:
         df["group"] = pd.factorize(key)[0]
         df["val_half"] = 0
         if v5:
-            # v4 有的案件沿用 v4 的折別與驗證集，v4 與 v5 才能在同一批案件上做成對比較（G9 消融）。
-            # 同一模板組的新案件放進該組 v4 案件最多的那一折；整組都是新案件的，另外分層分組。
-            prev = pd.read_csv(config.dataset_path("v4"), usecols=["id", "fold", "val_half"])
+            # 上一版（v5 是 v4，v6 是 v5）有的案件沿用上一版的折別與驗證集，兩版才能在同一批案件上做成對比較
+            # （G9 消融）。同一模板組的新案件放進該組舊案件最多的那一折；整組都是新案件的，另外分層分組。
+            prev_v = PREV[version]
+            prev = pd.read_csv(config.dataset_path(prev_v), usecols=["id", "fold", "val_half"])
             df = df.merge(prev.rename(columns={"fold": "fold4", "val_half": "vh4"}), on="id", how="left")
             old = df[df.fold4.notna()]
             g_fold = old.groupby("group").fold4.agg(lambda s: s.mode().iloc[0])
             g_vh = old.groupby("group").vh4.agg(lambda s: s.mode().iloc[0])
             n_conflict = int((old.fold4 != old.group.map(g_fold)).sum())
-            print(f"v4 案件 {len(old):,}（模板組內 v4 折別不一致而改折的 {n_conflict} 件）")
+            print(f"{prev_v} 案件 {len(old):,}（模板組內 {prev_v} 折別不一致而改折的 {n_conflict} 件）")
             hit = df.group.isin(g_fold.index)
             df.loc[hit, "fold"] = df.loc[hit, "group"].map(g_fold).astype(int)
             df.loc[hit, "val_half"] = df.loc[hit, "group"].map(g_vh).astype(int)
             new = df[~hit]
-            sgk = StratifiedGroupKFold(n_splits=5, shuffle=True, random_state=SEED)
-            for k, (_, te) in enumerate(sgk.split(new, new.y, new.group)):
-                df.loc[new.index[te], "fold"] = k
+            if new.group.nunique() >= 5:
+                sgk = StratifiedGroupKFold(n_splits=5, shuffle=True, random_state=SEED)
+                for k, (_, te) in enumerate(sgk.split(new, new.y, new.group)):
+                    df.loc[new.index[te], "fold"] = k
+            else:
+                # 新的模板組不到 5 組（v6 只多幾件）：依組號順序，每組放進目前件數最少的那一折
+                for g in sorted(new.group.unique()):
+                    sizes = df.loc[df.fold >= 0, "fold"].value_counts().reindex(range(5), fill_value=0)
+                    df.loc[new.index[new.group == g], "fold"] = int(sizes.idxmin())
             for k in range(5):
                 part = df[(df.fold == k) & ~hit]
                 if part.group.nunique() >= 2:
                     half = StratifiedGroupKFold(n_splits=2, shuffle=True, random_state=SEED)
                     _, h = next(half.split(part, part.y, part.group))
                     df.loc[part.index[h], "val_half"] = 1
-            df["in_v4"] = df.fold4.notna().astype(int)
+            df[f"in_{prev_v}"] = df.fold4.notna().astype(int)
         else:
             sgk = StratifiedGroupKFold(n_splits=5, shuffle=True, random_state=SEED)
             for k, (_, te) in enumerate(sgk.split(df, df.y, df.group)):
@@ -196,7 +213,7 @@ def build(version: str, suffix: str = "") -> pd.DataFrame:
     cols = ["id", "case_number", "court", "year", "case_kind", "case_type", "case_type_category",
             "case_type_mid", "outcome", "y", "fold", "plaintiff_claim_text", "defendant_defense_text"]
     if v4:
-        cols[cols.index("fold") + 1:cols.index("fold") + 1] = ["val_half", "group"] + (["in_v4"] if v5 else [])
+        cols[cols.index("fold") + 1:cols.index("fold") + 1] = ["val_half", "group"] + ([f"in_{PREV[version]}"] if v5 else [])
     out = config.DATASET_DIR / f"text_dataset_{tag}.csv"
     df[cols].to_csv(out, index=False, encoding="utf-8")
     config.OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
