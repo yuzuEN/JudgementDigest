@@ -1,7 +1,7 @@
 """
 平台用的獲償比例模型（第一版，兩階段的第二階段）：「如果是一部勝訴，原告大約贏幾成」。
 
-    python -m civil.models.amount_service evaluate     # 5 折評估，輸出 amount_service_v5.md
+    python -m civil.models.amount_service evaluate     # 5 折評估（預設 v6 資料集），輸出 amount_service_v6.md
     python -m civil.models.amount_service train        # 用全部資料訓練，存到 artifacts/civil_amount_v1/
 
 兩階段：第一階段是勝敗模型（civil.models.service，勝訴機率）；這個模型是第二階段，只回答
@@ -33,6 +33,7 @@ from sklearn.linear_model import Ridge
 from sklearn.preprocessing import OneHotEncoder
 
 import config
+from civil.dataset.fields import load_fields
 from civil.dataset.text import prepare_input
 from civil.features import ITEM_PATTERNS, ITEMS
 from civil.models.service import FEATURES, UNKNOWN, features_frame
@@ -49,9 +50,9 @@ CLAIM_CLIP = (1, 99)       # 請求金額（log10）裁到訓練資料的這兩�
 
 
 # ── 資料 ──
-def select_sample(d: pd.DataFrame) -> pd.DataFrame:
+def select_sample(d: pd.DataFrame, version: str = "v5") -> pd.DataFrame:
     """樣本條件同 amount.py 的主分析（一部勝訴）；回傳篩選後的資料與每一步的件數。"""
-    flow = [("v5 全部", len(d))]
+    flow = [(f"{version} 全部", len(d))]
     d = d[d.outcome == "一部勝訴一部敗訴"]
     flow.append(("一部勝訴一部敗訴", len(d)))
     d = d[d.grant_ratio_source == "計算"]
@@ -96,7 +97,7 @@ def load_training(version: str = "v5", rules: str = "current") -> pd.DataFrame:
     assert rules in ("current", "db")
     t = pd.read_csv(config.dataset_path(version), usecols=["id", "case_type_category", "case_type_mid", "outcome",
                                                            "fold", "plaintiff_claim_text"])
-    f = pd.read_pickle(config.FIELDS_PKL)[["id", "court_s", "plaintiff_has_lawyer", "defendant_is_corp"]]
+    f = load_fields(version)[["id", "court_s", "plaintiff_has_lawyer", "defendant_is_corp"]]
     d = t.merge(f, on="id", how="left", validate="1:1")
     with closing(sqlite3.connect(f"file:{config.WORK_DB}?mode=ro", uri=True)) as con:
         if rules == "db":
@@ -110,7 +111,7 @@ def load_training(version: str = "v5", rules: str = "current") -> pd.DataFrame:
             a = a.drop(columns="structuring_version")
         else:
             a, rule_version = rederive_amounts(d.id, con)
-    d = select_sample(d.merge(a, on="id", how="left", validate="1:1"))
+    d = select_sample(d.merge(a, on="id", how="left", validate="1:1"), version)
     flow = d.attrs["flow"]
     d["text"] = d.plaintiff_claim_text.fillna("")
     d["mid"] = d.case_type_mid.fillna("其他")
@@ -373,7 +374,7 @@ def usable_for(meta: Dict, mid: Optional[str], min_cases: int) -> bool:
 def main():
     ap = argparse.ArgumentParser(description="平台用的獲償比例模型（第一版）")
     ap.add_argument("action", choices=("evaluate", "train"))
-    ap.add_argument("--version", default="v5")
+    ap.add_argument("--version", default="v6")
     ap.add_argument("--out", default=None, help="模型輸出資料夾；預設 artifacts/civil_amount_v1")
     ap.add_argument("--rules", choices=("current", "db"), default="current",
                     help="金額欄位：current＝用目前的 structuring.py 重新推導（2.5.1，預設）；db＝資料庫的欄位（版本以資料庫為準）")

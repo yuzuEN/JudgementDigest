@@ -1,4 +1,6 @@
-# JudgementDigest：刑事及民事類案判決參考平台
+# CasEY：刑事及民事類案判決參考平台
+
+（repo 名稱 JudgementDigest 是開發代號）
 
 面臨法律糾紛時，民眾往往不清楚自身的法律風險，也不知道下一步該怎麼做。自行上網搜尋或詢問生成式 AI，可能得到不存在的判決或沒有依據的說法。
 
@@ -121,7 +123,7 @@ docker compose up --build
 
 開 http://localhost:8080 。8080 被占用時改用別的 port：`JD_PORT=8180 docker compose up --build`。
 
-模型與檢索資料（`artifacts/`）不在 repo 裡。模型從 Hugging Face 下載（見下面的「模型檔（Hugging Face）」），檢索資料由組內另外分享：
+模型與檢索資料（`artifacts/`）不在 repo 裡。模型從 Hugging Face 下載（見下面的「模型檔（Hugging Face）」），刑事的檢索資料由組內另外分享：
 
 | 情況 | 民事顯示 | 適合 |
 |---|---|---|
@@ -139,9 +141,10 @@ docker compose up --build
 | `criminal_term/` | 刑度 ELECTRA（約 410 MB） | `scripts/sync_criminal_term.sh` |
 | `criminal_v1/` | 刑事罪名、法條 SVM（約 220 MB） | `scripts/sync_criminal_models.sh` |
 | `civil_winloss_v1/` | 民事勝敗模型（約 9 MB） | `scripts/sync_civil_models.sh` |
-| `civil_amount_v1/` | 民事獲償比例模型（約 8 MB） | 同上（兩個民事模型一起下載） |
+| `civil_amount_v1/` | 民事獲償比例模型（約 8 MB） | 同上（民事三個資料夾一起下載） |
+| `retrieval_civil_v3/` | 民事相似判決檢索（約 2.6 GB） | 同上 |
 
-其他資料夾（民事檢索、刑事檢索）還在組內另外傳。上傳方式見 [`docs/模型檔上傳.md`](docs/模型檔上傳.md)。
+其他資料夾（刑事檢索）還在組內另外傳。上傳方式見 [`docs/模型檔上傳.md`](docs/模型檔上傳.md)。
 
 第一次使用：
 

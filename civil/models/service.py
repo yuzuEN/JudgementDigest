@@ -1,7 +1,7 @@
 """
 平台用的勝敗模型（第一版）：只用原告主張的 TF-IDF ＋ 使用者填得出來的案件特徵。
 
-    python -m civil.models.service evaluate     # 5 折評估，輸出 service_model_v5.md
+    python -m civil.models.service evaluate     # 5 折評估（預設 v6 資料集），輸出 service_model_v6.md
     python -m civil.models.service train        # 用全部資料訓練，存到 artifacts/civil_winloss_v1/
 
 為什麼不用兩造的模型（勝訴 F1 0.791、敗訴 F1 0.680）：平台上的使用者只能提供自己這一方的說法，沒有被告答辯；
@@ -28,6 +28,7 @@ from sklearn.metrics import brier_score_loss, precision_recall_fscore_support, r
 from sklearn.preprocessing import OneHotEncoder
 
 import config
+from civil.dataset.fields import load_fields
 from civil.dataset.text import prepare_input
 from civil.models.tfidf import logreg, vec
 
@@ -42,7 +43,7 @@ SEED = 42
 def load_training(version: str = "v5") -> pd.DataFrame:
     t = pd.read_csv(config.dataset_path(version), usecols=["id", "case_type_category", "case_type_mid", "y", "fold",
                                                            "plaintiff_claim_text"])
-    f = pd.read_pickle(config.FIELDS_PKL)[["id", "court_s", "plaintiff_has_lawyer", "defendant_is_corp"]]
+    f = load_fields(version)[["id", "court_s", "plaintiff_has_lawyer", "defendant_is_corp"]]
     d = t.merge(f, on="id", how="left", validate="1:1")
     d["text"] = d.plaintiff_claim_text.fillna("")
     d["mid"] = d.case_type_mid.fillna("其他")
@@ -208,7 +209,7 @@ def report(results: Dict, version: str, n: int) -> str:
 def main():
     ap = argparse.ArgumentParser(description="平台用的勝敗模型（第一版）")
     ap.add_argument("action", choices=("evaluate", "train"))
-    ap.add_argument("--version", default="v5")
+    ap.add_argument("--version", default="v6")
     ap.add_argument("--out", default=None, help="模型輸出資料夾；預設 artifacts/civil_winloss_v1")
     a = ap.parse_args()
     t0 = time.time()
