@@ -155,7 +155,7 @@ def main():
     sub = ap.add_subparsers(dest="cmd", required=True)
     s = sub.add_parser("sample", help="抽判決，匯出標註表（.xlsx）")
     s.add_argument("--out", required=True, type=Path)
-    s.add_argument("--cases", type=Path, default=Path(config.ARTIFACTS_DIR) / "retrieval_civil_v3" / "cases.sqlite")
+    s.add_argument("--cases", type=Path, default=Path(config.ARTIFACTS_DIR) / "retrieval_civil_v4" / "cases.sqlite")
     s.add_argument("--n", type=int, default=200)
     s.add_argument("--seed", type=int, default=1)
     s.add_argument("--exclude-from", type=Path, nargs="*", default=[], help="不要抽到這些標註表裡的判決")

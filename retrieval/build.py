@@ -1,7 +1,7 @@
 """
 建立上線用的民事檢索資料：索引、案件清單（已遮名）、每件判決提到的證據與被告抗辯類型。
 
-    python -m retrieval.build                  # 輸出到 artifacts/retrieval_civil_v3/
+    python -m retrieval.build                  # 輸出到 artifacts/retrieval_civil_v4/
     python -m retrieval.build --ner-names data_masking/ner_civil.jsonl   # 加上人名辨識找到的名字（retrieval/ner.py）
 
 輸出：
@@ -28,7 +28,7 @@ from retrieval.engine import TfidfIndex
 from retrieval.masking import (by_appearance, listed_with, mask_parties, party_names, rare_two_char_names,
                                third_party_names, usable_person_names)
 
-NAME = "retrieval_civil_v3"
+NAME = "retrieval_civil_v4"
 VOCAB_SAMPLE = 60_000     # 字典與 IDF 只用這麼多筆建（完整語料的字元 n-gram 字典太吃記憶體）
 SUMMARY_LEN = 90
 JUDICIAL_PREFIX = "https://judgment.judicial.gov.tw/"

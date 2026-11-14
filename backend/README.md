@@ -44,13 +44,13 @@ API 文件（可以直接在網頁上試）：http://127.0.0.1:8000/docs
 讀 `artifacts/`（`config.py` 的 `ARTIFACTS_DIR`，可用環境變數 `JD_ARTIFACTS_DIR` 改）：
 
 - `civil_winloss_v1/`：`python -m civil.models.service train` 產生
-- `retrieval_civil_v3/`：`python -m retrieval.build` 產生
+- `retrieval_civil_v4/`：`python -m retrieval.build` 產生
 - `civil_amount_v1/`（選用）：`python -m civil.models.amount_service train` 產生
-- `civil_winloss_v1/`、`civil_amount_v1/`、`retrieval_civil_v3/` 也可以從 Hugging Face 下載：`scripts/sync_civil_models.sh`（見根目錄 README 的「模型檔」）
+- `civil_winloss_v1/`、`civil_amount_v1/`、`retrieval_civil_v4/` 也可以從 Hugging Face 下載：`scripts/sync_civil_models.sh`（見根目錄 README 的「模型檔」）
 - `criminal_v1/`、`retrieval_criminal_v1/`：刑事罪名、法條模型與相似判決檢索（PR #39，`python -m criminal.models.service`、`python -m retrieval.criminal` 產生）；`criminal_v1/` 可以從 Hugging Face 下載：`scripts/sync_criminal_models.sh`
 - `criminal_term/`：刑度 ELECTRA（6 區間，和 SVM 相同），Kaggle `term-bucket-future-seed42-20261110` 的輸出（`best.pt`、`tokenizer/`、`encoder_config/`、`experiment_summary.json`）；沒有時刑度用 SVM。從 Hugging Face 下載：`scripts/sync_criminal_term.sh`（見根目錄 README 的「模型檔」）
 
-`civil_winloss_v1/`、`retrieval_civil_v3/` 任一個不存在時，民事改回傳示例資料；沒有 `criminal_v1/` 時罪名、法條、刑度、相似判決改回傳示例資料。伺服器照樣能啟動。
+`civil_winloss_v1/`、`retrieval_civil_v4/` 任一個不存在時，民事改回傳示例資料；沒有 `criminal_v1/` 時罪名、法條、刑度、相似判決改回傳示例資料。伺服器照樣能啟動。
 
 模型的 `meta.json` 記錄訓練時的 `git_commit`（有沒 commit 的改動會加 `-dirty`）、`sklearn`、`python` 版本（`config.build_info()`）。讀模型時如果 `sklearn` 和目前安裝的不同，記錄裡會留一筆警告（`config.warn_if_other_sklearn()`）；舊的 meta 沒有這個欄位就不比對。
 

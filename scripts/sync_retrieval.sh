@@ -2,9 +2,9 @@
 # Download published retrieval bundles into the platform's existing artifacts directory.
 set -euo pipefail
 case "${1:-}" in
-  civil) patterns=('retrieval_civil_v3/**') ;;
+  civil) patterns=('retrieval_civil_v4/**') ;;
   criminal) patterns=('retrieval_criminal_v1/**') ;;
-  all) patterns=('retrieval_civil_v3/**' 'retrieval_criminal_v1/**') ;;
+  all) patterns=('retrieval_civil_v4/**' 'retrieval_criminal_v1/**') ;;
   *) echo "Usage: bash scripts/sync_retrieval.sh civil|criminal|all [hf download options]" >&2; exit 2 ;;
 esac
 shift

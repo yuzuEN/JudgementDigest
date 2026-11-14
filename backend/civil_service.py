@@ -1,7 +1,7 @@
 """
 民事：勝訴機率、相似判決、金額範圍、證據對照、常見抗辯、判決導讀。
 
-模型（artifacts/civil_winloss_v1）與檢索資料（artifacts/retrieval_civil_v3）在啟動時讀進記憶體；
+模型（artifacts/civil_winloss_v1）與檢索資料（artifacts/retrieval_civil_v4）在啟動時讀進記憶體；
 任一個不存在時整個民事改回傳示例資料（mock = true），伺服器照樣能啟動，前端照樣能走完流程。
 
 獲償比例模型（artifacts/civil_amount_v1）是選用的：有的話金額範圍用模型推估（若為一部勝訴），
