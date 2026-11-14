@@ -35,6 +35,7 @@ function SiteFooter({ note }: { note?: ReactNode }) {
         <p className="flex flex-wrap gap-x-4 gap-y-1">
           <a href={LAF_URL} target="_blank" rel="noreferrer">法律扶助基金會</a>
           <Link to="/guide" className="text-link underline underline-offset-3">說明與法律小知識</Link>
+          <Link to="/privacy" className="text-link underline underline-offset-3">隱私與資料使用</Link>
           <a href={JUDICIAL_URL} target="_blank" rel="noreferrer">司法院裁判書查詢系統</a>
         </p>
       </div>

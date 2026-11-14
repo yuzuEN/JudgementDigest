@@ -5,6 +5,7 @@ import CriminalResult from "./pages/CriminalResult";
 import Guide from "./pages/Guide";
 import Home from "./pages/Home";
 import Intake from "./pages/Intake";
+import Privacy from "./pages/Privacy";
 import Reading from "./pages/Reading";
 
 export default function App() {
@@ -17,6 +18,7 @@ export default function App() {
         <Route path="/result/criminal" element={<CriminalResult />} />
         <Route path="/judgment/:source/:caseId" element={<Reading />} />
         <Route path="/guide" element={<Guide />} />
+        <Route path="/privacy" element={<Privacy />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
   );
