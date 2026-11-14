@@ -913,6 +913,18 @@ describe("民事結果", () => {
       expect(within(panel).getByText(/只用來排列結果，不是百分比/)).toBeInTheDocument();
     });
 
+    it("有司法院網址時，判決導讀旁邊附原文連結；沒有就不顯示", async () => {
+      const url = "https://judgment.judicial.gov.tw/FJUD/data.aspx?ty=JD&id=TPDV";
+      const [first, ...rest] = CIVIL_REPORT.similar;
+      await show({ similar: [{ ...first, url }, ...rest.map((c) => ({ ...c, url: null }))] });
+      const table = within(await openTab("相似判決")).getByRole("table");
+      const links = within(table).getAllByRole("link", { name: /判決原文/ });
+      expect(links).toHaveLength(1);
+      expect(links[0]).toHaveAttribute("href", url);
+      expect(links[0]).toHaveAttribute("target", "_blank");
+      expect(within(table).getAllByRole("link", { name: "判決導讀" })).toHaveLength(CIVIL_REPORT.similar.length);
+    });
+
     it("只看原告勝訴的：畫面上收起來，但列印時還印得出來", async () => {
       await show();
       const panel = await openTab("相似判決");
@@ -1136,6 +1148,14 @@ describe("判決導讀", () => {
     expect(screen.getByRole("img", { name: "判准金額約占請求金額的 65%" })).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "回結果" })).toHaveAttribute("href", "/result/civil?tab=cases");
     expect(screen.getByRole("region", { name: "CasEY 角色說明" })).toHaveTextContent("解說員");
+  });
+
+  it("有原文網址時連到這件判決，沒有時連到司法院查詢系統", async () => {
+    const url = "https://judgment.judicial.gov.tw/FJUD/data.aspx?ty=JD&id=TPDV";
+    mockApi({ "GET /judgments/civil/11/guide": () => ({ ...GUIDE, case: { ...GUIDE.case, url } }) });
+    renderAt("/judgment/:source/:caseId", <Reading />, "/judgment/civil/11");
+    expect(await screen.findByRole("link", { name: /在司法院網站看這件判決的原文/ })).toHaveAttribute("href", url);
+    expect(screen.getByRole("link", { name: "司法院網站上的原文" })).toHaveAttribute("href", url);
   });
 
   it("找不到判決", async () => {

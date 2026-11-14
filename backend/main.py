@@ -56,7 +56,7 @@ def create_app(settings: Optional[Settings] = None) -> FastAPI:
 
     @api.post("/intake/mask", response_model=schemas.MaskResponse)
     def mask_text(req: schemas.MaskRequest):
-        """遮掉身分證字號、電話、電子郵件、地址，以及使用者指定的名字。送到任何外部服務之前都要先經過這裡。"""
+        """遮掉身分證字號、電話、電子郵件、地址、車牌，以及使用者指定的名字。送到任何外部服務之前都要先經過這裡。"""
         text, spans = mask(req.text, req.names)
         return {"masked_text": text,
                 "spans": [{"start": s.start, "end": s.end, "kind": s.kind, "label": TAGS[s.kind]} for s in spans]}
