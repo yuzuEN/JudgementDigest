@@ -140,12 +140,12 @@ docker compose up --build
 |---|---|---|
 | `criminal_term/` | 刑度 ELECTRA（約 410 MB） | `scripts/sync_criminal_term.sh` |
 | `criminal_v1/` | 刑事罪名、法條 SVM（約 220 MB） | `scripts/sync_criminal_models.sh` |
-| `retrieval_criminal_v1/` | 刑事相似判決檢索（約 480 MB） | 同上（和刑事 SVM 一起下載） |
 | `civil_winloss_v1/` | 民事勝敗模型（約 9 MB） | `scripts/sync_civil_models.sh` |
 | `civil_amount_v1/` | 民事獲償比例模型（約 8 MB） | 同上（民事三個資料夾一起下載） |
-| `retrieval_civil_v3/` | 民事相似判決檢索（約 2.6 GB） | 同上 |
+| `retrieval_civil_v3/` | 民事相似判決檢索（約 2.6 GB） | 同上，或 `bash scripts/sync_retrieval.sh civil` |
+| `retrieval_criminal_v1/` | 刑事相似判決檢索（約 481 MB） | `scripts/sync_criminal_models.sh`（和刑事 SVM 一起下載），或 `bash scripts/sync_retrieval.sh criminal` |
 
-上傳方式見 [`docs/模型檔上傳.md`](docs/模型檔上傳.md)。
+刑事檢索也已上傳。可用 `bash scripts/sync_retrieval.sh civil`、`criminal` 或 `all` 單獨同步檢索資料；加 `--dry-run` 先看清單。本機有自訂導讀時先備份。分析用原始資料庫尚未納入同步。分享決策與上傳方式見 [`docs/模型檔上傳.md`](docs/模型檔上傳.md)。
 
 第一次使用：
 

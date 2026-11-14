@@ -43,8 +43,6 @@ import torch
 from sklearn.metrics import roc_auc_score
 from torch import nn
 from torch.utils.data import DataLoader, Dataset
-from transformers import (AutoModel, AutoModelForSequenceClassification, BertTokenizerFast,
-                          get_linear_schedule_with_warmup)
 
 import config  # noqa: E402
 
@@ -154,6 +152,8 @@ class ChunkPool(nn.Module):
     """每段的 [CLS] 向量依案件平均後分類。"""
     def __init__(self, name):
         super().__init__()
+        from transformers import AutoModel
+
         self.bert = AutoModel.from_pretrained(name, add_pooling_layer=False)
         self.drop = nn.Dropout(0.1)
         self.head = nn.Linear(self.bert.config.hidden_size, 2)
@@ -201,6 +201,10 @@ def main():
     ap.add_argument("--split", choices=["fold", "time"], default="fold",
                     help="time：2022–2024 訓練、2025 測試（10/21 加入）；驗證集＝2022–2024 中 fold==0 且 val_half==1")
     a = ap.parse_args()
+
+    # Load training dependencies only when training starts, not when importing helpers.
+    from transformers import (AutoModelForSequenceClassification, BertTokenizerFast,
+                              get_linear_schedule_with_warmup)
 
     torch.manual_seed(42)
     np.random.seed(42)
