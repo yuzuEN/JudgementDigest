@@ -341,6 +341,20 @@ class TestCuesAndPrompts(unittest.TestCase):
         self.assertTrue(quote_anchored("EXP", "衡諸常情，駕駛人於路口應減速慢行"))
         self.assertIsNone(quote_anchored("CL", "最高法院52年台上字第1240號判例參照"))
 
+    def test_quote_anchored_v05_trial(self):
+        """v0.5 試標（290 段 × 3 次）：這些都是正確的引文，自動檢查不應判成未錨定。"""
+        self.assertTrue(quote_anchored("SUB", "堪認系爭房地具有物之瑕疵"))
+        self.assertTrue(quote_anchored("SUB", "應認已達不法侵害原告基於配偶關係之身分法益之程度，且情節重大"))
+        self.assertTrue(quote_anchored("SUB", "被告受領系爭款項亦無法律上之原因"))
+        self.assertTrue(quote_anchored("SUB", "請求權均已罹於消滅時效"))
+        for t in ("應屬有理由", "即無理由", "亦屬無據", "於法無據", "核屬有據", "於法並無不合", "自無不合", "洵無足取"):
+            self.assertTrue(quote_anchored("CONCL", t), t)
+        self.assertFalse(quote_anchored("CONCL", "請求被告給付積欠之租金33,000元，併主張自起訴狀繕本送達翌日"))  # 只引到請求內容
+        self.assertTrue(quote_anchored("EV", "原告此部分主張與其提出之上開會議資料所載內容相左，實難採信"))
+        self.assertFalse(quote_anchored("EV", "此有除戶戶籍謄本、繼承系統表、本院公告、上開裁定在卷可稽"))  # 只列舉證據
+        self.assertTrue(quote_anchored("RULE", "法院對於慰撫金之量定，應斟酌實際加害情形"))
+        self.assertNotIn("SUB", cue_hits("即屬有據"))   # CONCL 的用語不能被 SUB 的新寫法吃掉
+
     def test_rule_cue(self):
         self.assertIn("RULE", cue_hits("四、另按損害之發生或擴大，被害人與有過失者"))
         self.assertIn("RULE", cue_hits("所謂即受確認判決之法律上利益，係指因法律關係之存否不明確"))
