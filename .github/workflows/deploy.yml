@@ -1,0 +1,40 @@
+name: deploy
+
+# main 的 tests 通過後，在主機（yuktoy）的自架 runner 上部署：建映像 → 換新版 → 檢查四項模型 → 失敗就換回上一版。
+# 細節在 deploy/server/deploy.sh，說明見 docs/部署.md。
+#
+# 安全：自架 runner 會在主機上執行 workflow 的指令，所以只接受兩種觸發：
+#   1. main 上的 push 跑完 tests（不接受 pull_request 觸發的 tests）
+#   2. 有寫入權限的人在 Actions 頁面手動執行，而且只能選 main
+# repo 是公開的，外部的 PR 要先經過核准才會跑任何 workflow（Settings → Actions → General）。
+
+on:
+  workflow_run:
+    workflows: [tests]
+    types: [completed]
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: deploy
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  deploy:
+    if: >-
+      (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main') ||
+      (github.event_name == 'workflow_run' && github.event.workflow_run.conclusion == 'success' &&
+       github.event.workflow_run.event == 'push' && github.event.workflow_run.head_branch == 'main' &&
+       github.event.workflow_run.head_repository.full_name == github.repository)
+    runs-on: [self-hosted, casey]
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
+
+      - name: 部署
+        run: bash deploy/server/deploy.sh
