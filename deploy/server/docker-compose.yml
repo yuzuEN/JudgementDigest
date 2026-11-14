@@ -1,0 +1,29 @@
+# 主機上的平台。deploy.sh 會把這個檔案複製到主機的 ~/casey/，和 .env、artifacts/ 放在同一層。
+# 手動操作：cd ~/casey && docker compose ps / logs / restart
+services:
+  casey:
+    image: casey:current             # deploy.sh 建好新版後把 casey:current 指過去
+    restart: unless-stopped          # 開機、崩潰後自動重啟
+    env_file: .env                   # HF_TOKEN、JD_HF_REVISION、Gemini 設定（只放主機上，不進 repo）
+    ports:
+      - "127.0.0.1:7860:7860"        # 只給本機（Tailscale Funnel）連，區網、tailnet 的其他裝置連不到
+    volumes:
+      - ./artifacts:/home/user/artifacts   # 模型存在主機上，重啟不用重新下載
+    # 資源上限：被狂打時不會拖垮整台機器
+    mem_limit: 5g
+    cpus: 6
+    pids_limit: 256
+    # 權限收緊：就算平台有漏洞被利用，容器裡能做的事也很少
+    cap_drop: [ALL]                  # 拿掉所有 Linux 特殊權限（nginx 聽 7860，不需要）
+    security_opt:
+      - no-new-privileges:true       # 程式不能再提升權限
+    read_only: true                  # 系統檔案唯讀；只有下面的 tmpfs 和模型資料夾能寫
+    tmpfs:
+      - /tmp
+      - /home/user/.cache
+    # 紀錄檔（IP、路徑、狀態碼，不含輸入內容）最多 3 個 × 10 MB，舊的自動刪除
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"

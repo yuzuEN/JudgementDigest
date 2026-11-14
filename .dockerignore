@@ -6,6 +6,11 @@
 !retrieval/
 !backend/
 !frontend/
+# 上線用的映像（deploy/server/Dockerfile）另外需要這些
+!deploy/server/
+!scripts/sync_civil_models.sh
+!scripts/sync_criminal_models.sh
+!scripts/sync_criminal_term.sh
 frontend/node_modules/
 frontend/dist/
 **/__pycache__/
