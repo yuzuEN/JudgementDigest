@@ -1,18 +1,22 @@
 """
-v0.4 的驗證（沒有法律專業人員時的做法，見手冊第七節）：
+v0.5 的驗證（沒有法律專業人員時的做法，見手冊第七節）：
 
   export  1. 模型三次的自身一致性
           2. 隨機樣本中各標籤的比例（多數決）
           3. 各標籤的「引文錨定率」：引文是否含該標籤的動作用語（規則 10，程式自動檢查）
-          4. 輸出抽查表：RULE、SUB、EV、PROC、DAM 各挑最多 n 段「模型標了該標籤」的段落，
-             由人工判斷：(a) 標籤是否符合手冊 (b) 引文是不是完成該動作的那一句
+          4. CONCL 的方向和判決結果（cases.outcome）比對（v0.5 新增，程式自動檢查）：
+               判決敗訴，卻標了「有理由」或「一部有理由」 → 衝突
+               判決勝訴，卻標了「無理由」或「一部有理由」 → 注意
+             這只是提示：「有理由」可能指反訴或被告的抗辯，一定要人工確認
+          5. 輸出抽查表：RULE、SUB、CONCL、EV、PROC、DAM、EXP 各挑最多 n 段「模型標了該標籤」的單位，
+             由人工判斷：(a) 標籤是否符合手冊 (b) 引文是不是包含完成該動作的用語
   score   讀回填好的抽查表：各標籤的精確度、引文正確率（95% Wilson 信賴區間），
           以及程式的引文檢查與人工判斷的一致程度
 
 抽查只能估「精確度」（模型標出來的對不對），不能估「召回率」（模型漏標多少）。
 
 用法：
-    python -m annotation.spot_check export            # → artifacts/annotation_civil_v2/抽查表_v0.4.xlsx
+    python -m annotation.spot_check export            # → artifacts/annotation_civil_v3/抽查表_v0.5.xlsx
     python -m annotation.spot_check score             # 讀回填好的抽查表
 """
 import argparse
@@ -29,18 +33,21 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 import config  # noqa: E402
 from annotation.cues import CUES, INTEREST_SERVICE, quote_anchored  # noqa: E402
-from annotation.prompts_v4 import MANUAL_VERSION, PROMPT_VERSION  # noqa: E402
+from annotation.prompts_v5 import MANUAL_VERSION, PROMPT_VERSION  # noqa: E402
 from annotation.sample import OUT_NAME  # noqa: E402
 
 OUT_DIR = config.ARTIFACTS_DIR / OUT_NAME
 SHEET_NAME = f"抽查表_{MANUAL_VERSION}.xlsx"
-CHECK_LABELS = ("RULE", "SUB", "EV", "PROC", "DAM")
+CHECK_LABELS = ("RULE", "SUB", "CONCL", "EV", "PROC", "DAM", "EXP")
 # 每個標籤優先從哪一批抽：稀有的從加抽批，常見的從隨機批
-PREFER_BATCH = {"RULE": "random", "SUB": "enriched:SUB", "EV": "random", "PROC": "random", "DAM": "enriched:DAM"}
+PREFER_BATCH = {"RULE": "random", "SUB": "enriched:SUB", "CONCL": "random", "EV": "random", "PROC": "random",
+                "DAM": "enriched:DAM", "EXP": "enriched:EXP"}
+WIN = ("勝訴", "確認勝訴")
+LOSE = ("敗訴",)
 VERDICTS = ("符合", "不符合", "不確定")
 QUOTE_VERDICTS = ("正確", "錯誤")
 HEADERS = ["sample_id", "批次", "標籤", "傾向／方向", "引文", "待標段落", "線索", "引文錨定（自動）",
-           "判定", "引文判定", "備註"]
+           "判決結果比對", "判定", "引文判定", "備註"]
 COL = {h: i for i, h in enumerate(HEADERS)}
 
 
@@ -73,6 +80,35 @@ def first_quote(rr: dict, label: str) -> tuple:
     return next((rr[r][label] for r in sorted(rr) if label in rr[r]), (None, ""))
 
 
+def concl_directions(con: sqlite3.Connection, prompt_version: str = PROMPT_VERSION) -> dict:
+    """
+    {sample_id: 多數決的 CONCL 方向集合}。
+    一個單位可能有好幾筆 CONCL（本金有理由、利息一部有理由），load_runs 每個標籤只留一筆，
+    所以這裡另外讀：某個方向在超過半數的 run 出現才算。
+    """
+    seen = collections.defaultdict(lambda: collections.defaultdict(set))   # sid -> 方向 -> {run}
+    runs = collections.defaultdict(set)
+    for sid, run, label, pol in con.execute(
+            "SELECT sample_id, run_no, label, polarity FROM annotations WHERE prompt_version = ?",
+            (prompt_version,)):
+        runs[sid].add(run)
+        if label == "CONCL" and pol:
+            seen[sid][pol].add(run)
+    return {sid: {d for d, rs in dirs.items() if len(rs) >= len(runs[sid]) // 2 + 1}
+            for sid, dirs in seen.items()}
+
+
+def outcome_flag(outcome, directions) -> str:
+    """CONCL 方向和判決結果比對：衝突／注意／一致；沒有判決結果或沒有方向時回傳空字串。"""
+    if not outcome or not directions:
+        return ""
+    if outcome in LOSE and directions & {"有理由", "一部有理由"}:
+        return "衝突"
+    if outcome in WIN and directions & {"無理由", "一部有理由"}:
+        return "注意"
+    return "一致"
+
+
 def wilson(k: int, n: int, z: float = 1.96) -> tuple:
     """比例 k/n 的 Wilson 信賴區間。小樣本、比例接近 0 或 1 時比常態近似穩定。"""
     if n == 0:
@@ -86,11 +122,19 @@ def wilson(k: int, n: int, z: float = 1.96) -> tuple:
 def export(db: Path, out: Path, n_per_label: int, seed: int) -> None:
     from openpyxl import Workbook
     from openpyxl.styles import Alignment, Font, PatternFill
+    from openpyxl.utils import get_column_letter
     from openpyxl.worksheet.datavalidation import DataValidation
 
     with closing(sqlite3.connect(db)) as con:   # Windows 不能刪除還開著的資料庫檔
         runs = load_runs(con)
-        paras = {r[0]: r[1:] for r in con.execute("SELECT sample_id, batch, para_text FROM paragraphs")}
+        concl = concl_directions(con)
+        paras = {r[0]: r[1:3] for r in con.execute("SELECT sample_id, batch, para_text FROM paragraphs")}
+        outcomes = {r[0]: r[1] for r in con.execute("SELECT sample_id, outcome FROM paragraphs")}
+        first_basis = {}
+        for sid, sub in con.execute("SELECT sample_id, subtype FROM annotations WHERE label = 'EV' "
+                                    "AND prompt_version = ? AND subtype IS NOT NULL ORDER BY run_no, id",
+                                    (PROMPT_VERSION,)):
+            first_basis.setdefault(sid, sub)
     if not runs:
         print("還沒有任何標註結果。")
         return
@@ -121,33 +165,43 @@ def export(db: Path, out: Path, n_per_label: int, seed: int) -> None:
             k = sum(checks)
             print(f"  {label:<5} {k}/{len(checks)} = {k / len(checks):.1%}")
 
-    # 4. 抽查表
+    # 4. CONCL 方向和判決結果比對（全部樣本）
+    flags = {s: outcome_flag(outcomes.get(s), concl.get(s, set())) for s in maj if "CONCL" in maj[s]}
+    fc = collections.Counter(f for f in flags.values())
+    print(f"\n== CONCL 方向和判決結果比對（{len(flags)} 個單位）==")
+    print(f"  一致 {fc['一致']}　注意 {fc['注意']}　衝突 {fc['衝突']}　無法比對 {fc['']}")
+    for s in sorted(k for k, f in flags.items() if f == "衝突"):
+        print(f"  衝突 sample_id {s}：判決 {outcomes.get(s)}，CONCL 方向 {sorted(concl.get(s, set()))}")
+
+    # 5. 抽查表
     rng = random.Random(seed)
     wb = Workbook()
     ws = wb.active
     ws.title = "填寫說明"
     for i, line in enumerate([
         f"抽查表（手冊 {MANUAL_VERSION}）",
-        "每一列是模型（三次多數決）標了某個標籤的段落。請依手冊的定義判斷兩件事：",
+        "每一列是模型（三次多數決）標了某個標籤的論點單位。請依手冊的定義判斷兩件事：",
         "「判定」：這個標籤對不對？選 符合／不符合／不確定。不確定的請在備註寫原因。",
-        "「引文判定」：只在判定為「符合」時填。引文是不是法院『完成該動作的那一句』（規則 10）？選 正確／錯誤。",
-        "　例：EV 的引文應是「堪信原告之主張為真實」這類評價，而不是「業據提出借據等件為證」這類列舉。",
+        "「引文判定」：只在判定為「符合」時填。引文有沒有包含完成該動作的用語（規則 10）？選 正確／錯誤。",
+        "　例：EV 的引文應包含「堪信原告之主張為真實」這類評價，不能只有「業據提出借據等件為證」這類列舉。",
         "「引文錨定（自動）」是程式檢查引文有沒有動作用語，只是提示，請以你自己的判斷為準。",
-        "「線索」欄：段落裡有沒有手冊列出的線索。有線索不代表一定對，沒線索也不代表一定錯。",
-        "RULE 是新標籤（大前提）：段落只陳述法律規範或其解釋、還沒有把本案事實套進去，就是 RULE。",
+        "「線索」欄：單位裡有沒有手冊列出的線索。有線索不代表一定對，沒線索也不代表一定錯。",
+        "CONCL 是新標籤（請求判斷）：法院對請求下結論（為有理由、應予准許、應予駁回）。也請檢查「傾向／方向」對不對。",
+        "「判決結果比對」只在 CONCL 頁有值：衝突＝判決敗訴卻標有理由；注意＝判決勝訴卻標無理由。可能是反訴或抗辯，請看原文。",
+        "EV 的「傾向／方向」後面括號是 basis（明示評價／依證據推論）。",
         "只判斷「標出來的對不對」，不用找漏標的。",
     ], start=1):
         ws.cell(i, 1, line).font = Font(bold=(i == 1), size=14 if i == 1 else 11)
     ws.column_dimensions["A"].width = 120
 
-    widths = [10, 16, 8, 12, 36, 80, 8, 12, 10, 10, 30]
+    widths = [10, 16, 8, 16, 36, 80, 8, 12, 12, 10, 10, 30]
     fill = PatternFill("solid", fgColor="FFDDDDDD")
     for label in CHECK_LABELS:
         ws = wb.create_sheet(label)
         for j, (h, w) in enumerate(zip(HEADERS, widths), start=1):
             c = ws.cell(1, j, h)
             c.font, c.fill = Font(bold=True), fill
-            ws.column_dimensions[chr(64 + j)].width = w
+            ws.column_dimensions[get_column_letter(j)].width = w
         ws.freeze_panes = "A2"
         cand = [s for s in maj if label in maj[s]]
         pref = [s for s in cand if paras[s][0] == PREFER_BATCH[label]]
@@ -158,20 +212,32 @@ def export(db: Path, out: Path, n_per_label: int, seed: int) -> None:
         for i, s in enumerate(sorted(chosen), start=2):
             batch, text = paras[s]
             pol, quote = first_quote(runs[s], label)
+            if label == "CONCL":
+                dirs = concl.get(s, set())
+                pol = "、".join(sorted(dirs)) if dirs else pol
+                versus = outcome_flag(outcomes.get(s), dirs)
+                versus = f"{versus}（判決{outcomes.get(s)}）" if versus else ""
+            else:
+                versus = ""
+            if label == "EV":
+                basis = first_basis.get(s)
+                pol = f"{pol}（{basis}）" if basis else pol
             if label == "PROC":
                 hint = "利息起算" if INTEREST_SERVICE.search(text) else ""
             else:
                 hint = "有" if label in CUES and CUES[label].search(text) else ("無" if label in CUES else "")
             anchored = quote_anchored(label, quote)
             anchored = "" if anchored is None else ("是" if anchored else "否")
-            for j, v in enumerate([s, batch, label, pol, quote, text, hint, anchored, None, None, None], start=1):
+            for j, v in enumerate([s, batch, label, pol, quote, text, hint, anchored, versus, None, None, None],
+                                  start=1):
                 ws.cell(i, j, v).alignment = Alignment(wrap_text=True, vertical="top")
             ws.row_dimensions[i].height = 110
         last = max(len(chosen) + 1, 2)
+        cv, cq = get_column_letter(COL["判定"] + 1), get_column_letter(COL["引文判定"] + 1)
         dv = DataValidation(type="list", formula1='"' + ",".join(VERDICTS) + '"', allow_blank=True)
-        dv.add(f"I2:I{last}")
+        dv.add(f"{cv}2:{cv}{last}")
         dq = DataValidation(type="list", formula1='"' + ",".join(QUOTE_VERDICTS) + '"', allow_blank=True)
-        dq.add(f"J2:J{last}")
+        dq.add(f"{cq}2:{cq}{last}")
         ws.add_data_validation(dv)
         ws.add_data_validation(dq)
         print(f"  抽查表 {label}：{len(chosen)} 段（模型標了 {len(cand)} 段）")
