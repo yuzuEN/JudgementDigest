@@ -26,7 +26,7 @@ from civil.insights import defense_types, evidence_mentions
 from retrieval.civil import load_expanded
 from retrieval.engine import TfidfIndex
 from retrieval.masking import (by_appearance, listed_with, mask_parties, name_word_frequencies, party_names,
-                               third_party_names, usable_person_names)
+                               party_roles, third_party_names, usable_person_names)
 
 NAME = "retrieval_civil_v4"
 VOCAB_SAMPLE = 60_000     # 字典與 IDF 只用這麼多筆建（完整語料的字元 n-gram 字典太吃記憶體）
@@ -84,8 +84,11 @@ def write_artifacts(corpus: pd.DataFrame, sections: pd.DataFrame, out: Path, ver
               for o, parts, p, d in zip(others, zip(s.plaintiff_claim_text, s.defendant_defense_text,
                                                     s.court_reasoning_text), s.plaintiff, s.defendant)]
     # 【關係人1】【關係人2】依導讀的閱讀順序（原告主張、被告答辯、法院判斷）第一次出現的位置編號
-    others = [by_appearance(o, "\n".join(parts)) for o, parts in
-              zip(others, zip(s.plaintiff_claim_text, s.defendant_defense_text, s.court_reasoning_text))]
+    # 當事人、代理人的名字不拿關係人的編號（人名辨識也會找到他們）
+    others = [by_appearance(o, "\n".join(parts), [n for role in party_roles(p, d, (pa, da)) for n in role])
+              for o, parts, p, d, pa, da in
+              zip(others, zip(s.plaintiff_claim_text, s.defendant_defense_text, s.court_reasoning_text),
+                  s.plaintiff, s.defendant, s.plaintiff_agent, s.defendant_agent)]
     masked = {col: [mask_parties(t, p, d, (pa, da), o) for t, p, d, pa, da, o in
                     zip(s[col], s.plaintiff, s.defendant, s.plaintiff_agent, s.defendant_agent, others)]
               for col in ("plaintiff_claim_text", "defendant_defense_text", "court_reasoning_text")}

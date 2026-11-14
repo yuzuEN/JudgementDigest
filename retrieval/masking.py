@@ -264,6 +264,17 @@ def _yi_name_ok(n: str, common_words: Optional[set]) -> bool:
     return prefix is None or (common_words is not None and prefix not in common_words)
 
 
+# 「陳明」是動詞（「陳明如下」「陳明願供擔保」），也是很常見的名字開頭（陳明輝、陳明華）。
+# 2026-11-14 第二次 60 件抽查：「陳彥達即陳明亭」的陳明亭因為開頭是「陳明」被擋掉；全部判決的辨識結果裡，
+# 「陳明」開頭的三個字有 282 種，約 240 種是真名。第三個字是動詞後面常接的字才當動詞
+_CHEN_MING_VERB_NEXT = set("如願其系確原伊為因係聲之以倘供告有依略時乃若待甲乙丙丁知該前擇並非訴准會人渠及與於在已經即對向就等"
+                           "業同所則亦稱表請也而此後再兩須選負誤變何備核由嗣轉屈採爭彼曾行自法嘆")
+
+
+def _chen_ming_name(n: str) -> bool:
+    return len(n) == 3 and n.startswith("陳明") and n[2] not in _CHEN_MING_VERB_NEXT
+
+
 def _two_char_candidate(n: str) -> bool:
     """兩個字的辨識結果，排除一看就不是名字的；是不是一般詞要再看 rare_two_char_names。"""
     return (len(n) == 2 and n[0] in _SURNAMES and n[1] not in "一二三四五六七八九十百千伊渠其"
@@ -346,16 +357,31 @@ def usable_person_names(names: Iterable[str], rare_two_char: Optional[set] = Non
             continue
         if n.endswith("之"):        # 「余梅之出資」「許北之」：後面的字黏上來
             continue
-        if re.match(_NOT_NAME, n) is None:   # _NOT_NAME 是否定預查，比對失敗＝開頭是常見詞
+        if re.match(_NOT_NAME, n) is None and not _chen_ming_name(n):   # _NOT_NAME 是否定預查，比對失敗＝開頭是常見詞
             continue
         kept.add(n)
     return sorted(kept)
 
 
-def by_appearance(names: Iterable[str], text: str) -> List[str]:
-    """名字依在 text 裡第一次出現的位置排序（給【關係人1】【關係人2】編號用）；沒出現的排最後。"""
-    names = list(dict.fromkeys(n for n in names if n))
-    return sorted(names, key=lambda n: (text.find(n) if n in text else len(text), n))
+def by_appearance(names: Iterable[str], text: str, exclude: Iterable[str] = ()) -> List[str]:
+    """
+    名字依在 text 裡第一次「真的會被換掉」的位置排序（給【關係人1】【關係人2】編號用）；換不到的排最後。
+    exclude：當事人、代理人的名字，不拿關係人的編號（人名辨識也會找到當事人，以前會先占走【關係人1】）。
+    照 mask_parties 的順序模擬：長的名字先換，被長名字蓋住的短名字（「杜彥伸」裡的「杜彥」）不算出現，
+    否則短名字拿了編號卻從來沒出現，文字裡只看得到【關係人2】（2026-11-14 抽查發現約兩成判決跳號）。
+    """
+    exclude = [n for n in dict.fromkeys(exclude) if n]
+    names = [n for n in dict.fromkeys(n for n in names if n) if n not in set(exclude)]
+    used = bytearray(len(text))
+    first = {}
+    every = names + exclude
+    for length in sorted({len(n) for n in every}, reverse=True):
+        pattern = _name_pattern([n for n in every if len(n) == length])
+        for m in pattern.finditer(text):
+            if not any(used[m.start():m.end()]):
+                used[m.start():m.end()] = bytes([1]) * (m.end() - m.start())
+                first.setdefault(m.group(), m.start())
+    return sorted(names, key=lambda n: (first.get(n, len(text)), n))
 
 
 def _role_tags(names: Iterable[str], role: str) -> dict:

@@ -142,6 +142,22 @@ class TestParties(unittest.TestCase):
         self.assertEqual(mask_parties("洪瑞斌未到", "", "", [], others), "【關係人2】未到")
         self.assertEqual(mask_parties("證人簡建祥到庭", "", "", [], others), "證人【關係人1】到庭")
 
+    def test_numbers_without_gaps(self):
+        """
+        第二次 60 件抽查：當事人也被人名辨識找到時先占了【關係人1】；「杜彥」「杜彥伸」都拿編號，
+        文字裡只有【關係人2】。當事人不編號，被長名字蓋住的短名字排最後。
+        """
+        text = "被告林玟珠與林煒忠\n杜彥伸簽發本票，杜彥伸未到"
+        others = by_appearance(["林玟珠", "林煒忠", "杜彥", "杜彥伸"], text, exclude=["林玟珠"])
+        self.assertEqual(others, ["林煒忠", "杜彥伸", "杜彥"])
+        self.assertEqual(mask_parties(text, "", "林玟珠", [], others),
+                         "被告【被告】與【關係人1】\n【關係人2】簽發本票，【關係人2】未到")
+
+    def test_names_starting_with_chen_ming(self):
+        """「陳明」是動詞也是名字開頭（第二次 60 件抽查：「陳彥達即陳明亭」的陳明亭沒遮）。"""
+        self.assertEqual(usable_person_names(["陳明亭", "陳明輝", "陳明如", "陳明願", "陳明其", "陳述人"]),
+                         ["陳明亭", "陳明輝"])
+
     def test_role_words_in_party_fields(self):
         """
         人工抽查：代理人欄位解析成「被告兼下一人；陳晁遠」，清掉「兼…」後的「被告」被當成名字，
