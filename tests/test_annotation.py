@@ -321,7 +321,7 @@ class TestCuesAndPrompts(unittest.TestCase):
             self.assertIn(f"【{label}", prompts_v5.SYSTEM_CIVIL)
         for label in prompts_v5.LABELS_CRIMINAL[:-1]:
             self.assertIn(f"【{label}", prompts_v5.SYSTEM_CRIMINAL)
-        self.assertEqual((prompts_v5.MANUAL_VERSION, prompts_v5.PROMPT_VERSION), ("v0.5", "p5.0"))
+        self.assertEqual((prompts_v5.MANUAL_VERSION, prompts_v5.PROMPT_VERSION), ("v0.5", "p5.1"))
         for label in ("CONCL", "HI"):
             self.assertIn(label, prompts_v5.LABELS_CIVIL)
         for d in ("有理由", "一部有理由", "無理由"):
