@@ -180,10 +180,17 @@ export interface CriminalReport {
 }
 
 export type GuideFunction = "claim" | "defense" | "issue" | "evidence" | "court";
+export type CriminalGuideFunction = "info" | "verdict" | "facts" | "evidence" | "court" | "laws" | "table" | "other";
 
 export interface Guide {
   case: SimilarCase;
   paragraphs: { function: GuideFunction; label: string; text: string }[];
+  /** 刑事導讀：全文依原本順序分段；沒有全文時是 null（只顯示摘要與原文連結） */
+  criminal?: {
+    source: "judgment" | "dataset";
+    judgment_date?: string;
+    paragraphs: { function: CriminalGuideFunction; label: string; text: string; pre?: boolean; part?: string | null }[];
+  } | null;
   labeler: string;
   mock: boolean;
 }

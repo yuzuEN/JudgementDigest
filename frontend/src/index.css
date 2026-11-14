@@ -270,9 +270,15 @@
   [data-slot="card"]:has(details) {
     break-inside: auto;
   }
-  /* 結果頁的分頁：列印時每個分頁都印出來 */
-  [data-slot="tabs-content"][hidden] {
-    display: flex !important;
+  /*
+    結果頁的分頁：列印時每個分頁都印出來。要放在 base 層：Tailwind 的 preflight 在 base 層有
+    [hidden] { display: none !important }，而層裡的 !important 比層外的優先，寫在層外會被它蓋掉。
+    同一層裡比 specificity，這裡的選擇器比較具體，所以會贏。
+  */
+  @layer base {
+    [data-slot="tabs-content"][hidden] {
+      display: flex !important;
+    }
   }
   [data-slot="tabs-content"] {
     break-before: auto;

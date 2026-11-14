@@ -1090,12 +1090,12 @@ describe("刑事結果", () => {
     expect(within(panel).queryByRole("table")).not.toBeInTheDocument();
   });
 
-  it("真的刑事判決連到司法院原文，不連判決導讀", async () => {
+  it("真的刑事判決同時提供導讀與司法院原文", async () => {
     const url = "https://judgment.judicial.gov.tw/FJUD/data.aspx?ty=JD&id=TPDM";
     await show({ mock: false, similar: [{ ...CRIMINAL_REPORT.similar[0], url }] });
     const panel = await openTab("相似判決");
     expect(within(panel).getByRole("link", { name: "判決原文" })).toHaveAttribute("href", url);
-    expect(within(panel).queryByRole("link", { name: "判決導讀" })).not.toBeInTheDocument();
+    expect(within(panel).getByRole("link", { name: "判決導讀" })).toHaveAttribute("href", `/judgment/criminal/${CRIMINAL_REPORT.similar[0].case_id}`);
     expect(within(panel).getByText(/只用來排列結果，不是百分比/)).toBeInTheDocument();
   });
 
@@ -1162,5 +1162,70 @@ describe("判決導讀", () => {
     mockApi({});
     renderAt("/judgment/:source/:caseId", <Reading />, "/judgment/civil/999");
     expect(await screen.findByRole("alert")).toBeInTheDocument();
+  });
+});
+
+
+describe("刑事判決導讀", () => {
+  const url = "https://judgment.judicial.gov.tw/FJUD/data.aspx?id=TPDM";
+  const para = (fn: string, label: string, text: string, extra = {}) => ({ function: fn, label, text, pre: false, part: null, ...extra });
+  const guide = { case: { ...CRIMINAL_REPORT.similar[0], url }, paragraphs: [], mock: false, labeler: "criminal-rule-v1",
+    criminal: { source: "judgment", judgment_date: "2024-05-01", paragraphs: [
+      para("info", "案件資訊", "臺灣臺北地方法院刑事簡易判決\n上列被告因過失傷害案件", { pre: true }),
+      para("verdict", "主文", "被告犯過失傷害罪，處拘役參拾日。"),
+      para("facts", "犯罪事實", "一、本件犯罪事實及證據，均引用檢察官起訴書（如附件）之記載。"),
+      para("court", "論罪科刑", "二、核被告所為，係犯刑法第284條前段之過失傷害罪。"),
+      para("other", "其他", "中華民國113年5月1日\n刑事第二十庭法官○○○", { pre: true }),
+      para("laws", "法條", "附錄本案論罪科刑法條全文：\n中華民國刑法第284條", { pre: true }),
+      para("facts", "犯罪事實", "一、被告駕車未注意車前狀況，致被害人受傷。", { part: "附件：起訴書" }),
+      para("evidence", "證據", "一、證據清單及待證事實：被告之自白。", { part: "附件：起訴書" }),
+    ] } };
+  it("依原文順序顯示全文分段，標出段落功能，附件另起標題", async () => {
+    mockApi({ "GET /judgments/criminal/11/guide": () => guide });
+    renderAt("/judgment/:source/:caseId", <Reading />, "/judgment/criminal/11");
+    expect(await screen.findByRole("heading", { name: "判決全文" })).toBeInTheDocument();
+    const texts = [...document.querySelectorAll(".para p")].map((n) => n.textContent);
+    expect(texts).toEqual(guide.criminal.paragraphs.map((p) => p.text));
+    expect(document.querySelector('.para[data-fn="verdict"]')).toHaveTextContent("主文被告犯過失傷害罪");
+    expect(screen.getByRole("heading", { name: "附件：起訴書" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /犯罪事實\s*2 段/ })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /附表/ })).not.toBeInTheDocument();   // 沒有附表就不列
+    expect(screen.queryByRole("button", { name: /原告主張/ })).not.toBeInTheDocument();
+    expect(screen.getByText("2024-05-01")).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "司法院判決原文" })).toHaveAttribute("href", url);
+    expect(screen.getByRole("link", { name: "回結果" })).toHaveAttribute("href", "/result/criminal?tab=cases");
+  });
+  it("取消上色後保留文字標籤", async () => {
+    mockApi({ "GET /judgments/criminal/11/guide": () => guide });
+    renderAt("/judgment/:source/:caseId", <Reading />, "/judgment/criminal/11");
+    const button = await screen.findByRole("button", { name: /論罪科刑/ });
+    await userEvent.click(button);
+    expect(button).toHaveAttribute("aria-pressed", "false");
+    const section = document.querySelector('.para[data-fn="court"]')!;
+    expect(section).toHaveAttribute("data-on", "false");
+    expect(section).toHaveTextContent("論罪科刑");
+  });
+  it("沒有全文時說明只有資料集的犯罪事實", async () => {
+    mockApi({ "GET /judgments/criminal/11/guide": () => ({ ...guide, criminal: { source: "dataset", judgment_date: "",
+      paragraphs: [para("facts", "犯罪事實", "被告基於××之犯意取走商品。", { part: "資料集節錄" })] } }) });
+    renderAt("/judgment/:source/:caseId", <Reading />, "/judgment/criminal/11");
+    expect(await screen.findByRole("heading", { name: "犯罪事實" })).toBeInTheDocument();
+    expect(screen.getByText(/這件判決沒有收錄全文，以下只有資料集裡的犯罪事實/)).toBeInTheDocument();
+    expect(screen.getByText("被告基於××之犯意取走商品。")).toBeInTheDocument();
+    expect(screen.queryByRole("heading", { name: "資料集節錄" })).not.toBeInTheDocument();
+  });
+  it("連資料集都沒有時只顯示摘要", async () => {
+    mockApi({ "GET /judgments/criminal/11/guide": () => ({ ...guide, criminal: null, labeler: "summary-only" }) });
+    renderAt("/judgment/:source/:caseId", <Reading />, "/judgment/criminal/11");
+    expect(await screen.findByText("這件判決沒有收錄全文")).toBeInTheDocument();
+    expect(screen.getByText(`摘要：${guide.case.summary}`)).toBeInTheDocument();
+    expect(document.querySelectorAll(".para")).toHaveLength(0);
+  });
+  it("無法載入時可重試，並可返回刑事結果", async () => {
+    mockApi({});
+    renderAt("/judgment/:source/:caseId", <Reading />, "/judgment/criminal/999");
+    expect(await screen.findByRole("alert")).toHaveTextContent("重新載入判決");
+    expect(screen.getByRole("button", { name: "再試一次" })).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "回結果" })).toHaveAttribute("href", "/result/criminal?tab=cases");
   });
 });

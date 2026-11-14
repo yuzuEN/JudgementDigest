@@ -5,7 +5,7 @@
 沒有模型時整個刑事回傳示例資料（mock = true）；有模型、沒有檢索資料時 similar 是空清單，前端顯示「開發中」。
 相似判決只在「含預測的第一個罪名」的判決裡找，這類判決太少時才放寬到全部。
 每個罪名另外統計相似判決中含這個罪名的案件的宣告刑分布（similar_sentence），和模型推估並列。
-刑事判決沒有判決導讀，列表附司法院的原文網址。
+刑事判決導讀：檢索庫的 guides 表存全文的分段與段落標示（主文、犯罪事實、證據…）；沒有全文時只有摘要與司法院原文網址。
 
 刑度（charges[].sentence，6 區間，含拘役、罰金）：有 artifacts/criminal_term（法律 ELECTRA）時用 ELECTRA，
 沒有或沒裝 torch 時用罪名模型（SVM）自己的刑度。整個案件一份分布，每個罪名附同一份。
@@ -16,6 +16,7 @@ import logging
 import re
 import sqlite3
 from contextlib import closing
+from datetime import datetime
 from pathlib import Path
 from typing import Dict, List, Optional
 
@@ -23,7 +24,7 @@ import numpy as np
 
 from backend import mock
 from criminal.models import lay_terms, service as model_service
-from retrieval import criminal as retrieval_criminal
+from retrieval import criminal as retrieval_criminal, criminal_guides
 from retrieval.engine import TfidfIndex
 
 N_SHOWN = 10
@@ -129,13 +130,62 @@ class CriminalService:
             if r["summary"][:DUPLICATE_PREFIX] in seen:
                 continue
             seen.add(r["summary"][:DUPLICATE_PREFIX])
-            out.append({"source": "criminal", "case_id": r["id"], "case_number": r["case_number"], "court": r["court"],
-                        "year": r["year"], "mid": "、".join(json.loads(r["charges"])), "outcome": "有罪",
-                        "similarity": round(float(s), 3), "summary": r["summary"], "sentence": r["sentence"],
-                        "url": r["url"] or None})
+            out.append(self._case(r, float(s)))
             if len(out) == n:
                 break
         return out
+
+
+    def _case(self, r, similarity=0.0):
+        # 列表預覽使用主文；不回退到可能漏名的舊犯罪事實摘要。
+        full_text = ""
+        if self._query("SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'full_text'"):
+            found = self._query("SELECT text FROM full_text WHERE row = ?", (r["row"],))
+            if found:
+                full_text = found[0]["text"] or ""
+        verdict = "\n".join(p["text"] for p in criminal_guides.segment(full_text)
+                            if p["function"] == "verdict" and not p["part"])
+        summary = "主文：" + verdict if verdict else "未收錄主文，請查看判決原文。"
+        return {"source": "criminal", "case_id": r["id"], "case_number": r["case_number"], "court": r["court"],
+                "year": r["year"], "mid": "、".join(json.loads(r["charges"])), "outcome": "有罪",
+                "similarity": round(similarity, 3), "summary": summary, "sentence": r["sentence"],
+                "url": r["url"] or None}
+
+    def guide(self, case_id: int) -> Optional[Dict]:
+        """判決導讀：優先讀取遮名原文包的 full_text 表，依原順序分段；相容舊 guides 表。
+        沒有全文的案件 criminal 是 null，前端只顯示摘要與司法院原文連結。"""
+        if self.mock:
+            cases = {c["case_id"]: c for c in mock.criminal_report()["similar"]}
+            return mock.criminal_guide(cases[case_id]) if case_id in cases else None
+        if self.db_path is None:
+            return None
+        rows = self._query("SELECT * FROM cases WHERE id = ?", (case_id,))
+        if not rows:
+            return None
+        tables = {row["name"] for row in self._query("SELECT name FROM sqlite_master WHERE type = 'table'")}
+        criminal = None
+        if "full_text" in tables:
+            # 原文包以索引 row 對應，API 的 case_id 則是 cases.id，兩者不能混用。
+            text = self._query("SELECT text FROM full_text WHERE row = ?", (rows[0]["row"],))
+            if text and (text[0]["text"] or "").strip():
+                paragraphs = criminal_guides.segment(text[0]["text"])
+                if paragraphs:
+                    date = ""
+                    jid = criminal_guides.judgment_id(rows[0]["url"])
+                    parts = jid.split(",") if jid else []
+                    if len(parts) == 6:
+                        try:
+                            date = datetime.strptime(parts[4], "%Y%m%d").date().isoformat()
+                        except ValueError:
+                            pass
+                    criminal = {"source": "judgment", "judgment_date": date, "paragraphs": paragraphs}
+        if criminal is None and "guides" in tables:
+            found = next(iter(self._query("SELECT * FROM guides WHERE case_id = ?", (case_id,))), None)
+            if found is not None and "paragraphs" in found.keys():
+                criminal = {"source": found["source"], "judgment_date": found["judgment_date"],
+                            "paragraphs": json.loads(found["paragraphs"])}
+        return {"case": self._case(rows[0]), "paragraphs": [], "criminal": criminal,
+                "labeler": criminal_guides.LABELER if criminal else "summary-only", "mock": False}
 
 
 

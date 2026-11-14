@@ -35,7 +35,7 @@ API 文件（可以直接在網頁上試）：http://127.0.0.1:8000/docs
 | `POST /api/civil/report` | 結果頁的全部內容：相似判決的勝敗件數、機率與提示、金額範圍、相似判決、證據對照、常見抗辯 | 模型＋檢索 |
 | `POST /api/criminal/predict` | 罪名、法條、刑度分布（`charges[].sentence`）、相似判決 | 罪名、法條、刑度：`criminal.models.service`；相似判決：`retrieval.criminal`（`mock`） |
 | `POST /api/retrieval/search` | 相似判決，`type` 為 `civil`、`criminal`、`both` | 檢索（沒有檢索資料時為示例） |
-| `GET /api/judgments/{source}/{case_id}/guide` | 判決導讀：段落與功能標示 | 民事為規則版（`labeler: rule-v0`）；刑事判決沒有導讀，列表附司法院原文網址 |
+| `GET /api/judgments/{source}/{case_id}/guide` | 判決導讀：段落與功能標示 | 民事為規則版（`labeler: rule-v0`）；刑事是全文分段與段落標示（`criminal`，`labeler: criminal-rule-v1`）；沒有全文時回傳 `summary-only`，只有摘要與司法院原文網址 |
 
 回應裡的 `mock`、`source`、`labeler` 說明結果是真的模型、規則，還是示例資料；前端據此標示「示例資料」。
 
@@ -47,7 +47,7 @@ API 文件（可以直接在網頁上試）：http://127.0.0.1:8000/docs
 - `retrieval_civil_v4/`：`python -m retrieval.build` 產生
 - `civil_amount_v1/`（選用）：`python -m civil.models.amount_service train` 產生
 - `civil_winloss_v1/`、`civil_amount_v1/`、`retrieval_civil_v4/` 也可以從 Hugging Face 下載：`scripts/sync_civil_models.sh`（見根目錄 README 的「模型檔」）
-- `criminal_v1/`、`retrieval_criminal_v1/`：刑事罪名、法條模型與相似判決檢索（PR #39，`python -m criminal.models.service`、`python -m retrieval.criminal` 產生）；`criminal_v1/` 可以從 Hugging Face 下載：`scripts/sync_criminal_models.sh`
+- `criminal_v1/`、`retrieval_criminal_v1/`：刑事罪名、法條模型與相似判決檢索（PR #39，`python -m criminal.models.service`、`python -m retrieval.criminal` 產生）；兩個都可以從 Hugging Face 下載：`scripts/sync_criminal_models.sh`
 - `criminal_term/`：刑度 ELECTRA（6 區間，和 SVM 相同），Kaggle `term-bucket-future-seed42-20261110` 的輸出（`best.pt`、`tokenizer/`、`encoder_config/`、`experiment_summary.json`）；沒有時刑度用 SVM。從 Hugging Face 下載：`scripts/sync_criminal_term.sh`（見根目錄 README 的「模型檔」）
 
 `civil_winloss_v1/`、`retrieval_civil_v4/` 任一個不存在時，民事改回傳示例資料；沒有 `criminal_v1/` 時罪名、法條、刑度、相似判決改回傳示例資料。伺服器照樣能啟動。
@@ -120,8 +120,32 @@ API 文件（可以直接在網頁上試）：http://127.0.0.1:8000/docs
 
 ## 接上其他組的功能
 
-- **刑事**：罪名、法條、刑度、相似判決都在 `criminal_service.py`（TF-IDF＋SVM，PR #39）；刑度用同一檔的 ELECTRA（2025 年判決測試：區間 0.763、差一區 0.973），沒有模型檔時用 SVM；`criminal_term/` 從 Hugging Face 下載（`scripts/sync_criminal_term.sh`），`criminal_v1/` 從 Hugging Face 下載（`scripts/sync_criminal_models.sh`），`retrieval_criminal_v1/` 還是另外傳，放進 `artifacts/`
+- **刑事**：罪名、法條、刑度、相似判決都在 `criminal_service.py`（TF-IDF＋SVM，PR #39）；刑度用同一檔的 ELECTRA（2025 年判決測試：區間 0.763、差一區 0.973），沒有模型檔時用 SVM；`criminal_term/` 從 Hugging Face 下載（`scripts/sync_criminal_term.sh`），`criminal_v1/`、`retrieval_criminal_v1/` 從 Hugging Face 下載（`scripts/sync_criminal_models.sh`）
 - **LLM 追問**：已接上，見上面的「LLM」；送出的文字一律先經過 `retrieval.masking.mask()`
 - **段落功能標註**：`civil.insights.guide_paragraphs()` 換成標註模型，`labeler` 改成模型名稱
 
 測試：`python -m unittest tests.test_backend`（有模型、沒有模型兩種情況都測）。
+
+
+## 刑事判決導讀資料
+
+刑事導讀使用「完整原文＋段落標示」：全文依原本的順序切成段落，每段標出功能——案件資訊、主文、犯罪事實、
+證據、論罪科刑、法條、附表、其他（署名、上訴說明）；附件（起訴書、聲請簡易判決處刑書）另外標示，裡面一樣分段。
+切法只看判決書的標題行（「主文」「犯罪事實」「理由」「附表一：」…）和段落編號，是規則，可能有誤。
+
+目前可直接使用 `刑事檢索_遮名原文_cases_20261114.zip` 中的 `cases.sqlite`。其中 `cases` 保留原本 88,376 件檢索樣本，`full_text(row, text)` 保存同批樣本的遮名判決全文。安裝前須確認 `cases` 所有欄位與既有案件庫相同，再替換 `artifacts/retrieval_criminal_v1/cases.sqlite`，保留原本 `index.joblib`。
+
+API 以 `cases.id` 找案件，再以 `cases.row` 讀取 `full_text.row`，即時切段與標色；原文優先於舊的 `guides` 表。裁判日期由司法院判決 ID 的日期欄位取得。部署時要同步更新案件庫與後端程式。
+
+刑事相似判決列表的預覽改用遮名後的主文；找不到主文時提示查看原文，不回退到犯罪事實摘要。民事與刑事結果各自在瀏覽器記憶體保留最近一次請求，從導讀返回時沿用結果；輸入變更後重算，失敗不快取，重設或重新整理頁面會清除。
+
+若來源是原始年度資料庫，也可以先建好刑事檢索索引，再把導讀補進同一個案件庫（只重建 `guides` 表，不改索引和案件 ID）：
+
+```bash
+python -m retrieval.criminal_guides --db data_opendata/db --cases artifacts/retrieval_criminal_v1/cases.sqlite --require-full
+```
+
+- `--db` 接受多個原文 SQLite 檔案，或含 `刑事判決_全國地院_*.db` 的目錄。只讀取既有檢索樣本對應的 `full_text`，不重新抽樣。以司法院網址裡的判決 ID 對應；同一個 ID 有多件時不用。
+- 正式導讀使用 `--require-full`：全部樣本都有原文才更新。缺漏或有歧義時回報件數並保留既有導讀，不允許 CAIL fact 備援。
+- 舊版的 `--data` 仍可供開發時檢查資料集節錄，不能用來宣稱完整原文覆蓋。本機先前只有臺北 `judgments.db`，因此 88,376 件中只有 6,908 件有全文，其餘是 fact；2026-11-14 的遮名原文包已補齊這批樣本。
+- 遮名：辨識到的被告換成「被告」；有稱謂的人名（被害人、證人、共犯、會長、法官等）和列舉在後面的人名換成【關係人】，全文重複出現的姓名一併替換。支援跨行姓名及夾帶括註的人名清單；沒有稱謂或不符規則的姓名仍可能漏遮，並非完整的人名辨識。

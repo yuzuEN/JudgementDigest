@@ -48,5 +48,9 @@ describe("完整流程", () => {
     await user.click(await screen.findByRole("tab", { name: "相似判決" }));
     await user.click((await screen.findAllByRole("link", { name: "判決導讀" }))[0]);
     expect(await screen.findByText("本件爭點為被告有無過失。")).toBeInTheDocument();
+    await user.click(screen.getByRole("link", { name: "回結果" }));
+    await screen.findByRole("tab", { name: "相似判決" });
+    expect(calls.filter((c) => c.key === "POST /civil/report")).toHaveLength(1);
+    expect(calls.filter((c) => c.key === "POST /criminal/predict")).toHaveLength(1);
   });
 });

@@ -526,6 +526,7 @@ function RewriteStage({ heading, llm, vendor, intake, update, state, onStart, co
           <div className="flex flex-col gap-2">
             <label htmlFor="rewrite-draft" className="font-bold">整理後的寫法（可以直接修改）</label>
             <p id="rewrite-hint" className="text-[15px] text-muted-foreground">
+              {criminal && "請先確認被告、被害人與「敘述者」是否對應正確；稱謂是本次分析的角色，不代表已起訴或有罪。"}
               請檢查有沒有多出你沒說過的事，例如{criminal ? "日期、傷勢、前科、和解" : "日期、金額、簽約或書面文件"}。這段只用來{usedFor}，不是法律文件。
             </p>
             <Textarea id="rewrite-draft" value={draft} aria-describedby="rewrite-hint" className="min-h-[200px] resize-y"

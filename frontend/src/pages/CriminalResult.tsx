@@ -19,7 +19,7 @@ import { useIntake } from "../state";
 const TABS = [
   { key: "charges", label: "可能的罪名", line: "我是解說員。選擇罪名後，可以到「刑期範圍」查看推估結果與相似判決。" },
   { key: "sentence", label: "刑期範圍", line: "這裡並列模型推估與相似判決的實際宣告刑，方便比較。" },
-  { key: "cases", label: "相似判決", line: "可以開啟判決原文，查看案件經過和法院判斷。" },
+  { key: "cases", label: "相似判決", line: "點「判決導讀」可查看主文、犯罪事實與適用法條，也可以開啟司法院原文。" },
 ] as const;
 type TabKey = (typeof TABS)[number]["key"];
 
@@ -250,9 +250,10 @@ function CasesPanel({ report }: { report: CriminalReport }) {
                   <TableCell className="py-3.5 align-top whitespace-nowrap">{c.sentence ?? "—"}</TableCell>
                   <TableCell className="py-3.5 text-right align-top font-bold tabular-nums">{c.similarity.toFixed(2)}</TableCell>
                   <TableCell className="no-print py-3.5 align-top">
-                    {c.url
-                      ? <a href={c.url} target="_blank" rel="noreferrer" aria-label="判決原文" className="inline-flex min-h-11 items-center gap-1 font-semibold">原文<ExternalLinkIcon className="size-4" aria-hidden="true" /></a>
-                      : <LinkButton variant="outline" size="sm" to={`/judgment/criminal/${c.case_id}`}>判決導讀</LinkButton>}
+                    <div className="flex flex-wrap items-center gap-2">
+                      <LinkButton variant="outline" size="sm" to={`/judgment/criminal/${c.case_id}`}>判決導讀</LinkButton>
+                      {c.url && <a href={c.url} target="_blank" rel="noreferrer" aria-label="判決原文" className="inline-flex min-h-11 items-center gap-1 font-semibold">原文<ExternalLinkIcon className="size-4" aria-hidden="true" /></a>}
+                    </div>
                   </TableCell>
                 </TableRow>
               ))}
