@@ -1,7 +1,6 @@
 #!/usr/bin/env bash
 # 在主機上部署這份程式碼：建映像 → 換掉容器 → 等 /api/health 四項都是真的模型 → 失敗就換回上一版。
 # 手動：在主機的 repo 根目錄執行 bash deploy/server/deploy.sh
-# CI：.github/workflows/deploy.yml 在主機的自架 runner 上執行同一支。
 #
 # 主機上的位置（CASEY_HOME，預設 ~/casey）：.env、artifacts/ 放這裡；docker-compose.yml 每次從 repo 複製過去。
 set -euo pipefail

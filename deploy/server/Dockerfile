@@ -1,5 +1,5 @@
 # 上線用的映像：前端（nginx）和後端（uvicorn）放在同一個容器，對外只開 7860。
-# 主機上用 deploy/server/deploy.sh 建置與換版（CI 也是跑這支）；說明見 docs/部署.md。
+# 主機上用 deploy/server/deploy.sh 建置與換版；說明見 docs/部署.md。
 # 本機試跑（在 repo 根目錄）：docker build -f deploy/server/Dockerfile -t casey .
 # 本機開發照舊用根目錄的 docker-compose.yml。
 
