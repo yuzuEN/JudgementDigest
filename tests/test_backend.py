@@ -155,12 +155,14 @@ class TestCriminalWithModel(unittest.TestCase):
         self.assertFalse(r["mock"])
         self.assertEqual(r["charges"][0]["name"], "酒駕罪")
         self.assertEqual(len(r["charges"][0]["sentence"]), 6)
-        # 相似判決只在含「酒駕罪」的判決裡找，附宣告刑與原文網址；真的判決沒有導讀
+        # 相似判決只在含「酒駕罪」的判決裡找，附宣告刑、原文網址與導讀
         self.assertTrue(r["similar"] and all(c["mid"] == "酒駕罪" for c in r["similar"]))
         self.assertTrue(r["similar"][0]["url"].startswith("https://judgment.judicial.gov.tw/"))
         self.assertIn(r["similar"][0]["sentence"], ("有期徒刑 4 月", "拘役 20 日"))
         guide = self.client.get(f"/api/judgments/criminal/{r['similar'][0]['case_id']}/guide")
-        self.assertEqual(guide.status_code, 404)
+        self.assertEqual(guide.status_code, 200)
+        self.assertIsNone(guide.json()["criminal"])
+        self.assertEqual(guide.json()["labeler"], "summary-only")
         # 每個罪名另外附相似判決的宣告刑分布（合成資料：酒駕 30 件，有期徒刑 4 月與拘役各半）
         drunk = r["charges"][0]
         self.assertEqual(drunk["n_similar"], 30)

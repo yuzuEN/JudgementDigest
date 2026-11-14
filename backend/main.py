@@ -12,7 +12,7 @@ from typing import Optional
 from fastapi import APIRouter, FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 
-from backend import followup, llm, mock, schemas
+from backend import followup, llm, schemas
 from backend.civil_service import CivilService
 from backend.criminal_service import CriminalService
 from backend.llm.limits import UsageLimiter
@@ -128,13 +128,11 @@ def create_app(settings: Optional[Settings] = None) -> FastAPI:
 
     @api.get("/judgments/{source}/{case_id}/guide", response_model=schemas.Guide)
     def guide(source: str, case_id: int):
-        """判決導讀：判決分成原告主張、被告答辯、爭點、證據、法院判斷。"""
+        """判決導讀：民事段落功能標示；刑事原始判決欄位。"""
         if source == "civil":
             result = civil.guide(case_id)
         elif source == "criminal":
-            # 真的刑事判決沒有導讀（列表附司法院原文網址），只有示例資料有
-            cases = {c["case_id"]: c for c in mock.criminal_report()["similar"]} if criminal.mock else {}
-            result = mock.guide(cases[case_id]) if case_id in cases else None
+            result = criminal.guide(case_id)
         else:
             raise HTTPException(404, "source 只能是 civil 或 criminal")
         if result is None:

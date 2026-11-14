@@ -12,6 +12,7 @@ import { SampleTag } from "../components/casey/Sample";
 import { ErrorBox } from "../components/Common";
 import { JUDICIAL_URL, Layout, PAGE } from "../components/Layout";
 import { LinkButton } from "../components/LinkButton";
+import CriminalReading from "./CriminalReading";
 import { outcomeLabel, outcomeTone, percent } from "../format";
 
 /** 五類段落：各有底色，但每段開頭一定有文字標籤，不只靠顏色。法院判斷用白底加粗框。 */
@@ -40,6 +41,8 @@ export default function Reading() {
   const counts = (guide?.paragraphs ?? []).reduce<Record<string, number>>((acc, p) => ({ ...acc, [p.function]: (acc[p.function] ?? 0) + 1 }), {});
   const style = (fn: GuideFunction) => FUNCTIONS.find((f) => f.id === fn)!;
   const resultPath = `/result/${source === "criminal" ? "criminal" : "civil"}?tab=cases`;
+
+  if (source === "criminal") return <CriminalReading guide={guide} error={error} onRetry={load} />;
 
   return (
     <Layout stage={7} scene={{ who: "explainer", line: "全文已標出主張、抗辯、爭點、證據與法院判斷。你可以選擇要上色的類別，方便找出相關段落。" }}>

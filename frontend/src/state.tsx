@@ -1,6 +1,7 @@
 import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
 import type { CaseType, CivilInput, DefendantType } from "./api/types";
 import { parseAmount } from "./format";
+import { clearReportCache } from "./api/client";
 
 // 使用者填的內容放在這個分頁的 sessionStorage：重新整理還在，關掉分頁就清掉；
 // 不用 localStorage（會一直留在電腦上），也不送去保存。
@@ -121,7 +122,7 @@ export function IntakeProvider({ children, initial }: { children: ReactNode; ini
     () => ({
       intake,
       update: (patch: Partial<Intake>) => setIntake((prev) => ({ ...prev, ...patch })),
-      reset: () => setIntake(EMPTY_INTAKE),
+      reset: () => { clearReportCache(); setIntake(EMPTY_INTAKE); },
     }),
     [intake],
   );

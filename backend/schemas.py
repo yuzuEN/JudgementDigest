@@ -254,8 +254,23 @@ class GuideParagraph(BaseModel):
     text: str
 
 
+class CriminalGuideParagraph(BaseModel):
+    function: Literal["info", "verdict", "facts", "evidence", "court", "laws", "table", "other"]
+    label: str
+    text: str
+    pre: bool = False                    # 保留原本的換行（法條全文、附表、當事人列表）
+    part: Optional[str] = None           # 段落屬於附件時，例如「附件：起訴書」；資料集節錄是「資料集節錄」
+
+
+class CriminalGuide(BaseModel):
+    source: Literal["judgment", "dataset"]   # judgment：判決全文；dataset：只有資料集的犯罪事實
+    judgment_date: str = ""
+    paragraphs: List[CriminalGuideParagraph]
+
+
 class Guide(BaseModel):
     case: SimilarCase
     paragraphs: List[GuideParagraph]
+    criminal: Optional[CriminalGuide] = None   # 刑事導讀（全文分段）；民事用 paragraphs
     labeler: str
     mock: bool
