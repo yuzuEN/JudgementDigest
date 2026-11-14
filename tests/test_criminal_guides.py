@@ -4,11 +4,23 @@ import sqlite3
 import tempfile
 import unittest
 import zipfile
+from contextlib import contextmanager
 from pathlib import Path
 
 from backend.criminal_service import CriminalService
 from retrieval.criminal_guides import build, clean, dataset_guide, dataset_rows, judgment_guide, judgment_id, segment
 from tests.test_criminal_service import synthetic, train_artifacts
+
+
+@contextmanager
+def connect(path):
+    """sqlite3 的 with 只會 commit、不會關閉連線；Windows 上沒關的檔案刪不掉，暫存資料夾會清不掉。"""
+    con = sqlite3.connect(path)
+    try:
+        with con:
+            yield con
+    finally:
+        con.close()
 
 # 簡易判決：主文 → 事實及理由 → 署名 → 附錄法條 → 附表 → 附件（起訴書，裡面再分犯罪事實、證據）
 FULL_TEXT = """臺灣臺北地方法院刑事簡易判決
@@ -186,7 +198,7 @@ class TestBuild(unittest.TestCase):
 
     def _raw_db(self, path: Path, rows):
         columns = ("full_text", "judgment_date", "defendant", "source_url", "case_number")
-        with sqlite3.connect(path) as con:
+        with connect(path) as con:
             con.execute("CREATE TABLE judgments (" + ",".join(f"{c} TEXT" for c in columns) + ")")
             con.executemany("INSERT INTO judgments VALUES (?, ?, ?, ?, ?)", [tuple(r[c] for c in columns) for r in rows])
 
@@ -222,7 +234,7 @@ class TestBuild(unittest.TestCase):
             raw_dir.mkdir()
             cases = root / "cases.db"
             urls = [f"https://judgment.judicial.gov.tw/FJUD/data.aspx?id=TPDM,{year},簡,1" for year in (2024, 2025)]
-            with sqlite3.connect(cases) as con:
+            with connect(cases) as con:
                 con.execute("CREATE TABLE cases (id INTEGER PRIMARY KEY, url TEXT)")
                 con.executemany("INSERT INTO cases VALUES (?, ?)", [(41, urls[0]), (92, urls[1])])
                 con.execute("CREATE TABLE guides (case_id INTEGER PRIMARY KEY, source TEXT, judgment_date TEXT, paragraphs TEXT)")
@@ -233,13 +245,13 @@ class TestBuild(unittest.TestCase):
                 self._raw_db(raw_dir / f"刑事判決_全國地院_{year}.db", [row])
             with self.assertRaisesRegex(ValueError, "原文只對上 1/2 件"):
                 build(raw_dir, cases, require_full=True)
-            with sqlite3.connect(cases) as con:
+            with connect(cases) as con:
                 self.assertEqual(con.execute("SELECT * FROM guides").fetchall(), [(41, "judgment", "", "[]")])
-            with sqlite3.connect(raw_dir / "刑事判決_全國地院_2025.db") as con:
+            with connect(raw_dir / "刑事判決_全國地院_2025.db") as con:
                 con.execute("UPDATE judgments SET full_text = ?", (FULL_TEXT,))
             result = build(raw_dir, cases, require_full=True)
             self.assertEqual((result["from_judgment"], result["from_dataset"]), (2, 0))
-            with sqlite3.connect(cases) as con:
+            with connect(cases) as con:
                 self.assertEqual(con.execute("SELECT case_id FROM guides ORDER BY case_id").fetchall(), [(41,), (92,)])
                 texts = [json.loads(r[0]) for r in con.execute("SELECT paragraphs FROM guides")]
                 for paragraphs in texts:
@@ -256,7 +268,7 @@ class TestBuild(unittest.TestCase):
             svc = CriminalService(root)
             first = svc._query("SELECT id, row FROM cases ORDER BY row LIMIT 1")[0]
             self.assertNotEqual(first["id"], first["row"])
-            with sqlite3.connect(svc.db_path) as con:
+            with connect(svc.db_path) as con:
                 con.execute("CREATE TABLE full_text (row INTEGER PRIMARY KEY, text TEXT)")
                 con.execute("INSERT INTO full_text VALUES (?, ?)", (first["row"], FULL_TEXT.replace("王大明", "【被告】")))
                 con.execute("UPDATE cases SET summary = ? WHERE id = ?", ("陳小華的手機遭竊，林美玉、黃志明到場。", first["id"]))
@@ -273,7 +285,7 @@ class TestBuild(unittest.TestCase):
             self.assertTrue(any(p["function"] == "verdict" for p in detail["paragraphs"]))
             self.assertTrue(any(p["part"] == "附件：起訴書" for p in detail["paragraphs"]))
             self.assertIsNone(svc.guide(999999))
-            with sqlite3.connect(svc.db_path) as con:
+            with connect(svc.db_path) as con:
                 con.execute("UPDATE full_text SET text = ''")
             self.assertEqual(svc.guide(first["id"])["criminal"]["source"], "dataset")
             self.assertEqual(svc.guide(first["id"])["case"]["summary"], "未收錄主文，請查看判決原文。")
@@ -283,7 +295,7 @@ class TestBuild(unittest.TestCase):
             root = Path(tmp)
             train_artifacts(root)
             svc = CriminalService(root)
-            with sqlite3.connect(svc.db_path) as con:
+            with connect(svc.db_path) as con:
                 con.execute("CREATE TABLE guides (case_id INTEGER PRIMARY KEY, fields TEXT NOT NULL)")
                 con.execute("INSERT INTO guides VALUES (1, '{\"verdict\": \"x\"}')")
             self.assertIsNone(svc.guide(1)["criminal"])
@@ -294,14 +306,14 @@ class TestBuild(unittest.TestCase):
             raw, cases, data = root / "raw.db", root / "cases.db", root / "data.zip"
             self._raw_db(raw, [])
             row = synthetic(2)[1]
-            with sqlite3.connect(cases) as con:
+            with connect(cases) as con:
                 con.execute("CREATE TABLE cases (id INTEGER PRIMARY KEY, url TEXT)")
                 con.execute("INSERT INTO cases VALUES (?, ?)", (321, row["meta"]["source_url"]))
             with zipfile.ZipFile(data, "w") as archive:
                 archive.writestr("data.jsonl", json.dumps(row))
             self.assertEqual(len(list(dataset_rows(data))), 1)
             self.assertEqual(build(raw, cases, data)["from_dataset"], 1)
-            with sqlite3.connect(cases) as con:
+            with connect(cases) as con:
                 case_id, source, _, paragraphs = con.execute("SELECT * FROM guides").fetchone()
             self.assertEqual((case_id, source), (321, "dataset"))
             self.assertEqual({p["function"] for p in json.loads(paragraphs)}, {"facts"})
