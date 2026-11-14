@@ -16,7 +16,7 @@ _NUM = r"[0-9０-９一二三四五六七八九十百之-]"
 # 沒寫縣市的地址一律遮，不看前後文（2026-11-13 改）：只看「門牌」「房屋」這類前後文時，
 # 「承租富宜路270號」「不動產所在地：楊梅鎮高獅路711號」都會漏掉。代價是車禍地點也會遮（「停於【地址】前」），句子仍讀得懂。
 # 路名不能含「時、於、在、因」這類虛詞：「住在…」「因當時東門街68號」才會從路名開始遮，不會把前面的字吃掉。
-_CITY = r"(?:[臺台](?:北|中|南|東)|新北|桃園|高雄|基隆|新竹|嘉義|苗栗|彰化|南投|雲林|屏東|宜蘭|花蓮|澎湖|金門|連江)[市縣]"
+_CITY = r"(?:[臺台](?:北|中|南|東)|新北|桃園|高雄|基隆|新竹|嘉義|苗栗|彰化|南投|雲林|屏東|宜蘭|花蓮|澎湖|金門|連江)[市縣巿]"   # 「巿」是「市」的異體字，判決偶爾會用（「臺東巿」）
 # 單字：幾乎不會出現在路名裡的虛詞與動詞；詞：「經」「由」「前」「開」可能是路名（經國路、自由路、前鎮區、開元路），
 # 只擋判決常見的詞（「經查」「由於」「之前」「當時」）
 _ROAD_STOP_WORDS = "當時|前往|之前|以前|先前|經查|經過|經由|由於|開設|開始|自行|向來|至於|後來|前開|上開|嗣後"
@@ -24,7 +24,7 @@ _ROAD_STOP_CHARS = "時於在因即為將之與及等坐落住址號的係而並
 # 詞的第二個字也要擋（「經查」的「查」），否則會從「查」開始遮，留下「經【地址】」
 _ROAD_STOP_SECOND = "|".join(f"(?<={w[0]}){w[1]}" for w in _ROAD_STOP_WORDS.split("|"))
 _ROAD_CHAR = (r"(?:(?!" + _ROAD_STOP_WORDS + r")(?!" + _ROAD_STOP_SECOND + r")(?![" + _ROAD_STOP_CHARS + r"])[一-鿿])")
-_ADDR_NO_CITY = (r"(?:" + _ROAD_CHAR + r"{1,3}[區鄉鎮市])?(?:" + _ROAD_CHAR + r"{1,3}[村里])?"
+_ADDR_NO_CITY = (r"(?:" + _ROAD_CHAR + r"{1,3}[區鄉鎮市巿])?(?:" + _ROAD_CHAR + r"{1,3}[村里])?"
                  + _ROAD_CHAR + r"{1,5}(?:路|街|大道)"
                  r"(?:" + _NUM + r"+段)?(?:" + _NUM + r"+巷)?(?:" + _NUM + r"+弄)?" + _NUM + r"+號"
                  r"(?:之" + _NUM + r"+)?(?:" + _NUM + r"+樓)?(?:之" + _NUM + r"+)?")
@@ -33,7 +33,7 @@ PATTERNS = [
     ("email", re.compile(r"[\w.+-]+@[\w-]+(?:\.[\w-]+)+")),
     ("phone", re.compile(r"(?<!\d)(?:\+886[-\s]?9|09)\d{2}[-\s]?\d{3}[-\s]?\d{3}(?!\d)"
                          r"|(?<!\d)\(?0[2-8]\d?\)?[-\s]?\d{3,4}[-\s]?\d{4}(?!\d)")),
-    ("address", re.compile(_CITY + r"(?:[一-鿿]{1,3}?[區鄉鎮市])?"
+    ("address", re.compile(_CITY + r"(?:[一-鿿]{1,3}?[區鄉鎮市巿])?"
                            r"[一-鿿]{1,6}?[路街道大道](?:" + _NUM + r"+段)?(?:" + _NUM + r"+巷)?"
                            r"(?:" + _NUM + r"+弄)?" + _NUM + r"+號(?:之" + _NUM + r"+)?(?:" + _NUM + r"+樓)?")),
     ("address", re.compile(_ADDR_NO_CITY)),
@@ -41,12 +41,16 @@ PATTERNS = [
     # 前後不能再接英數字或「-」，「7345-ST-A03」這類圖號才不會被切出一段。ISO-9001 這類標準編號除外。
     # 其他格式（AB-123、123-AB、法院遮過的 000-0000）要前面寫了「車牌」「車號」才遮；值放在 v 群組，只遮車牌本身。
     # 出生年月日（法院公開判決時不含，但偶爾漏掉）：「89年4月6日生，」「民國41年1月15日出生」。
-    # 後面要接標點或結尾，「112年1月4日生送達效力」「…日生效」才不會被遮。
-    ("birth", re.compile(r"(?:民國)?(?<![0-9])[0-9]{2,3}年[0-9]{1,2}月[0-9]{1,2}日(?:出生|生)(?=[，,。、；;（(）)\s]|$)")),
+    # 後面要接標點、「之」或結尾，「112年1月4日生送達效力」「…日生效」才不會被遮（「46年6月29日生之原告」要遮）。
+    ("birth", re.compile(r"(?:民國)?(?<![0-9])[0-9]{2,3}年[0-9]{1,2}月[0-9]{1,2}日(?:出生|生)(?=[，,。、；;（(）)\s之]|$)")),
     ("plate", re.compile(r"(?<![A-Za-z0-9-])(?!ISO|CNS|SOP|IEC|RFC)"
                          r"(?:[A-Z]{3}-[0-9]{3,4}|[0-9]{3}-[A-Z]{3}|[0-9]{4}-[A-Z]{2}|[A-Z]{2}-[0-9]{4}"
                          r"|[A-Z][0-9]-[0-9]{4}|[0-9]{4}-[A-Z][0-9])(?![A-Za-z0-9-])"
                          r"|(?:車牌|車號|牌照|號牌)(?:號碼|號)?[：:為是即]?\s?(?P<v>[A-Z0-9]{2,4}-?[A-Z0-9]{2,4})(?![A-Za-z0-9-])")),
+    # 沒有連字號、前面是「機車」「車輛」這類詞的：「機車FBL922」「車輛ARK6316號」「牌號EQE3228」。
+    # 一定要英文字母和數字都有，「車輛2023年」才不會被遮；型號（「GLE350的車子」）前面不是這些詞，不會遮
+    ("plate", re.compile(r"(?:機車|車輛|汽車|貨車|小客車|小貨車|車斗|拖車|牌號)(?:號碼)?[：:為是即]?\s?"
+                         r"(?P<v>[A-Z]{2,3}-?[0-9]{3,4}|[0-9]{3,4}-?[A-Z]{2,3})(?![A-Za-z0-9-])")),
 ]
 
 
@@ -215,8 +219,9 @@ _CJK_NAME = re.compile(r"[" + _HAN + r"]{2,4}")
 # 人名辨識在判決裡常見的誤判（100 件實測）：判決用語黏到名字上（「利云云」「固可認」「卷可佐」「伊前夫」「主張渠等」→「張渠」），
 # 以及計算方法等專有名詞。開頭是虛詞、或姓氏之後出現這些字的，都不當人名。
 _NER_BAD_FIRST = set("伊渠其於自更固卷上又詎該本此並另嗣經即")
-# 「之、渠、其、開」不放：「張之瑋」「吳渭渠」「陳其邁」「儲開軒」是真名；「云」也不放（「曾湘云」），只排除「云云」
-_NER_BAD_INNER = set("伊可卷於無庸僅參尚")
+# 「之、渠、其、開」不放：「張之瑋」「吳渭渠」「陳其邁」「儲開軒」是真名；「云」也不放（「曾湘云」），只排除「云云」。
+# 「伊」也不放：它是代名詞（「約定伊」「陳稱伊」），也是常見的名字用字（「謝伊婷」「林芷伊」），另外用 _yi_name_ok 判斷
+_NER_BAD_INNER = set("可卷於無庸僅參尚")
 # 「之孫鄭維德」會被辨識出「孫鄭」：親屬稱謂接姓氏的兩個字不是人名（取代時還會切斷後面的「鄭宇峰」）
 _KINSHIP_FIRST = set("孫子女妻夫父母兄弟姊妹姪甥媳婿")
 # 法院給未成年人或匿名者的代稱（「蘇童」＝姓蘇的兒童、「王姓」「陳某」「林女」），不是真名，不用遮
@@ -224,11 +229,35 @@ _PSEUDONYM_SECOND = set("童姓某氏男女")
 _NOT_PERSON = {"霍夫曼", "萊布尼茲", "萊布尼滋", "張冠李戴", "烏克麗麗", "亞帝芬奇", "三樓馬達", "卓見", "毛遂", "余裕"}
 # 四個字的辨識結果常是三個字的名字多黏了一個字：「經查張德滿」→「查張德滿」、「王怡文固」「陳國輝代」。去掉黏上的字
 _GLUED_FIRST = set("查代姊兄弟妹母父")
-_GLUED_LAST = set("固業代公斯君等")
+# 「蔡如滿伊」「錢祥瑞伊」：三個字的名字後面接代名詞「伊」；「劉伊峯嗣」：接「嗣後」
+_GLUED_LAST = set("固業代公斯君等伊嗣")
 
 
 _TOP_SURNAMES = set("陳林黃張李王吳劉蔡楊")
 RARE_MAX_DF = 10      # 兩個字的名字：在全部判決裡出現的件數不超過這個才算人名
+COMMON_MIN_DF = 1000  # 名字裡有「伊」時，前兩個字出現在這麼多件判決以上就是一般詞（「金錢」「程序」「陳稱」）
+
+# 名字裡有「伊」時的判斷（2026-11-14，全部 15.8 萬件的辨識結果裡，原本只因為「伊」被擋掉的有 422 種）：
+# 代名詞的「伊」前後是動詞或虛詞（「陳稱伊」「明知伊」「伊及伊」），名字的「伊」前面是姓（「黃伊弘」）或名字用字（「林芷伊」）。
+# 「致」不放：「呂致伊」是名字
+_YI_FUNC = set("稱述知定時因及與說請以向對將把被為在於使令讓給告約示認悉證查依按斯云謂指跟和替叫拿帶由自故後不若")
+_YI_SURNAMES = set(_SURNAMES) | set("饒殷葛覃穆崔聶房章祝喬賈雷齊廉龍萬易岳文")
+
+
+def _yi_prefix(n: str) -> Optional[str]:
+    """「林芷伊」這種「伊」在第三個字以後的名字，要看前兩個字是不是一般詞（「金錢伊」「程序伊」）；回傳要查的前兩個字。"""
+    return n[:2] if "伊" in n[2:] and "伊" not in n[:2] else None
+
+
+def _yi_name_ok(n: str, common_words: Optional[set]) -> bool:
+    """有「伊」的辨識結果是不是人名。common_words：在全部判決裡很常見的兩個字（common_bigrams）；沒給時，「伊」不在第二個字的一律不收。"""
+    if n.count("伊") != 1 or n[0] not in _YI_SURNAMES:
+        return False
+    i = n.index("伊")
+    if n[i - 1] in _YI_FUNC or (i + 1 < len(n) and n[i + 1] in _YI_FUNC):
+        return False
+    prefix = _yi_prefix(n)
+    return prefix is None or (common_words is not None and prefix not in common_words)
 
 
 def _two_char_candidate(n: str) -> bool:
@@ -244,19 +273,46 @@ def rare_two_char_names(candidates: Iterable[str], texts: Iterable[str], max_df:
     一般詞會出現在很多判決（15.8 萬件裡「陳情」1,016 件、「馬達」687 件、「周全」204 件），
     人名通常只有一兩件（「劉旭」3 件、「張蕾」2 件），用出現的件數分開。
     """
-    cands = {n for n in candidates if _two_char_candidate(n)}
+    return name_word_frequencies(candidates, texts, max_df)[0]
+
+
+_COMPOUND_SURNAMES = {"歐陽", "司馬", "諸葛", "上官", "張簡", "范姜", "司徒", "東方", "夏侯", "長孫", "慕容", "端木",
+                      "皇甫", "尉遲", "公孫"}
+
+
+def _trim_glued(n: str) -> str:
+    if len(n) == 4 and n[0] in _GLUED_FIRST and n[1] in _SURNAMES:
+        return n[1:]
+    if len(n) == 4 and n[3] in _GLUED_LAST and n[:2] not in _COMPOUND_SURNAMES:   # 「歐陽芷伊」是四個字的名字
+        return n[:3]
+    return n
+
+
+def name_word_frequencies(candidates: Iterable[str], texts: Iterable[str], max_df: int = RARE_MAX_DF,
+                          common_df: int = COMMON_MIN_DF) -> "tuple[set, set]":
+    """
+    讀一次全部判決，回傳（rare_two_char, common_words）：
+    rare_two_char：兩個字的候選名字裡出現不超過 max_df 件的（見 rare_two_char_names）
+    common_words：有「伊」的候選名字（「金錢伊」「林芷伊」）的前兩個字裡，出現 common_df 件以上的一般詞
+    """
+    candidates = {(n or "").strip() for n in candidates}
+    two = {n for n in candidates if _two_char_candidate(n)}
+    prefixes = {p for p in (_yi_prefix(_trim_glued(n)) for n in candidates if len(n) >= 3) if p}
+    cands = two | prefixes
     if not cands:
-        return set()
+        return set(), set()
     firsts = {n[0] for n in cands}
     df = {}
     for t in texts:
         t = t or ""
         for b in {t[i:i + 2] for i in range(len(t) - 1) if t[i] in firsts} & cands:
             df[b] = df.get(b, 0) + 1
-    return {n for n in cands if df.get(n, 0) <= max_df}
+    return ({n for n in two if df.get(n, 0) <= max_df},
+            {p for p in prefixes if df.get(p, 0) >= common_df})
 
 
-def usable_person_names(names: Iterable[str], rare_two_char: Optional[set] = None) -> List[str]:
+def usable_person_names(names: Iterable[str], rare_two_char: Optional[set] = None,
+                        common_words: Optional[set] = None) -> List[str]:
     """
     人名辨識（retrieval/ner.py）找到的名字，挑出可以拿來全文取代的。
     取代是整件判決找同樣的字串，不像人名的會把一般用語一起遮掉，所以：
@@ -264,6 +320,7 @@ def usable_person_names(names: Iterable[str], rare_two_char: Optional[set] = Non
     - 兩個字的只收 rare_two_char 裡的（rare_two_char_names：在全部判決裡很少出現的）；沒給就不收。
       人工抽查時「馬達」被當成人名遮掉，兩個字的辨識結果多半是一般詞（「陳情」「周全」）
     - 已經遮過（含「○」）的、和 _NOT_NAME 的常見詞（「陳述」「簡易」）開頭相同的不收
+    - 有「伊」的看 _yi_name_ok；common_words 是 name_word_frequencies 算出的一般詞
     """
     kept = set()
     for n in names:
@@ -273,13 +330,12 @@ def usable_person_names(names: Iterable[str], rare_two_char: Optional[set] = Non
                     and re.match(_NOT_NAME, n)):
                 kept.add(n)
             continue
-        if len(n) == 4 and n[0] in _GLUED_FIRST and n[1] in _SURNAMES:
-            n = n[1:]
-        elif len(n) == 4 and n[3] in _GLUED_LAST:
-            n = n[:3]
+        n = _trim_glued(n)
         if not _CJK_NAME.fullmatch(n) or len(n) < 3:
             continue
         if n in _NOT_PERSON or n[0] in _NER_BAD_FIRST or _NER_BAD_INNER & set(n[1:]) or "云云" in n:
+            continue
+        if "伊" in n and not _yi_name_ok(n, common_words):
             continue
         if n.endswith("之"):        # 「余梅之出資」「許北之」：後面的字黏上來
             continue
@@ -323,6 +379,13 @@ def mask_parties(text: str, plaintiffs: Optional[str], defendants: Optional[str]
     for names, role in ((p, "原告"), (d, "被告"), (a, "代理人"), (list(others), "關係人")):
         for name, tag in _role_tags(names, role).items():
             tags.setdefault(name, tag)        # 同一個名字出現在兩種角色時，以前面的角色為準
+    # 兩個字的姓（「頴川建忠」「頴川萬和」）：人名辨識有時只抓到「川欽和」，遮完會留下「頴【關係人1】」。
+    # 這件判決裡已經有某個名字以「頴川」開頭時，「頴」＋「川欽和」也是同一個人，用同一個標籤
+    heads = {n[:2] for n in tags if len(n) == 4}
+    for name in [n for n in tags if len(n) == 3]:
+        for head in heads:
+            if head[1] == name[0] and head + name[1:] in text:
+                tags.setdefault(head + name[1:], tags[name])
     # 長的名字先全部換掉，再換短的：「曾孫鄭宇峰」裡，誤判的「孫鄭」不會比「鄭宇峰」先換掉而切斷它。
     # 換的時候先放私用區的記號，最後才換成標籤：否則後面換短名字時，會換到前面已經放進去的標籤裡（「【被告】」裡的「被告」）
     codes = {name: f"{k}" for k, name in enumerate(tags)}

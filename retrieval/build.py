@@ -25,7 +25,7 @@ import config
 from civil.insights import defense_types, evidence_mentions
 from retrieval.civil import load_expanded
 from retrieval.engine import TfidfIndex
-from retrieval.masking import (by_appearance, listed_with, mask_parties, party_names, rare_two_char_names,
+from retrieval.masking import (by_appearance, listed_with, mask_parties, name_word_frequencies, party_names,
                                third_party_names, usable_person_names)
 
 NAME = "retrieval_civil_v4"
@@ -51,13 +51,14 @@ def provenance(db: Path) -> dict:
 
 def write_artifacts(corpus: pd.DataFrame, sections: pd.DataFrame, out: Path, version: str = "",
                     extra: Optional[dict] = None, ner_names: Optional[Dict[int, List[str]]] = None,
-                    rare_two_char: Optional[set] = None) -> Path:
+                    rare_two_char: Optional[set] = None, common_words: Optional[set] = None) -> Path:
     """
     corpus：id、字號、案由、結果、金額、原告主張，以及 default_judgment、in_stats（沒有時視為對審、納入統計）。
     sections：id ＋ 三段文字與當事人欄位（見 retrieval.civil.expanded_row）。
     ner_names：人名辨識找到的名字（retrieval.ner），和稱謂規則找到的第三人一起換成【關係人】（多人時編號）。
     rare_two_char：兩個字的名字裡可以遮的（masking.rare_two_char_names）；沒給就用這次的語料算，
     所以只建一部分判決（抽查）時，要傳用全部判決算好的結果，否則一般詞也會被當成很少見。
+    common_words：有「伊」的名字要排除的一般詞（masking.name_word_frequencies），規則同上。
     """
     corpus = corpus.reset_index(drop=True)
     if "default_judgment" not in corpus:
@@ -70,11 +71,13 @@ def write_artifacts(corpus: pd.DataFrame, sections: pd.DataFrame, out: Path, ver
     others = [third_party_names("\n".join(parts)) for parts in
               zip(corpus.plaintiff_claim_text, s.plaintiff_claim_text, s.defendant_defense_text, s.court_reasoning_text)]
     if ner_names is not None:
-        if rare_two_char is None:
+        if rare_two_char is None or common_words is None:
             texts = ("\n".join(parts) for parts in
                      zip(s.plaintiff_claim_text, s.defendant_defense_text, s.court_reasoning_text))
-            rare_two_char = rare_two_char_names({n for v in ner_names.values() for n in v}, texts)
-        others = [set(o) | set(usable_person_names(ner_names.get(int(i), []), rare_two_char))
+            rare, common = name_word_frequencies({n for v in ner_names.values() for n in v}, texts)
+            rare_two_char = rare if rare_two_char is None else rare_two_char
+            common_words = common if common_words is None else common_words
+        others = [set(o) | set(usable_person_names(ner_names.get(int(i), []), rare_two_char, common_words))
                   for o, i in zip(others, corpus.id)]
     # 列舉裡夾在已知名字之間、人名辨識漏掉的名字（「【關係人80】、吳渭渠、【關係人83】」）
     others = [set(o) | set(listed_with("\n".join(parts), set(o) | set(party_names(p, d))))

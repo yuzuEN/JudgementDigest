@@ -12,7 +12,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from retrieval.masking import (by_appearance, find_spans, listed_with, mask, mask_parties, party_names, party_roles,  # noqa: E402
-                               rare_two_char_names, third_party_names,
+                               name_word_frequencies, rare_two_char_names, third_party_names,
                                usable_person_names)
 
 
@@ -225,6 +225,27 @@ class TestPersonNames(unittest.TestCase):
     def test_replaced_everywhere_as_third_party(self):
         names = usable_person_names(["李惠明"])
         self.assertEqual(mask_parties("李惠明於當日將款項交付", "", "", [], names), "【關係人】於當日將款項交付")
+
+    def test_names_with_yi(self):
+        """「伊」是代名詞，也是名字用字（人工抽查後發現 422 種名字只因為「伊」沒遮）。"""
+        self.assertEqual(usable_person_names(["黃伊弘", "謝伊婷", "鄭展伊代", "蔡如滿伊", "歐陽芷伊"], common_words=set()),
+                         ["歐陽芷伊", "蔡如滿", "謝伊婷", "鄭展伊", "黃伊弘"])
+        for pronoun in ("約定伊", "陳稱伊", "斯時伊", "伊及伊", "明知伊", "益徵伊"):
+            self.assertEqual(usable_person_names([pronoun], common_words=set()), [], pronoun)
+
+    def test_yi_after_an_ordinary_word(self):
+        """「伊」在第三個字時看前兩個字：「金錢」「程序」出現在很多判決，是一般詞；「林芷」不是。"""
+        texts = ["原告交付金錢"] * 20 + ["證人林芷伊到庭，被告交付金錢"]
+        rare, common = name_word_frequencies(["金錢伊", "林芷伊"], texts, common_df=10)
+        self.assertEqual(common, {"金錢"})
+        self.assertEqual(usable_person_names(["金錢伊", "林芷伊"], rare, common), ["林芷伊"])
+        self.assertEqual(usable_person_names(["林芷伊"]), [], "沒給頻率資料時不收")
+
+    def test_two_character_surname_prefix(self):
+        """人名辨識只抓到「川欽和」時，同一件判決裡有「頴川」開頭的名字，「頴川欽和」整個遮掉（人工抽查發現）。"""
+        out = mask_parties("原告命次子頴川欽和詢問", "頴川建忠", "", [], ["川欽和"])
+        self.assertEqual(out, "原告命次子【關係人】詢問")
+        self.assertEqual(mask_parties("由王川欽和處理", "頴川建忠", "", [], ["川欽和"]), "由王【關係人】處理")
 
 
 if __name__ == "__main__":

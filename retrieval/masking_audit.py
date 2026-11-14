@@ -46,7 +46,7 @@ GUIDE = [
 
 _HINT_NAME = re.compile(r"(?<![一-鿿○〇])" + _NOT_NAME + r"([" + _SURNAMES + r"][一-鿿]{2})(?=[於向稱並、，即係已之為與和到])")
 _HINT_ID = re.compile(r"(?<![A-Za-z0-9])[A-Z][12489][0-9]{8}(?![0-9])")
-_PLATE = dict(PATTERNS)["plate"]
+_PLATES = [rx for kind, rx in PATTERNS if kind == "plate"]
 
 
 def hints(text: str, ner_names: Iterable[str] = ()) -> str:
@@ -55,7 +55,7 @@ def hints(text: str, ner_names: Iterable[str] = ()) -> str:
     ner_left = [n for n in usable_person_names(ner_names) if n in text]
     if ner_left:
         out.append("人名辨識：" + "、".join(ner_left[:20]))
-    plates = sorted({p for p in (m.group("v") or m.group() for m in _PLATE.finditer(text))
+    plates = sorted({p for p in (m.group("v") or m.group() for rx in _PLATES for m in rx.finditer(text))
                      if not re.fullmatch(r"[0-]+", p)})      # 000-0000 是法院遮過的
     if plates:
         out.append("車牌？" + "、".join(plates))
