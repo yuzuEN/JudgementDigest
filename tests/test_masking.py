@@ -232,6 +232,10 @@ class TestPersonNames(unittest.TestCase):
                          ["歐陽芷伊", "蔡如滿", "謝伊婷", "鄭展伊", "黃伊弘"])
         for pronoun in ("約定伊", "陳稱伊", "斯時伊", "伊及伊", "明知伊", "益徵伊"):
             self.assertEqual(usable_person_names([pronoun], common_words=set()), [], pronoun)
+        # 接「伊」「嗣」但開頭不是姓的整個不收；姓開頭的動詞＋伊也不收（重建後比對新遮掉的字串發現）
+        for word in ("茲陳報伊", "不爭執伊", "非約定伊", "沖帳使伊", "鏡週刊嗣", "甲判決嗣", "羅織伊", "杜撰伊"):
+            self.assertEqual(usable_person_names([word], common_words=set()), [], word)
+        self.assertEqual(usable_person_names(["凌大賢固", "黄伊平"], common_words=set()), ["凌大賢", "黄伊平"])
 
     def test_yi_after_an_ordinary_word(self):
         """「伊」在第三個字時看前兩個字：「金錢」「程序」出現在很多判決，是一般詞；「林芷」不是。"""

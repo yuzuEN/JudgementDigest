@@ -241,7 +241,9 @@ COMMON_MIN_DF = 1000  # 名字裡有「伊」時，前兩個字出現在這麼�
 # 代名詞的「伊」前後是動詞或虛詞（「陳稱伊」「明知伊」「伊及伊」），名字的「伊」前面是姓（「黃伊弘」）或名字用字（「林芷伊」）。
 # 「致」不放：「呂致伊」是名字
 _YI_FUNC = set("稱述知定時因及與說請以向對將把被為在於使令讓給告約示認悉證查依按斯云謂指跟和替叫拿帶由自故後不若")
-_YI_SURNAMES = set(_SURNAMES) | set("饒殷葛覃穆崔聶房章祝喬賈雷齊廉龍萬易岳文")
+_YI_SURNAMES = set(_SURNAMES) | set("饒殷葛覃穆崔聶房章祝喬賈雷齊廉龍萬易岳文温黄凌戚柴畢竇茆蒲闕陶霍靳麥奚塗巢官池")
+# 姓開頭的動詞接代名詞「伊」（「羅織伊入罪」「杜撰伊有專長」）：在判決裡不常見，出現件數擋不掉
+_YI_VERBS = {"羅織", "杜撰", "誣指", "誣陷", "陷害", "誣告", "詆毀", "污衊", "汙衊", "蒙騙", "誘騙", "唆使", "毆打"}
 
 
 def _yi_prefix(n: str) -> Optional[str]:
@@ -257,6 +259,8 @@ def _yi_name_ok(n: str, common_words: Optional[set]) -> bool:
     if n[i - 1] in _YI_FUNC or (i + 1 < len(n) and n[i + 1] in _YI_FUNC):
         return False
     prefix = _yi_prefix(n)
+    if prefix in _YI_VERBS:
+        return False
     return prefix is None or (common_words is not None and prefix not in common_words)
 
 
@@ -284,6 +288,9 @@ def _trim_glued(n: str) -> str:
     if len(n) == 4 and n[0] in _GLUED_FIRST and n[1] in _SURNAMES:
         return n[1:]
     if len(n) == 4 and n[3] in _GLUED_LAST and n[:2] not in _COMPOUND_SURNAMES:   # 「歐陽芷伊」是四個字的名字
+        # 接「伊」「嗣」的，第一個字要是姓，否則整個不收（「茲陳報伊」「不爭執伊」「鏡週刊嗣」是一般詞）
+        if n[3] in "伊嗣" and n[0] not in _YI_SURNAMES:
+            return ""
         return n[:3]
     return n
 
