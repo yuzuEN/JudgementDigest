@@ -3,6 +3,7 @@
 
 # 虛擬環境
 .venv/
+.venv-ner/
 
 # 擋我的小key key
 .env

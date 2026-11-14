@@ -60,7 +60,7 @@ flowchart LR
 ## 資料
 
 - 來源：[司法院裁判書查詢系統](https://judgment.judicial.gov.tw/FJUD/default.aspx)，全國地方法院判決（含簡易庭）
-- 規模：民事資料庫 236,009 筆判決（2022 年 1 月至 2026 年 4 月）；其中檢索語料 158,327 件、模型訓練 46,683 件。刑事：全國地院第一審判決 2016–2025（有罪、單一被告），CAIL 格式資料集 v2 共 1,132,585 筆；研究用均衡抽樣 10 萬筆（罪名 80 類、法條 102 類），平台模型用隨機 30 萬筆，刑事檢索語料 88,376 件
+- 規模：民事資料庫 236,009 筆判決（2022 年 1 月至 2026 年 4 月）；其中檢索語料 158,330 件、模型訓練 46,683 件。刑事：全國地院第一審判決 2016–2025（有罪、單一被告），CAIL 格式資料集 v2 共 1,132,585 筆；研究用均衡抽樣 10 萬筆（罪名 80 類、法條 102 類），平台模型用隨機 30 萬筆，刑事檢索語料 88,376 件
 - 處理：以規則切分段落，擷取事實、判決結果、金額、刑期、法官等欄位，欄位定義見 [docs/欄位說明.md](docs/欄位說明.md)
 - 刑事另從[司法院資料開放平臺](https://opendata.judicial.gov.tw/)取得全國地院刑事判決（`data_pipeline/opendata_*.py`）
 - 資料庫、HTML 原檔與模型權重不放在 repo 裡（檔案太大，且含當事人資訊）
@@ -142,7 +142,7 @@ docker compose up --build
 | `criminal_v1/` | 刑事罪名、法條 SVM（約 220 MB） | `scripts/sync_criminal_models.sh` |
 | `civil_winloss_v1/` | 民事勝敗模型（約 9 MB） | `scripts/sync_civil_models.sh` |
 | `civil_amount_v1/` | 民事獲償比例模型（約 8 MB） | 同上（民事三個資料夾一起下載） |
-| `retrieval_civil_v3/` | 民事相似判決檢索（約 2.6 GB） | 同上，或 `bash scripts/sync_retrieval.sh civil` |
+| `retrieval_civil_v4/` | 民事相似判決檢索（約 2.6 GB） | 同上，或 `bash scripts/sync_retrieval.sh civil` |
 | `retrieval_criminal_v1/` | 刑事相似判決檢索（約 481 MB） | `scripts/sync_criminal_models.sh`（和刑事 SVM 一起下載），或 `bash scripts/sync_retrieval.sh criminal` |
 
 刑事檢索也已上傳。可用 `bash scripts/sync_retrieval.sh civil`、`criminal` 或 `all` 單獨同步檢索資料；加 `--dry-run` 先看清單。本機有自訂導讀時先備份。分析用原始資料庫尚未納入同步。分享決策與上傳方式見 [`docs/模型檔上傳.md`](docs/模型檔上傳.md)。
@@ -193,7 +193,7 @@ cd frontend && npm install && npm run dev     # 前端（另開一個終端機�
 python -m civil.models.service evaluate       # 5 折評估
 python -m civil.models.service train          # → artifacts/civil_winloss_v1/
 python -m civil.models.amount_service train   # → artifacts/civil_amount_v1/（選用：金額範圍改用模型推估）
-python -m retrieval.build                     # → artifacts/retrieval_civil_v3/（要有 judgments.db，約 35 分鐘）
+python -m retrieval.build                     # → artifacts/retrieval_civil_v4/（要有 judgments.db，約 35 分鐘）
 ```
 
 爬取與資料處理：
@@ -213,7 +213,7 @@ python scripts/browse_db.py
 - 結果只代表「打到判決」的案件；約 26–29% 的通常程序民事案件以和解、撤回、調解結束，沒有判決書
 - 模型讀的是法官整理過的事實，口語描述的機率會偏低、分不太出輸贏；訓練時加入短版文字沒有改善（見 `retrieval/README.md`）
 - 相似判決用字元 TF-IDF 比對。使用者確認過 LLM 整理的文字時用整理後的文字，否則用原本的描述；整理可能多加事實，所以要使用者確認，也會提醒多出來的數字
-- 遮名是規則版，判決裡的第三人姓名和車牌仍可能漏掉，正式公開前要再處理
+- 民事相似判決的姓名用規則加人名辨識（CKIP）遮掉。逐字讀隨機 140 件判決，2 件有漏遮的姓名（都已修正），估計每件判決有漏遮的機率 1.4%，95% 信心上限 4.4%；仍可能漏掉少見寫法的名字，也可能把暱稱等不是姓名的字遮掉（見 `docs/遮名.md`）。刑事判決的遮名還沒做
 - 法院「為什麼採信」很難自動判斷；證據比對只說「相似判決提到哪些證據」，不代表法院會採信
 - 法官事實認定論理傾向分析仍在規劃中；法官層級的結果會附樣本數與限制說明，民眾版只呈現法院與案件類型層級
 - 平台不保存使用者輸入的資料
