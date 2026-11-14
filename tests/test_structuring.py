@@ -1423,6 +1423,53 @@ class TestReasoningSections(unittest.TestCase):
         self.assertEqual(r["section_split_status"], "成功")
         self.assertTrue(r["court_reasoning_text"].startswith("按當事人"))
 
+    # ── 2.5.3：全庫 23.6 萬件新舊規則逐件比對時找到的寫法（A1 遮名抽查時發現簡易庭的答辯被併進法院判斷）──
+    CLAIM = "一、原告主張：被告向原告借款50萬元未還。並聲明：被告應給付原告50萬元。"
+
+    def test_defense_heading_asks_for_judgment(self):
+        """「二、被告求為判決：…其答辯意旨略以」（395499）：2.5.2 答辯空白，整段答辯算進法院判斷。"""
+        text = (self.CLAIM + "二、被告求為判決：原告之訴駁回。其答辯意旨略以：該款項係贈與等語。"
+                "三、本院之判斷：原告提出之借據堪信為真。")
+        r = S.split_reasoning_sections(text, "", "")
+        self.assertTrue(r["defendant_defense_text"].startswith("被告求為判決"))
+        self.assertTrue(r["court_reasoning_text"].startswith("三、本院之判斷"))
+
+    def test_defense_heading_variants(self):
+        for head in ("被告則表示：願意分期還款等語。", "被告到庭表示沒有意見。", "被告辯：該款項係贈與。",
+                     "被告具狀陳報：對原告請求並無異議等語。", "被告於辯論期日到場，表示對原告請求沒有意見。",
+                     "被告就原告請求之金額並不爭執。", "被告雖未提出書狀，惟到庭陳述：願意和解等語。"):
+            r = S.split_reasoning_sections(self.CLAIM + "二、" + head + "三、經查，原告提出之借據堪信為真。", "", "")
+            self.assertEqual(r["defendant_defense_text"], head, head)
+
+    def test_not_defense_headings(self):
+        """原告的指控（411873）、法院的程序說明（365325）不是答辯開頭。"""
+        for head in ("被告對未成年子女表示『你還要跟媽媽會面嗎』，原告因此受有精神痛苦。",
+                     "被告現在監執行中，具狀表明不願提解到場，自應尊重被告之意思。"):
+            r = S.split_reasoning_sections(self.CLAIM.replace("。並聲明", "。㈡並聲明") + "二、" + head
+                                           + "三、被告未於言詞辯論期日到場，亦未提出書狀作何聲明或陳述。"
+                                           + "四、經查，原告提出之借據堪信為真。", "", "")
+            self.assertFalse(r["defendant_defense_text"].startswith(head[:4]), head)
+
+    def test_not_filed_before_court_considers(self):
+        """「亦未提出書狀供本院審酌」（2.5.2 有 2,780 件切在「供」後面，法院段從「本院審酌。」開始）。"""
+        text = (self.CLAIM + "二、被告既未於言詞辯論期日到場，亦未提出書狀供本院審酌。"
+                "三、經查，原告提出之借據堪信為真。")
+        r = S.split_reasoning_sections(text, "", "")
+        self.assertTrue(r["defendant_defense_text"].endswith("供本院審酌。"))
+        self.assertTrue(r["court_reasoning_text"].startswith("三、經查"))
+
+    def test_several_defendants(self):
+        """多位被告各寫一段：引用「本院卷」的答辯（323229）、缺席被告「未提出其他書狀」（339657）也是答辯。"""
+        text = (self.CLAIM + "二、被告甲公司表示不爭執原告之請求等語。"
+                "三、被告乙則以：伊僅為連帶保證人（見本院卷第17頁），保證書非伊簽名等語，資為抗辯。"
+                "四、被告丙未於言詞辯論期日到場，未提出其他書狀作何聲明或陳述。"
+                "五、得心證之理由：原告提出之借據堪信為真。")
+        r = S.split_reasoning_sections(text, "", "")
+        self.assertTrue(r["defendant_defense_text"].startswith("被告甲公司"))
+        self.assertIn("被告乙則以", r["defendant_defense_text"])
+        self.assertIn("被告丙未於言詞辯論期日到場", r["defendant_defense_text"])
+        self.assertTrue(r["court_reasoning_text"].startswith("五、得心證之理由"))
+
     def test_only_civil_first_instance_is_split(self):
         row = dict(TestDeriveStructuredFields.BASE, facts_and_reasons=self.CONTESTED)
         self.assertEqual(S.derive_structured_fields(row)["section_split_status"], "成功")
