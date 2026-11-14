@@ -21,9 +21,9 @@ services:
     tmpfs:
       - /tmp
       - /home/user/.cache
-    # 紀錄檔（IP、路徑、狀態碼，不含輸入內容）最多 3 個 × 10 MB，舊的自動刪除
+    # 紀錄（IP、路徑、狀態碼，不含輸入內容）交給主機的 journald 保存，重新部署、容器重建也不會不見。
+    # 保留期限（30 天、最多 1 GB）設在主機上，見 harden-host.sh。查詢：journalctl -t casey，或 docker compose logs
     logging:
-      driver: json-file
+      driver: journald
       options:
-        max-size: "10m"
-        max-file: "3"
+        tag: casey
