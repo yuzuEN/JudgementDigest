@@ -11,7 +11,7 @@
             只用來抽查精確度，不能拿來估比例（batch 欄寫 enriched:DAM 等）。
 
 用法：
-    python -m annotation.sample                                  # 預設讀 artifacts/retrieval_civil_v3/cases.sqlite
+    python -m annotation.sample                                  # 預設讀 artifacts/retrieval_civil_v4/cases.sqlite
     python -m annotation.sample --cases civil_sample_3000.sqlite  # 讀抽出來的小檔案
     python -m annotation.sample --n-random 200 --n-enriched 30
 
@@ -183,7 +183,7 @@ def _draw(src: sqlite3.Connection, n_random: int, n_enriched: int, seed: int) ->
 
 def main():
     ap = argparse.ArgumentParser(description="抽出要標註的民事法院判斷段落")
-    ap.add_argument("--cases", type=Path, default=config.ARTIFACTS_DIR / "retrieval_civil_v3" / "cases.sqlite")
+    ap.add_argument("--cases", type=Path, default=config.ARTIFACTS_DIR / "retrieval_civil_v4" / "cases.sqlite")
     ap.add_argument("--out", type=Path, default=config.ARTIFACTS_DIR / OUT_NAME / "annotation.sqlite")
     ap.add_argument("--n-random", type=int, default=200)
     ap.add_argument("--n-enriched", type=int, default=30, help="每個加抽類別的段數")

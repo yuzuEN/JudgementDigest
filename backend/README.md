@@ -28,7 +28,7 @@ API 文件（可以直接在網頁上試）：http://127.0.0.1:8000/docs
 |---|---|---|
 | `GET /api/health` | 各部分是真的模型還是示例資料 | |
 | `GET /api/meta/options` | 問卷選項：糾紛類型（案由中類）、法院、證據 | 來自模型的訓練資料 |
-| `POST /api/intake/mask` | 遮掉身分證字號、電話、電子郵件、地址、指定的名字 | 規則；網站改在瀏覽器遮名，這個 API 留給其他用途 |
+| `POST /api/intake/mask` | 遮掉身分證字號、電話、電子郵件、地址、車牌、指定的名字 | 規則；網站改在瀏覽器遮名，這個 API 留給其他用途 |
 | `POST /api/intake/followup` | 追問描述裡缺少的事實 | 固定題庫；`allow_llm: true` 且有設定 LLM 時用 LLM |
 | `POST /api/intake/rewrite` | 把描述整理成判決書寫法：民事是原告主張，`case_type: criminal` 是犯罪事實 | LLM；不能用時回傳 `source: none` |
 | `POST /api/civil/predict` | 民事勝訴機率 | 模型 |
@@ -44,13 +44,13 @@ API 文件（可以直接在網頁上試）：http://127.0.0.1:8000/docs
 讀 `artifacts/`（`config.py` 的 `ARTIFACTS_DIR`，可用環境變數 `JD_ARTIFACTS_DIR` 改）：
 
 - `civil_winloss_v1/`：`python -m civil.models.service train` 產生
-- `retrieval_civil_v3/`：`python -m retrieval.build` 產生
+- `retrieval_civil_v4/`：`python -m retrieval.build` 產生
 - `civil_amount_v1/`（選用）：`python -m civil.models.amount_service train` 產生
-- `civil_winloss_v1/`、`civil_amount_v1/`、`retrieval_civil_v3/` 也可以從 Hugging Face 下載：`scripts/sync_civil_models.sh`（見根目錄 README 的「模型檔」）
+- `civil_winloss_v1/`、`civil_amount_v1/`、`retrieval_civil_v4/` 也可以從 Hugging Face 下載：`scripts/sync_civil_models.sh`（見根目錄 README 的「模型檔」）
 - `criminal_v1/`、`retrieval_criminal_v1/`：刑事罪名、法條模型與相似判決檢索（PR #39，`python -m criminal.models.service`、`python -m retrieval.criminal` 產生）；`criminal_v1/` 可以從 Hugging Face 下載：`scripts/sync_criminal_models.sh`
 - `criminal_term/`：刑度 ELECTRA（6 區間，和 SVM 相同），Kaggle `term-bucket-future-seed42-20261110` 的輸出（`best.pt`、`tokenizer/`、`encoder_config/`、`experiment_summary.json`）；沒有時刑度用 SVM。從 Hugging Face 下載：`scripts/sync_criminal_term.sh`（見根目錄 README 的「模型檔」）
 
-`civil_winloss_v1/`、`retrieval_civil_v3/` 任一個不存在時，民事改回傳示例資料；沒有 `criminal_v1/` 時罪名、法條、刑度、相似判決改回傳示例資料。伺服器照樣能啟動。
+`civil_winloss_v1/`、`retrieval_civil_v4/` 任一個不存在時，民事改回傳示例資料；沒有 `criminal_v1/` 時罪名、法條、刑度、相似判決改回傳示例資料。伺服器照樣能啟動。
 
 模型的 `meta.json` 記錄訓練時的 `git_commit`（有沒 commit 的改動會加 `-dirty`）、`sklearn`、`python` 版本（`config.build_info()`）。讀模型時如果 `sklearn` 和目前安裝的不同，記錄裡會留一筆警告（`config.warn_if_other_sklearn()`）；舊的 meta 沒有這個欄位就不比對。
 
@@ -72,7 +72,7 @@ API 文件（可以直接在網頁上試）：http://127.0.0.1:8000/docs
 
 ## 相似判決的兩層
 
-檢索語料有 158,327 件，但不是每一件都適合算統計（見 `retrieval/README.md`）：
+檢索語料有 158,330 件，但不是每一件都適合算統計（見 `retrieval/README.md`）：
 
 - 勝敗件數、金額範圍、證據對照、常見抗辯：只用對審且有被告答辯的案件（前 30 件）
 - `default_cases`：不分層的前 30 件裡有幾件被告未到庭，只用來另外說明，不算進比例

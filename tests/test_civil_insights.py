@@ -137,6 +137,17 @@ class TestGuide(unittest.TestCase):
         self.assertTrue(all(len(p["text"]) <= 400 for p in paras))
         self.assertEqual("".join(p["text"] for p in paras), court)
 
+    def test_masking_does_not_change_paragraphs(self):
+        """遮名標籤比名字長（【關係人12】7 個字），切段與「爭點」「證據」的判斷要和原文一樣。"""
+        sentence = "訴外人王大明於當日將款項交付林小美，林小美再轉交陳志強。"
+        masked_sentence = "訴外人【關係人11】於當日將款項交付【關係人12】，【關係人12】再轉交【關係人13】。"
+        raw_court = "一、" + sentence * 12 + "二、" + sentence * 2 + "兩造爭點在於借款是否成立。"
+        masked_court = "一、" + masked_sentence * 12 + "二、" + masked_sentence * 2 + "兩造爭點在於借款是否成立。"
+        raw = guide_paragraphs("被告陳志強則以：", "", raw_court)
+        masked = guide_paragraphs("被告【被告】則以：", "", masked_court)
+        self.assertEqual([p["function"] for p in masked], [p["function"] for p in raw])
+        self.assertEqual(len(masked), len(raw))
+
 
 if __name__ == "__main__":
     unittest.main()

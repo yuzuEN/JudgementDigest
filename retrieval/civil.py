@@ -12,7 +12,7 @@
 """
 import re
 import sqlite3
-from typing import Dict, Optional, Tuple
+from typing import Dict, Iterable, Optional, Tuple
 
 import pandas as pd
 
@@ -77,7 +77,7 @@ def expanded_row(row: Dict, derived: Dict) -> Optional[Tuple[Dict, Dict]]:
             "case_type_mid": derived["case_type_mid"], "outcome": derived["outcome"],
             "y": int(derived["outcome"] != "敗訴"), "plaintiff_claim_text": claim,
             "claimed_amount": derived["claimed_amount"], "awarded_amount": derived["awarded_amount"],
-            "grant_ratio": derived["grant_ratio"], "default_judgment": int(default),
+            "grant_ratio": derived["grant_ratio"], "default_judgment": int(default), "url": row.get("source_url") or "",
             "in_stats": int(not default and len(defense) >= MIN_DEFENSE and not absent)}
     section = {"id": row["id"], "plaintiff_claim_text": claim_raw, "defendant_defense_text": defense_raw,
                "court_reasoning_text": derived["court_reasoning_text"] or "", "plaintiff": row.get("plaintiff") or "",
@@ -86,8 +86,11 @@ def expanded_row(row: Dict, derived: Dict) -> Optional[Tuple[Dict, Dict]]:
     return case, section
 
 
-def load_expanded(db=None, chunk: int = 5000) -> Tuple[pd.DataFrame, pd.DataFrame]:
-    """從正式資料庫取第一審的給付、確認案件，用目前的規則在記憶體裡重新推導段落（資料庫不寫入）。"""
+def load_expanded(db=None, chunk: int = 5000, only: Optional[Iterable[int]] = None) -> Tuple[pd.DataFrame, pd.DataFrame]:
+    """
+    從正式資料庫取第一審的給付、確認案件，用目前的規則在記憶體裡重新推導段落（資料庫不寫入）。
+    only：只取這些 id（例如遮名抽查的 200 件），不用讀整個資料庫。
+    """
     config.use_data_pipeline()
     import structuring as S
     con = sqlite3.connect(f"file:{db or config.MAIN_DB}?mode=ro", uri=True)
@@ -95,7 +98,12 @@ def load_expanded(db=None, chunk: int = 5000) -> Tuple[pd.DataFrame, pd.DataFram
     try:
         ids = [r[0] for r in con.execute("SELECT id FROM judgments WHERE party_posture = '第一審對審' "
                                          "AND case_kind_category = '給付確認' ORDER BY id")]
-        cols = ", ".join(["id"] + S.SOURCE_COLUMNS)
+        if only is not None:
+            wanted = {int(i) for i in only}
+            ids = [i for i in ids if i in wanted]
+        # 司法院的原文網址：結果頁和導讀附「原文」連結（舊的資料庫沒有這一欄時留空）
+        has_url = any(r[1] == "source_url" for r in con.execute("PRAGMA table_info(judgments)"))
+        cols = ", ".join(["id"] + S.SOURCE_COLUMNS + (["source_url"] if has_url else []))
         cases, sections = [], []
         for start in range(0, len(ids), chunk):
             part = ids[start:start + chunk]

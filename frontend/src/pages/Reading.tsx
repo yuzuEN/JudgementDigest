@@ -103,9 +103,9 @@ export default function Reading() {
                   段落標示由系統判斷，可能有誤，請以判決原文為準。
                   {guide.labeler === "rule-v0" ? "目前依文字規則標示。" : "段落功能依標註手冊，由 LLM 輔助標註、法律系學生抽查驗證。"}
                 </p>
-                <p className="text-sm text-muted-foreground">判決中的當事人姓名已換成【原告】【被告】，證人、訴外人等換成【關係人】；這是自動處理，可能有遺漏。</p>
-                <a href={JUDICIAL_URL} target="_blank" rel="noreferrer" className="inline-flex w-fit items-center gap-1 text-[15px] font-semibold">
-                  司法院裁判書查詢系統<ExternalLinkIcon className="size-4" aria-hidden="true" />
+                <p className="text-sm text-muted-foreground">判決中的當事人姓名已換成【原告】【被告】，證人、訴外人與其他人名換成【關係人】，車牌、地址等也已遮蔽；同一角色有多人時加上編號（【被告1】【被告2】），同一件判決裡同一個編號是同一個人。這是自動處理，可能有遺漏。</p>
+                <a href={guide.case.url || JUDICIAL_URL} target="_blank" rel="noreferrer" className="inline-flex w-fit items-center gap-1 text-[15px] font-semibold">
+                  {guide.case.url ? "在司法院網站看這件判決的原文" : "司法院裁判書查詢系統"}<ExternalLinkIcon className="size-4" aria-hidden="true" />
                 </a>
               </Card>
             </aside>
@@ -127,7 +127,12 @@ export default function Reading() {
                   </section>
                 );
               })}
-              <InfoNote>想看完整、正式的判決，請到<a href={JUDICIAL_URL} target="_blank" rel="noreferrer">司法院裁判書查詢系統</a>用字號查詢。本頁不是法律意見。</InfoNote>
+              <InfoNote>
+                {guide.case.url
+                  ? <>想看完整、正式的判決，請看<a href={guide.case.url} target="_blank" rel="noreferrer">司法院網站上的原文</a>。</>
+                  : <>想看完整、正式的判決，請到<a href={JUDICIAL_URL} target="_blank" rel="noreferrer">司法院裁判書查詢系統</a>用字號查詢。</>}
+                本頁不是法律意見。
+              </InfoNote>
             </Card>
           </div>
         )}

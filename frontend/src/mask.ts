@@ -3,18 +3,34 @@
  * 規則要和 retrieval/masking.py 一致，兩邊用同一份測試案例 test/masking_cases.json。
  * Python 的 \d、\w 會比對 Unicode，這裡要明確寫 \p{Nd}、\p{L}，否則行為不同。
  */
-const TAGS = { id: "身分證字號", phone: "電話", email: "電子郵件", address: "地址", name: "姓名" } as const;
+const TAGS = { id: "身分證字號", phone: "電話", email: "電子郵件", address: "地址", plate: "車牌", birth: "出生日期", name: "姓名" } as const;
 type Kind = keyof typeof TAGS;
 
 const NUM = "[0-9０-９一二三四五六七八九十百之-]";
 const CITY = "(?:[臺台](?:北|中|南|東)|新北|桃園|高雄|基隆|新竹|嘉義|苗栗|彰化|南投|雲林|屏東|宜蘭|花蓮|澎湖|金門|連江)[市縣]";
 const WORD = "\\p{L}\\p{N}_";
+// 沒寫縣市、但有門牌號碼的地址一律遮；路名不能含虛詞，才不會把「住在」「因當時」吃進去（說明見 masking.py）
+const ROAD_STOP_WORDS = "當時|前往|之前|以前|先前|經查|經過|經由|由於|開設|開始|自行|向來|至於|後來|前開|上開|嗣後";
+const ROAD_STOP_CHARS = "時於在因即為將之與及等坐落住址號的係而並其該已爭稱到寄搬去送回從赴往位系本沿";
+const ROAD_STOP_SECOND = ROAD_STOP_WORDS.split("|").map((w) => `(?<=${w[0]})${w[1]}`).join("|");
+const ROAD_CHAR = `(?:(?!${ROAD_STOP_WORDS})(?!${ROAD_STOP_SECOND})(?![${ROAD_STOP_CHARS}])[一-鿿])`;
+const ADDR_NO_CITY = `(?:${ROAD_CHAR}{1,3}[區鄉鎮市])?(?:${ROAD_CHAR}{1,3}[村里])?${ROAD_CHAR}{1,5}(?:路|街|大道)`
+  + `(?:${NUM}+段)?(?:${NUM}+巷)?(?:${NUM}+弄)?${NUM}+號(?:之${NUM}+)?(?:${NUM}+樓)?(?:之${NUM}+)?`;
 
 const PATTERNS: [Kind, RegExp][] = [
   ["id", /(?<![A-Za-z0-9])[A-Z][12489]\p{Nd}{8}(?![0-9])/gu],
   ["email", new RegExp(`[${WORD}.+\\-]+@[${WORD}\\-]+(?:\\.[${WORD}\\-]+)+`, "gu")],
   ["phone", /(?<!\p{Nd})(?:\+886[-\s]?9|09)\p{Nd}{2}[-\s]?\p{Nd}{3}[-\s]?\p{Nd}{3}(?!\p{Nd})|(?<!\p{Nd})\(?0[2-8]\p{Nd}?\)?[-\s]?\p{Nd}{3,4}[-\s]?\p{Nd}{4}(?!\p{Nd})/gu],
   ["address", new RegExp(`${CITY}(?:[一-鿿]{1,3}?[區鄉鎮市])?[一-鿿]{1,6}?[路街道大道](?:${NUM}+段)?(?:${NUM}+巷)?(?:${NUM}+弄)?${NUM}+號(?:之${NUM}+)?(?:${NUM}+樓)?`, "gu")],
+  ["address", new RegExp(ADDR_NO_CITY, "gu")],
+  // 車牌：一看就是車牌的格式直接遮；其他格式要前面寫了「車牌」「車號」才遮，只遮 v 群組（說明見 masking.py）
+  // 出生年月日：後面要接標點或結尾，「…日生效」「…日生送達效力」才不會被遮
+  ["birth", /(?:民國)?(?<![0-9])[0-9]{2,3}年[0-9]{1,2}月[0-9]{1,2}日(?:出生|生)(?=[，,。、；;（(）)\s]|$)/gu],
+  ["plate", new RegExp(
+    "(?<![A-Za-z0-9-])(?!ISO|CNS|SOP|IEC|RFC)"
+    + "(?:[A-Z]{3}-[0-9]{3,4}|[0-9]{3}-[A-Z]{3}|[0-9]{4}-[A-Z]{2}|[A-Z]{2}-[0-9]{4}"
+    + "|[A-Z][0-9]-[0-9]{4}|[0-9]{4}-[A-Z][0-9])(?![A-Za-z0-9-])"
+    + "|(?:車牌|車號|牌照|號牌)(?:號碼|號)?[：:為是即]?\\s?(?<v>[A-Z0-9]{2,4}-?[A-Z0-9]{2,4})(?![A-Za-z0-9-])", "gu")],
 ];
 
 interface Span { start: number; end: number; kind: Kind }
@@ -36,7 +52,12 @@ function findSpans(text: string, names: string[]): Span[] {
   const found: Span[] = [];
   const half = halfWidth(text);
   for (const [kind, rx] of PATTERNS) {
-    for (const m of half.matchAll(rx)) found.push({ start: m.index, end: m.index + m[0].length, kind });
+    for (const m of half.matchAll(rx)) {
+      const end = m.index + m[0].length;
+      // 「車號」後面的車牌只遮車牌本身；v 群組一定在比對結果的最後
+      const v = m.groups?.v;
+      found.push({ start: v ? end - v.length : m.index, end, kind });
+    }
   }
   const pattern = namePattern(names);
   if (pattern) {

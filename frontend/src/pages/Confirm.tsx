@@ -211,7 +211,7 @@ function MaskStage({ heading, intake, update, kinds, llm }: {
       <div className="flex flex-col gap-2">
         <p className="font-bold">會送出的內容（已遮名）</p>
         <p className="flex flex-wrap items-center gap-2 text-[15px]">
-          <mark className="masked">橘色</mark><span className="text-muted-foreground">標示已遮蔽的身分證字號、電話、email、地址，以及你加入的名字</span>
+          <mark className="masked">橘色</mark><span className="text-muted-foreground">標示已遮蔽的身分證字號、電話、email、地址、車牌、出生日期，以及你加入的名字</span>
         </p>
         <MaskedText text={intake.maskedText} live />
       </div>
