@@ -9,10 +9,11 @@
 # 下載位置跟著 config.py：有設 JD_ARTIFACTS_DIR 就放那裡，否則放 repo 根目錄的 artifacts/。
 set -euo pipefail
 project_root="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)"
-hf download JudgementDigest/judgementdigest-artifacts \
-  --revision "${JD_HF_REVISION:-main}" \
-  --include 'civil_winloss_v1/**' \
-  --include 'civil_amount_v1/**' \
-  --include 'retrieval_civil_v3/**' \
-  --local-dir "${JD_ARTIFACTS_DIR:-$project_root/artifacts}" \
-  "$@"
+# 每個資料夾各下載一次：hf 0.x 的 --include 寫好幾次時只有最後一個有效（1.x 則全部有效），分開寫兩種版本都對
+for folder in civil_winloss_v1 civil_amount_v1 retrieval_civil_v3; do
+  hf download JudgementDigest/judgementdigest-artifacts \
+    --revision "${JD_HF_REVISION:-main}" \
+    --include "$folder/**" \
+    --local-dir "${JD_ARTIFACTS_DIR:-$project_root/artifacts}" \
+    "$@"
+done
