@@ -41,6 +41,15 @@ done
 EOF
 chmod 755 /usr/local/sbin/casey-egress.sh
 
+# 上面擋掉了容器連家裡的路由器，也擋掉了容器用路由器查 DNS（docker build 時 npm、pip 會連不上網）。
+# 執行中的平台走 docker 內建的 DNS，不受影響；建置用的容器會照抄主機的 DNS（路由器），所以改用公開的 DNS。
+if [ ! -s /etc/docker/daemon.json ]; then
+  echo '{ "dns": ["1.1.1.1", "8.8.8.8"] }' > /etc/docker/daemon.json
+  systemctl restart docker
+elif ! grep -q '"dns"' /etc/docker/daemon.json; then
+  echo "注意：/etc/docker/daemon.json 已經有其他設定，請手動加上 \"dns\": [\"1.1.1.1\", \"8.8.8.8\"]，再 systemctl restart docker"
+fi
+
 cat > /etc/systemd/system/casey-egress.service <<'EOF'
 [Unit]
 Description=Block Docker containers from LAN and tailnet
