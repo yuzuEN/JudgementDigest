@@ -1,0 +1,5 @@
+{
+  "repo_id": "JudgementDigest/judgementdigest-artifacts",
+  "revision": "bc1e2366d5010db945c05d70705009c327092028",
+  "folders": ["criminal_v1", "criminal_term", "civil_winloss_v1", "civil_amount_v1", "retrieval_criminal_v1", "retrieval_civil_v3"]
+}

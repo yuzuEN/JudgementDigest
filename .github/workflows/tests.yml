@@ -66,3 +66,19 @@ jobs:
 
       - name: 型別檢查與建置
         run: npm run build
+
+  newer-python:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+          cache: pip
+      - name: Install newer runtime and reproduce the optional PEFT incompatibility
+        run: |
+          pip install uv
+          uv pip install --system -r requirements.txt -r backend/requirements.txt --override requirements-ci-new.txt peft==0.17.0
+      - name: Run all offline tests on newer Python
+        run: python -m unittest discover -s tests -t . -v

@@ -44,7 +44,6 @@ import torch
 from scipy.stats import spearmanr
 from sklearn.metrics import roc_auc_score
 from torch.utils.data import DataLoader, Dataset
-from transformers import AutoModelForSequenceClassification, BertTokenizerFast, get_linear_schedule_with_warmup
 
 HERE = Path(__file__).resolve().parent
 try:   # 在 repo 裡執行時用 config.py 的路徑；單獨上傳到雲端執行時沒有 config，資料與輸出放在程式旁邊
@@ -151,6 +150,9 @@ def main():
                     help="time：2022–2024 訓練、2025 測試；驗證集＝2022–2024 中 fold==0 且 val_half==1（同 train_bert.py）")
     ap.add_argument("--train_last", type=int, default=0, help="只微調最後 N 層 encoder（加上分類頭）；0＝全部微調")
     a = ap.parse_args()
+
+    # Load training dependencies only when training starts, not when importing helpers.
+    from transformers import AutoModelForSequenceClassification, BertTokenizerFast, get_linear_schedule_with_warmup
     t2s = not a.no_t2s
     regress = a.task == "amount"
 
