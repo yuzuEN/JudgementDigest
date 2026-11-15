@@ -1,5 +1,5 @@
 """
-以 Claude API 標註 sample.py 抽出的論點單位（手冊 v0.5、prompt p5.0，民事），寫入 annotations 表。
+以 Claude API 標註 sample.py 抽出的論點單位（手冊 v0.6、prompt p6.0，民事），寫入 annotations 表。
 
 改寫自階段一、二的 annotate.py，保留：
   - 可中斷續跑：同一段、同一個 run_no、同一個 prompt 版本已標過就跳過，不會重複付費
@@ -13,6 +13,10 @@ v0.5 新增：
   - EV 的 basis（明示評價／依證據推論）存進 annotations.subtype
   - 舊資料庫（v1、v2）沒有 subtype 欄位時自動補上，--reparse 才能用在舊資料
   - 預算預設 $4：論點單位比 v0.4 的段落長（中位數 281 字，但長的到 1,200 字）
+v0.6 新增：
+  - 引文超過 100 字時可以寫「開頭〔略〕結尾」。程式先整段比對；找不到才依〔略〕切成開頭、結尾，
+    先找結尾、再往回找最靠近的開頭，還原完整範圍（resolve_quote）。範圍超過 400 字或開頭、結尾不到 8 字都算不合法
+  - quotes 欄位存模型原本寫的引文；完整範圍隨時可以用 resolve_quote(引文, 單位原文) 算回來，不另外存
 
 用法（建議照順序，每步確認沒問題再往下）：
     python -m annotation.annotate --dry-run                 # 只印出第一段的 prompt，不呼叫 API（0 元）
@@ -37,8 +41,38 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 import config  # noqa: E402
 from annotation.sample import OUT_NAME  # noqa: E402
-from annotation.prompts_v5 import (EV_BASIS, LABELS_CIVIL, MANUAL_VERSION, POLARITY_BY_LABEL_CIVIL,  # noqa: E402
+from annotation.cues import MARK  # noqa: E402
+from annotation.prompts_v6 import (EV_BASIS, LABELS_CIVIL, MANUAL_VERSION, POLARITY_BY_LABEL_CIVIL,  # noqa: E402
                                    POLARITY_CIVIL, PROMPT_VERSION, SYSTEM_CIVIL, USER_TEMPLATE)
+
+MAX_SPAN = 400   # 用〔略〕還原的範圍上限（字）：避免模型把整個單位框起來
+MIN_PART = 8     # 開頭、結尾各至少幾個字：太短（例如「原告」）幾乎一定在單位裡重複出現
+
+
+def resolve_quote(quote: str, para: str, max_span: int = MAX_SPAN, min_part: int = MIN_PART):
+    """
+    引文在單位原文裡的完整範圍 (start, end)；找不到或不合法回傳 None。
+      1. 整段比對：原文本來就含有省略號的引文，也會在這一步直接找到
+      2. 有一個〔略〕：切成開頭、結尾。先找結尾，再往回找最靠近、而且在結尾之前結束的開頭，
+         這樣切出來的是最短的範圍，不會把兩個請求混在一起；結尾出現好幾次時依序試
+    """
+    if not quote:
+        return None
+    i = para.find(quote)
+    if i >= 0:
+        return (i, i + len(quote))
+    if quote.count(MARK) != 1:
+        return None
+    head, tail = (x.strip() for x in quote.split(MARK))
+    if len(head) < min_part or len(tail) < min_part:
+        return None
+    e = para.find(tail)
+    while e >= 0:
+        s = para.rfind(head, 0, e)
+        if s >= 0 and e + len(tail) - s <= max_span:
+            return (s, e + len(tail))
+        e = para.find(tail, e + 1)
+    return None
 
 MODEL = "claude-sonnet-5-5"
 # 美元／百萬 token（https://platform.claude.com/docs/en/about-claude/pricing）
@@ -109,7 +143,7 @@ def parse_response(raw: str, para: str, valid_labels=LABELS_CIVIL, valid_polarit
     for item in labels:
         code = item.get("code", "")
         quote = item.get("quote") or ""
-        valid = 1 if code == "NONE" else int(bool(quote) and quote in para)
+        valid = 1 if code == "NONE" else int(resolve_quote(quote, para) is not None)
         polarity = check_polarity(code, item.get("polarity"), valid_polarity)
         subtype = None
         if code == "EV":

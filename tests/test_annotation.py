@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 """
-annotation/ 的離線測試（v0.5）：論點單位抽樣、回應解析（CONCL 方向、EV basis）、多數決、
+annotation/ 的離線測試（v0.6）：論點單位抽樣、回應解析（CONCL 方向、EV basis）、多數決、
 CONCL 和判決結果比對、線索、prompt 的標籤定義。不呼叫 API。
 """
 
@@ -13,9 +13,9 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from annotation import prompts_v5  # noqa: E402
-from annotation.annotate import check_polarity, parse_response, reparse  # noqa: E402
-from annotation.cues import CUES, INTEREST_SERVICE, cue_hits, quote_anchored  # noqa: E402
+from annotation import prompts_v5, prompts_v6  # noqa: E402
+from annotation.annotate import check_polarity, parse_response, reparse, resolve_quote  # noqa: E402
+from annotation.cues import CUES, INTEREST_SERVICE, MARK, cue_hits, quote_anchored  # noqa: E402
 from annotation.sample import MAX_UNIT, SCHEMA, build_sample, used_case_ids  # noqa: E402
 from annotation.spot_check import (COL, concl_directions, export, majority, outcome_flag,  # noqa: E402
                                    score, wilson)
@@ -96,7 +96,7 @@ class TestSample(unittest.TestCase):
         # 加抽的單位一定含有該類線索
         for batch, text in read(self.out, "SELECT batch, para_text FROM paragraphs WHERE batch LIKE 'enriched:%'"):
             self.assertRegex(text, CUES[batch.split(":")[1]])
-        self.assertEqual(min(r[0] for r in read(self.out, "SELECT sample_id FROM paragraphs")), 3001)
+        self.assertEqual(min(r[0] for r in read(self.out, "SELECT sample_id FROM paragraphs")), 4001)
 
     def test_exclude_previous_rounds(self):
         """新一輪不能再抽到先前各輪用過的判決。"""
@@ -182,6 +182,56 @@ class TestParseResponse(unittest.TestCase):
         self.assertEqual(parse_response("不是 JSON", self.PARA)[0][0], "PARSE_ERROR")
 
 
+class TestResolveQuote(unittest.TestCase):
+    """v0.6：引文超過 100 字時寫「開頭〔略〕結尾」，程式還原完整範圍。"""
+    PARA = ("原告依消費借貸之法律關係，請求被告給付本金50萬元，及自起訴狀繕本送達翌日起至清償日止，"
+            "按週年利率5%計算之利息，為有理由，應予准許。原告請求被告給付違約金10萬元部分，為無理由，應予駁回。")
+
+    def test_exact_quote(self):
+        q = "為有理由，應予准許"
+        s, e = resolve_quote(q, self.PARA)
+        self.assertEqual(self.PARA[s:e], q)
+
+    def test_head_tail(self):
+        q = "原告依消費借貸之法律關係〔略〕按週年利率5%計算之利息，為有理由"
+        s, e = resolve_quote(q, self.PARA)
+        self.assertTrue(self.PARA[s:e].startswith("原告依消費借貸之法律關係"))
+        self.assertTrue(self.PARA[s:e].endswith("為有理由"))
+
+    def test_shortest_span_with_repeated_head(self):
+        """開頭在單位裡出現兩次：先找結尾、往回找最近的開頭，不會把兩個請求混在一起。"""
+        para = ("原告請求被告給付本金50萬元及利息，為有理由，應予准許。"
+                "原告請求被告給付違約金10萬元部分，經核過高，為無理由，應予駁回。")
+        q = "原告請求被告給付〔略〕為無理由，應予駁回"
+        s, e = resolve_quote(q, para)
+        self.assertNotIn("本金", para[s:e])
+        self.assertIn("違約金", para[s:e])
+
+    def test_original_text_with_ellipsis(self):
+        """原文本來就有省略號：整段比對就找到，不會被當成〔略〕。"""
+        para = "按「因故意或過失，不法侵害他人之權利者⋯⋯負損害賠償責任」，民法第184條定有明文。"
+        q = "因故意或過失，不法侵害他人之權利者⋯⋯負損害賠償責任"
+        self.assertIsNotNone(resolve_quote(q, para))
+
+    def test_invalid(self):
+        self.assertIsNone(resolve_quote("不在原文裡的句子", self.PARA))
+        self.assertIsNone(resolve_quote("原告〔略〕為有理由", self.PARA))                 # 開頭太短（< 8 字）
+        self.assertIsNone(resolve_quote("為有理由，應予准許〔略〕原告依消費借貸之法律關係", self.PARA))  # 順序顛倒
+        self.assertIsNone(resolve_quote("原告依消費借貸之法律關係〔略〕給付本金50萬元〔略〕為有理由", self.PARA))  # 兩個〔略〕
+        long_para = "原告依消費借貸之法律關係" + "甲" * 500 + "為有理由，應予准許"
+        self.assertIsNone(resolve_quote("原告依消費借貸之法律關係〔略〕為有理由，應予准許", long_para))  # 超過 400 字
+
+    def test_parse_uses_resolve(self):
+        raw = ('{"labels": [{"code": "CONCL", "quote": "原告依消費借貸之法律關係〔略〕按週年利率5%計算之利息，為有理由", '
+               '"polarity": "有理由", "confidence": "high"}]}')
+        self.assertEqual(parse_response(raw, self.PARA)[0][4], 1)
+
+    def test_anchor_checks_tail_only(self):
+        """用〔略〕時只檢查結尾：結論寫在開頭、結尾沒有，判成未錨定。"""
+        self.assertTrue(quote_anchored("CONCL", "原告依消費借貸之法律關係〔略〕按週年利率5%計算之利息，為有理由"))
+        self.assertFalse(quote_anchored("CONCL", "為有理由，原告依消費借貸之法律關係〔略〕自起訴狀繕本送達翌日起"))
+
+
 class TestReparse(unittest.TestCase):
     def test_reparse_old_db_without_subtype(self):
         """v0.4 以前的資料庫沒有 subtype 欄位：reparse 要自動補上欄位，再救回失敗列。"""
@@ -227,7 +277,7 @@ class TestSpotCheck(unittest.TestCase):
         """一個單位兩筆 CONCL（本金有理由、利息無理由），三次中出現兩次以上的方向才算。"""
         with tempfile.TemporaryDirectory() as tmp:
             db = Path(tmp) / "a.sqlite"
-            v = prompts_v5.PROMPT_VERSION
+            v = prompts_v6.PROMPT_VERSION
             with closing(sqlite3.connect(db)) as con:
                 con.executescript(SCHEMA)
                 for run, dirs in ((1, ["有理由", "無理由"]), (2, ["有理由", "無理由"]), (3, ["一部有理由"])):
@@ -246,7 +296,7 @@ class TestSpotCheck(unittest.TestCase):
             sheet = Path(tmp) / "check.xlsx"
             make_cases_db(cases, n=40)
             build_sample(cases, db, n_random=12, n_enriched=2, seed=3)
-            v = prompts_v5.PROMPT_VERSION
+            v = prompts_v6.PROMPT_VERSION
             with closing(sqlite3.connect(db)) as con:
                 for sid, text in con.execute("SELECT sample_id, para_text FROM paragraphs").fetchall():
                     if "堪信" in text:
@@ -266,6 +316,8 @@ class TestSpotCheck(unittest.TestCase):
             self.assertGreater(ws.max_row - 1, 0)
             self.assertEqual(ws.cell(2, COL["引文錨定（自動）"] + 1).value, "是")
             self.assertIn("明示評價", ws.cell(2, COL["傾向／方向"] + 1).value)
+            self.assertEqual(ws.cell(2, COL["完整範圍"] + 1).value, "核與證人所述相符，堪信為真實")   # v0.6
+            self.assertLessEqual(wb["CONCL"].max_row - 1, 10)                                     # 回歸檢查只抽 10 個
             # CONCL：判決敗訴卻標「有理由」→ 衝突；勝訴 → 一致
             wc = wb["CONCL"]
             flags = {wc.cell(i, COL["判決結果比對"] + 1).value for i in range(2, wc.max_row + 1)}
@@ -311,24 +363,31 @@ class TestCuesAndPrompts(unittest.TestCase):
                   "被告所辯，無足採信", "原告難證明其主張"):
             self.assertIn("EV", cue_hits(t), t)
 
-    def test_exp_closed_list(self):
-        for t in ("此類詐騙手法屢見不鮮", "依社會通念", "衡諸常情", "依經驗法則"):
+    def test_exp_families(self):
+        """v0.6：EXP 改成看功能，線索放寬成用語家族（v0.5 抽查 15 筆同義變化）。"""
+        for t in ("此類詐騙手法屢見不鮮", "依社會通念", "衡諸常情", "依經驗法則", "衡情，倘員工在正常情狀",
+                  "是其上開辯詞悖於常情", "此已與借款常情不合", "實務上並非罕見", "依一般社會通常觀念"):
             self.assertIn("EXP", cue_hits(t), t)
         self.assertNotIn("EXP", cue_hits("被告應注意並能注意而不注意"))
+        self.assertIn("BOP", cue_hits("被告就其抗辯並未提出證據以實其說"))
 
     def test_every_label_is_defined_in_prompt(self):
-        for label in prompts_v5.LABELS_CIVIL[:-1]:
-            self.assertIn(f"【{label}", prompts_v5.SYSTEM_CIVIL)
-        for label in prompts_v5.LABELS_CRIMINAL[:-1]:
-            self.assertIn(f"【{label}", prompts_v5.SYSTEM_CRIMINAL)
-        self.assertEqual((prompts_v5.MANUAL_VERSION, prompts_v5.PROMPT_VERSION), ("v0.5", "p5.1"))
+        P = prompts_v6
+        for label in P.LABELS_CIVIL[:-1]:
+            self.assertIn(f"【{label}", P.SYSTEM_CIVIL)
+        for label in P.LABELS_CRIMINAL[:-1]:
+            self.assertIn(f"【{label}", P.SYSTEM_CRIMINAL)
+        self.assertEqual((P.MANUAL_VERSION, P.PROMPT_VERSION), ("v0.6", "p6.0"))
+        self.assertEqual((prompts_v5.MANUAL_VERSION, prompts_v5.PROMPT_VERSION), ("v0.5", "p5.1"))  # 舊版保留不動
         for label in ("CONCL", "HI"):
-            self.assertIn(label, prompts_v5.LABELS_CIVIL)
+            self.assertIn(label, P.LABELS_CIVIL)
         for d in ("有理由", "一部有理由", "無理由"):
-            self.assertIn(d, prompts_v5.POLARITY_CIVIL)
-            self.assertIn(d, prompts_v5.SYSTEM_CIVIL)
-        self.assertIn('"basis"', prompts_v5.SYSTEM_CIVIL)
-        self.assertIn("10～100 字", prompts_v5.SYSTEM_CIVIL)
+            self.assertIn(d, P.POLARITY_CIVIL)
+            self.assertIn(d, P.SYSTEM_CIVIL)
+        self.assertIn('"basis"', P.SYSTEM_CIVIL)
+        self.assertIn(MARK, P.SYSTEM_CIVIL)          # v0.6 引文格式
+        self.assertIn("規則十一F", P.SYSTEM_CIVIL)    # 程序處分只標 PROC
+        self.assertNotIn("只看下列封閉清單", P.SYSTEM_CIVIL)   # EXP 不再是封閉清單
 
     def test_quote_anchored(self):
         """規則 10：EV 只引到列舉證據、SUB 只引到大前提，自動檢查要能抓出來（v0.3 抽查 1051、1249）。"""

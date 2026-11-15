@@ -18,8 +18,8 @@ v0.4 以前用的是 civil.insights._paragraphs()（400 字硬切），結果在
     python -m annotation.sample --cases civil_sample_3000.sqlite  # 讀抽出來的小檔案
     python -m annotation.sample --n-random 200 --n-enriched 30
 
-輸出：artifacts/annotation_civil_v3/annotation.sqlite 的 paragraphs 表，以及 meta.json。
-預設排除先前各輪（annotation_civil_v1、v2）用過的判決，確保新版手冊以新段落驗證。
+輸出：artifacts/annotation_civil_v4/annotation.sqlite 的 paragraphs 表，以及 meta.json。
+預設排除先前各輪（annotation_civil_v1、v2、v3）用過的判決，確保新版手冊以新段落驗證。
 重跑會清空 paragraphs 表重抽，但不動 annotations 表，請確認沒有已標註的資料再重跑。
 """
 import argparse
@@ -38,9 +38,9 @@ import config  # noqa: E402
 from annotation.cues import CUES  # noqa: E402
 from annotation.structure import units  # noqa: E402
 
-OUT_NAME = "annotation_civil_v3"     # v0.5 起；v0.3 在 annotation_civil_v1、v0.4 在 annotation_civil_v2
-PREV_NAMES = ("annotation_civil_v1", "annotation_civil_v2")  # 先前各輪：抽樣時排除這些輪用過的判決
-FIRST_ID = 3001          # v0.4 為 2001 起、v0.3 為 1001 起、更早的 samples 為 1–528
+OUT_NAME = "annotation_civil_v4"     # v0.6；v0.3 在 annotation_civil_v1、v0.4 在 v2、v0.5 在 v3
+PREV_NAMES = ("annotation_civil_v1", "annotation_civil_v2", "annotation_civil_v3")  # 先前各輪：抽樣時排除這些輪用過的判決
+FIRST_ID = 4001          # v0.6；v0.5 為 3001 起、v0.4 為 2001 起、v0.3 為 1001 起、更早的 samples 為 1–528
 MIN_LEN = 20             # 少於 20 字不標（手冊規則）
 MAX_UNIT = 1200          # 論點單位的長度上限（v0.5 以 3,000 件判決測試選定）
 CONTEXT = 300            # 前後文只取相鄰單位的末／首 300 字：單位較長，整段放進去費用會變成三倍

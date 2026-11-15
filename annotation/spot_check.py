@@ -16,7 +16,7 @@ v0.5 的驗證（沒有法律專業人員時的做法，見手冊第七節）：
 抽查只能估「精確度」（模型標出來的對不對），不能估「召回率」（模型漏標多少）。
 
 用法：
-    python -m annotation.spot_check export            # → artifacts/annotation_civil_v3/抽查表_v0.5.xlsx
+    python -m annotation.spot_check export            # → artifacts/annotation_civil_v4/抽查表_v0.6.xlsx
     python -m annotation.spot_check score             # 讀回填好的抽查表
 """
 import argparse
@@ -33,7 +33,8 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 import config  # noqa: E402
 from annotation.cues import CUES, INTEREST_SERVICE, quote_anchored  # noqa: E402
-from annotation.prompts_v5 import MANUAL_VERSION, PROMPT_VERSION  # noqa: E402
+from annotation.annotate import resolve_quote  # noqa: E402
+from annotation.prompts_v6 import MANUAL_VERSION, PROMPT_VERSION  # noqa: E402
 from annotation.sample import OUT_NAME  # noqa: E402
 
 OUT_DIR = config.ARTIFACTS_DIR / OUT_NAME
@@ -42,11 +43,13 @@ CHECK_LABELS = ("RULE", "SUB", "CONCL", "EV", "PROC", "DAM", "EXP")
 # 每個標籤優先從哪一批抽：稀有的從加抽批，常見的從隨機批
 PREFER_BATCH = {"RULE": "random", "SUB": "enriched:SUB", "CONCL": "random", "EV": "random", "PROC": "random",
                 "DAM": "enriched:DAM", "EXP": "enriched:EXP"}
+# v0.6：規則沒改的標籤只做回歸檢查（每類 10 個），確認沒有變差；其他照 --n 完整抽查
+REGRESSION = {"RULE": 10, "CONCL": 10}
 WIN = ("勝訴", "確認勝訴")
 LOSE = ("敗訴",)
 VERDICTS = ("符合", "不符合", "不確定")
 QUOTE_VERDICTS = ("正確", "錯誤")
-HEADERS = ["sample_id", "批次", "標籤", "傾向／方向", "引文", "待標段落", "線索", "引文錨定（自動）",
+HEADERS = ["sample_id", "批次", "標籤", "傾向／方向", "引文", "完整範圍", "待標段落", "線索", "引文錨定（自動）",
            "判決結果比對", "判定", "引文判定", "備註"]
 COL = {h: i for i, h in enumerate(HEADERS)}
 
@@ -188,13 +191,16 @@ def export(db: Path, out: Path, n_per_label: int, seed: int) -> None:
         "「線索」欄：單位裡有沒有手冊列出的線索。有線索不代表一定對，沒線索也不代表一定錯。",
         "CONCL 是新標籤（請求判斷）：法院對請求下結論（為有理由、應予准許、應予駁回）。也請檢查「傾向／方向」對不對。",
         "「判決結果比對」只在 CONCL 頁有值：衝突＝判決敗訴卻標有理由；注意＝判決勝訴卻標無理由。可能是反訴或抗辯，請看原文。",
+        "v0.6：引文超過 100 字時寫成「開頭〔略〕結尾」，「完整範圍」欄是程式還原的整段。引文判定請看完整範圍：結尾有沒有完成動作的用語。",
+        "v0.6：EXP 改成看功能（以一般經驗、常情、社會通念為判斷依據），不限特定用語；只有明顯不是在講經驗法則的才判不符合。",
+        "RULE、CONCL 規則沒改，只抽 10 個做回歸檢查。",
         "EV 的「傾向／方向」後面括號是 basis（明示評價／依證據推論）。",
         "只判斷「標出來的對不對」，不用找漏標的。",
     ], start=1):
         ws.cell(i, 1, line).font = Font(bold=(i == 1), size=14 if i == 1 else 11)
     ws.column_dimensions["A"].width = 120
 
-    widths = [10, 16, 8, 16, 36, 80, 8, 12, 12, 10, 10, 30]
+    widths = [10, 16, 8, 16, 36, 60, 80, 8, 12, 12, 10, 10, 30]
     fill = PatternFill("solid", fgColor="FFDDDDDD")
     for label in CHECK_LABELS:
         ws = wb.create_sheet(label)
@@ -208,7 +214,7 @@ def export(db: Path, out: Path, n_per_label: int, seed: int) -> None:
         rest = [s for s in cand if paras[s][0] != PREFER_BATCH[label]]
         rng.shuffle(pref)
         rng.shuffle(rest)
-        chosen = (pref + rest)[:n_per_label]
+        chosen = (pref + rest)[:REGRESSION.get(label, n_per_label)]
         for i, s in enumerate(sorted(chosen), start=2):
             batch, text = paras[s]
             pol, quote = first_quote(runs[s], label)
@@ -228,7 +234,9 @@ def export(db: Path, out: Path, n_per_label: int, seed: int) -> None:
                 hint = "有" if label in CUES and CUES[label].search(text) else ("無" if label in CUES else "")
             anchored = quote_anchored(label, quote)
             anchored = "" if anchored is None else ("是" if anchored else "否")
-            for j, v in enumerate([s, batch, label, pol, quote, text, hint, anchored, versus, None, None, None],
+            span = resolve_quote(quote, text) if quote else None
+            full = text[span[0]:span[1]] if span else "（找不到）"
+            for j, v in enumerate([s, batch, label, pol, quote, full, text, hint, anchored, versus, None, None, None],
                                   start=1):
                 ws.cell(i, j, v).alignment = Alignment(wrap_text=True, vertical="top")
             ws.row_dimensions[i].height = 110
