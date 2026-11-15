@@ -93,3 +93,18 @@ def guide(case: Dict) -> Dict:
     labels = {"claim": "原告主張", "defense": "被告答辯", "issue": "爭點", "evidence": "證據", "court": "法院判斷"}
     return {"case": case, "labeler": "mock", "mock": True,
             "paragraphs": [{"function": f, "label": labels[f], "text": "（示例）" + t} for f, t in paragraphs]}
+
+
+def criminal_guide(case: Dict) -> Dict:
+    def para(fn, label, text, pre=False, part=None):
+        return {"function": fn, "label": label, "text": "（示例）" + text, "pre": pre, "part": part}
+    return {"case": case, "paragraphs": [], "labeler": "mock", "mock": True, "criminal": {
+        "source": "judgment", "judgment_date": "", "paragraphs": [
+            para("info", "案件資訊", "○○地方法院刑事簡易判決\n上列被告因過失傷害案件，經檢察官聲請以簡易判決處刑，本院判決如下：", pre=True),
+            para("verdict", "主文", f"被告犯過失傷害罪，處{case['sentence']}，如易科罰金，以新臺幣壹仟元折算壹日。"),
+            para("facts", "犯罪事實", "一、被告駕車行經路口，未注意車前狀況，碰撞被害人機車，致被害人受傷。"),
+            para("evidence", "證據", "二、上開犯罪事實，業據被告坦承不諱，核與告訴人指訴相符，並有診斷證明書在卷可稽。"),
+            para("court", "論罪科刑", "三、核被告所為，係犯刑法第284條前段之過失傷害罪。爰審酌被告犯後坦承犯行等一切情狀，量處如主文所示之刑。"),
+            para("laws", "法條", "四、依刑事訴訟法第449條第1項前段、第3項、第454條第1項，逕以簡易判決處刑如主文。"),
+            para("laws", "法條", "附錄本案論罪科刑法條全文：\n中華民國刑法第284條\n因過失傷害人者，處1年以下有期徒刑、拘役或10萬元以下罰金。", pre=True),
+        ]}}

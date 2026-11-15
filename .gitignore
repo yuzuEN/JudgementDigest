@@ -3,6 +3,7 @@
 
 # 虛擬環境
 .venv/
+.venv-ner/
 
 # 擋我的小key key
 .env
@@ -14,7 +15,7 @@ __pycache__/
 *.pyo
 
 # 資料（不入版控）
-html_cache/
+html_cache*/
 *.db
 *.zip
 judgments.db*

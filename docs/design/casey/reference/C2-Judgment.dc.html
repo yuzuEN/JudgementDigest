@@ -1,0 +1,93 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<title>CasEY 判決導讀</title>
+<script src="./support.js"></script>
+<link rel="stylesheet" href="./jd.css">
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;700;800&display=swap" rel="stylesheet">
+<style>body{margin:0}</style>
+</helmet>
+<div class="jd {{theme}}">
+  <dc-import name="CTop" at="7" who="b" line="這是一件相似的判決。我把全文依功能上色：誰主張什麼、對方怎麼回、爭點在哪、法院怎麼認定。顏色只是幫你找段落，每段開頭都有文字標籤。" note="false" hint-size="100%,420px"></dc-import>
+
+  <main class="wrap" style="padding-top:28px;padding-bottom:56px">
+    <div class="stack" style="margin-bottom:28px">
+      <div class="row"><a class="btn btn-g" href="C2-Civil.dc.html"><span class="ic ic-back"></span>回結果</a></div>
+      <p class="kicker">判決導讀</p>
+      <h1 class="h1">臺灣雲林地方法院 113 年度簡字第 106 號民事判決</h1>
+    </div>
+
+    <div style="display:flex;flex-wrap:wrap;gap:28px;align-items:flex-start">
+      <aside class="stack" style="flex:1 1 280px;max-width:360px;min-width:0">
+        <section class="card stack">
+          <h2 class="h3">判決的基本資料</h2>
+          <dl class="stack-s small" style="margin:0">
+            <div class="stack-s" style="gap:2px"><dt class="muted">案由</dt><dd class="b">損害賠償（交通事故）</dd></div>
+            <div class="stack-s" style="gap:4px"><dt class="muted">結果</dt><dd><span class="oc oc-part">一部勝訴</span></dd></div>
+            <div class="stack-s" style="gap:2px"><dt class="muted">判准／請求</dt><dd class="num"><b>420,350</b> ／ 918,252 元</dd></div>
+          </dl>
+          <div class="stack-s"><div class="mini" role="img" aria-label="判准金額約占請求金額的 46%"><i style="width:46%;background:var(--part)"></i></div><p class="xs muted">判准的金額，約占請求的 46%。</p></div>
+        </section>
+        <section class="card stack">
+          <h2 class="h3">要標色哪幾類？</h2>
+          <p class="small muted">勾選的類別會標上顏色。</p>
+          <div class="stack-s">
+            <sc-for list="{{filters}}" as="f" hint-placeholder-count="5">
+              <button class="opt {{f.cls}}" type="button" aria-pressed="{{f.on}}" onClick="{{f.toggle}}" style="align-items:center;padding:10px 14px;font:inherit;color:inherit;width:100%;text-align:left;cursor:pointer"><span class="cb {{f.cb}}"><span class="ic ic-check" style="width:16px;height:16px"></span></span><span class="pz-sq" style="background:{{f.bg}}"></span><span class="b">{{f.name}}</span></button>
+            </sc-for>
+          </div>
+        </section>
+        <section class="card card-flat stack-s">
+          <h2 class="h3">關於這些標示</h2>
+          <p class="small muted">標示是系統自動判斷的，不是法院寫的，偶爾會標錯。看不確定時，以判決原文為準。</p>
+          <a class="lnk small" href="https://judgment.judicial.gov.tw">司法院裁判書查詢系統<span class="ic ic-ext" style="width:1em;height:1em"></span></a>
+        </section>
+      </aside>
+
+      <article class="card stack" style="flex:999 1 500px;min-width:0">
+        <div class="card-h"><h2 class="h3">判決全文</h2><span class="smp-tag">版面示意，非真實判決內容</span></div>
+        <sc-for list="{{passages}}" as="p" hint-placeholder-count="6">
+          <div class="pz {{p.cls}}"><span class="pz-tag"><span class="pz-sq" style="background:{{p.bg}}"></span>{{p.tag}}</span><p>{{p.text}}</p></div>
+        </sc-for>
+        <div class="note"><span class="ic ic-info"></span><p class="small">想看完整、正式的判決，請到<a href="https://judgment.judicial.gov.tw">司法院裁判書查詢系統</a>。本頁不是法律意見。</p></div>
+      </article>
+    </div>
+  </main>
+  <footer class="ftr"><div class="wrap row row-sb"><p>本服務提供的是過去判決的統計參考，不是法律意見。</p><a href="C2-Guide.dc.html">說明與法律小知識</a></div></footer>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"dark":{"editor":"boolean","default":false},"$preview":{"width":1280,"height":2300}}'>
+class Component extends DCLogic {
+  renderVals() {
+    const dark = !!this.props.dark;
+    const st = this.state || {};
+    const off = st.off || {};
+    const col = dark
+      ? { claim: '#1D2B47', def: '#2E2442', issue: '#3A3220', ev: '#173229', court: '#182027' }
+      : { claim: '#E2EAF8', def: '#EEE5F4', issue: '#F5EBC8', ev: '#DCEEE8', court: '#FFFFFF' };
+    const cats = [['主張', 'claim', 'pz-claim'], ['抗辯', 'def', 'pz-def'], ['爭點', 'issue', 'pz-issue'], ['證據', 'ev', 'pz-ev'], ['法院判斷', 'court', 'pz-court']];
+    const text = {
+      claim: '原告主張：被告駕車行經路口時未注意車前狀況，致與原告騎乘之機車發生碰撞，原告因而受傷，請求被告賠償醫療費用、車輛修理費用及工作損失。（示意文字）',
+      def: '被告抗辯：原告亦有未依號誌行駛之情形，應負一部過失責任；且原告請求之金額過高，部分項目亦欠缺必要性。（示意文字）',
+      issue: '本件爭點：一、被告就本件事故有無過失；二、原告是否與有過失，其比例為何；三、原告得請求之賠償金額若干。（示意文字）',
+      ev: '證據：原告提出診斷證明書、醫療費用收據、車輛修理估價單及路口監視器畫面為證，被告對其形式真正不爭執。（示意文字）',
+      court: '法院判斷：依前揭證據，堪認被告有過失；原告亦有部分過失，應減輕被告之賠償金額。爰判決被告應給付原告如主文所示之金額，其餘請求駁回。（示意文字）'
+    };
+    const flip = (k) => () => { const n = Object.assign({}, off); n[k] = !n[k]; this.setState({ off: n }); };
+    return {
+      theme: dark ? 'dark' : '',
+      filters: cats.map(([name, k]) => { const on = !off[k]; return { name, on, bg: on ? col[k] : 'transparent', cls: on ? 'sel' : '', cb: on ? 'on' : '', toggle: flip(k) }; }),
+      passages: cats.map(([name, k, cls]) => { const on = !off[k]; return { tag: name, cls: on ? cls : 'pz-plain', bg: on ? col[k] : 'transparent', text: text[k] }; })
+        .concat([{ tag: '', cls: 'pz-plain', bg: 'transparent', text: '其餘為訴訟費用負擔等程序事項，未標色。（示意文字）' }])
+    };
+  }
+}
+</script>
+</body>
+</html>

@@ -1,0 +1,113 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<title>金額區塊</title>
+<script src="./support.js"></script>
+<link rel="stylesheet" href="./jd.css">
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;700;800&display=swap" rel="stylesheet">
+<style>body{margin:0;background:transparent}</style>
+</helmet>
+<section class="card stack {{cardCls}}" style="min-width:0">
+  <div class="card-h">
+    <h2 class="h3">{{title}}</h2>
+    <sc-if value="{{sample}}" hint-placeholder-val="{{ false }}"><span class="smp-tag"><span class="ic ic-book"></span>示例資料</span></sc-if>
+  </div>
+
+  <!-- 模型推估 -->
+  <sc-if value="{{isModel}}" hint-placeholder-val="{{ true }}">
+    <div class="row"><span class="oc oc-part">來源：模型推估</span><span class="small muted">依 30 件相似判決訓練出的估計</span></div>
+    <div>
+      <p class="amt">21,087 ～ 580,339 元</p>
+      <p class="muted">你請求 <b class="num" style="color:var(--ink)">648,000 元</b></p>
+    </div>
+    <figure role="group" aria-label="金額範圍：21,087 元到 580,339 元，中位數 238,253 元，請求金額 648,000 元">
+      <div class="rng"><div class="rng-track"></div><div class="rng-fill dash" style="left:3.25%;width:86.3%"></div><div class="rng-med" style="left:36.77%"></div><span class="rng-lab" style="left:36.77%">中位數 238,253</span></div>
+      <div class="rng-ends"><span>0 元</span><span>請求 648,000 元</span></div>
+    </figure>
+    <p><b>10 件約有 8 件</b>會落在這個範圍。</p>
+    <div class="note"><span class="ic ic-info"></span><p class="small">模型推估的範圍<b>很寬</b>，只能看個大概。如果判決是「全部勝訴」，通常就是請求的全額。</p></div>
+  </sc-if>
+
+  <!-- 相似判決 -->
+  <sc-if value="{{isSimilar}}" hint-placeholder-val="{{ false }}">
+    <div class="row"><span class="oc oc-full">來源：相似判決</span><span class="small muted">依 30 件相似的勝訴判決</span></div>
+    <div>
+      <p class="amt">21,087 ～ 580,339 元</p>
+      <p class="muted">你請求 <b class="num" style="color:var(--ink)">648,000 元</b></p>
+    </div>
+    <figure role="group" aria-label="金額範圍：21,087 元到 580,339 元，中位數 238,253 元，請求金額 648,000 元">
+      <div class="rng"><div class="rng-track"></div><div class="rng-fill" style="left:3.25%;width:86.3%"></div><div class="rng-med" style="left:36.77%"></div><span class="rng-lab" style="left:36.77%">中位數 238,253</span></div>
+      <div class="rng-ends"><span>0 元</span><span>請求 648,000 元</span></div>
+    </figure>
+    <p><b>10 件約有 8 件</b>會落在這個範圍。</p>
+  </sc-if>
+
+  <!-- 沒填請求金額 -->
+  <sc-if value="{{isNo}}" hint-placeholder-val="{{ false }}">
+    <div class="row"><span class="oc oc-lose">沒有填請求金額</span></div>
+    <div>
+      <p class="amt">請求金額的 3%～90%</p>
+      <p class="muted">因為沒有填金額，這裡改用「占請求金額的比例」。</p>
+    </div>
+    <figure role="group" aria-label="判准比例：請求金額的 3% 到 90%，中位數 37%">
+      <div class="rng"><div class="rng-track"></div><div class="rng-fill" style="left:3%;width:87%"></div><div class="rng-med" style="left:37%"></div><span class="rng-lab" style="left:37%">中位數 37%</span></div>
+      <div class="rng-ends"><span>0%</span><span>請求金額 100%</span></div>
+    </figure>
+    <p><b>10 件約有 8 件</b>會落在這個範圍。</p>
+    <div class="note"><span class="ic ic-info"></span><p class="small">想看到實際的金額範圍？<a href="Start.dc.html">回上一步填寫請求金額</a>，資料會保留。</p></div>
+  </sc-if>
+
+  <!-- 資料不足 -->
+  <sc-if value="{{isInsuf}}" hint-placeholder-val="{{ false }}">
+    <div style="border:2px dashed var(--line2);border-radius:14px;padding:24px;display:grid;gap:8px;text-align:center;justify-items:center">
+      <span class="ic ic-minus ic-lg" style="color:var(--ink3)"></span>
+      <p class="h3">無法估出金額範圍</p>
+      <p class="small muted" style="max-width:420px">相似的勝訴判決太少，估出來的範圍不可靠，所以不顯示。你可以參考下方的相似判決，或回上一步補充細節。</p>
+    </div>
+  </sc-if>
+
+  <sc-if value="{{showHist}}" hint-placeholder-val="{{ true }}">
+    <details open="{{open}}">
+      <summary>看各金額範圍有幾件</summary>
+      <div class="dbody stack-s">
+        <p class="small muted">相似判決裡，判准金額占請求金額的比例：</p>
+        <sc-for list="{{hist}}" as="h" hint-placeholder-count="5">
+          <div class="hist-r"><span class="num">{{h.label}}</span><div class="hist-b"><i style="width:{{h.w}}%"></i></div><b class="num">{{h.n}} 件</b></div>
+        </sc-for>
+        <p class="xs muted">共 30 件。0–20% 7 件、20–40% 8 件、40–60% 12 件、60–80% 1 件、80–100% 2 件。</p>
+      </div>
+    </details>
+  </sc-if>
+</section>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"variant":{"editor":"enum","options":["model","similar","noamount","insufficient"],"default":"model"},"sample":{"editor":"boolean","default":false},"open":{"editor":"boolean","default":false},"$preview":{"width":600,"height":780}}'>
+class Component extends DCLogic {
+  renderVals() {
+    const v = this.props.variant || 'model';
+    const titles = {
+      model: '如果判決是「一部勝訴」，可能判准的金額',
+      similar: '如果勝訴，可能判准的金額',
+      noamount: '可能判准的比例',
+      insufficient: '可能判准的金額'
+    };
+    const data = [['0–20%',7],['20–40%',8],['40–60%',12],['60–80%',1],['80–100%',2]];
+    return {
+      title: titles[v],
+      isModel: v === 'model', isSimilar: v === 'similar', isNo: v === 'noamount', isInsuf: v === 'insufficient',
+      showHist: v !== 'insufficient',
+      sample: !!this.props.sample,
+      cardCls: this.props.sample ? 'sample-card' : '',
+      open: !!this.props.open,
+      hist: data.map(([label, n]) => ({ label, n, w: Math.round(n / 12 * 100) }))
+    };
+  }
+}
+</script>
+</body>
+</html>

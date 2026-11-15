@@ -7,7 +7,7 @@ fastapi>=0.115,<0.116
 uvicorn>=0.32,<0.33
 httpx>=0.27,<0.29
 python-dotenv>=1.0,<2
-# ELECTRA 刑期模型（目前停用）。啟用時打開下面三行：只裝 CPU 版 torch，transformers 鎖訓練時的版本。
-# --extra-index-url https://download.pytorch.org/whl/cpu
-# torch==2.5.1
-# transformers==4.56.2
+# 刑度模型（法律 ELECTRA）。只裝 CPU 版的 torch，映像檔小很多；transformers 鎖訓練時的版本。
+--extra-index-url https://download.pytorch.org/whl/cpu
+torch==2.5.1
+transformers==4.56.2

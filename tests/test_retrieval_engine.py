@@ -12,7 +12,7 @@ import numpy as np
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from retrieval.engine import TfidfIndex  # noqa: E402
+from retrieval.engine import TfidfIndex, sort_vocabulary  # noqa: E402
 
 CORPUS = [
     "原告騎機車直行遭被告汽車右轉撞擊受傷住院",
@@ -117,6 +117,26 @@ class TestSaveLoad(unittest.TestCase):
         self.assertTrue(np.array_equal(a[0], b[0]))
         self.assertTrue(np.allclose(a[1], b[1]))
 
+
+
+class TestVocabularyOrder(unittest.TestCase):
+    def test_save_sorts_vocabulary_without_changing_scores(self):
+        index = small_index()
+        before = index.scores("機車在路口被汽車撞到受傷")
+        self.assertNotEqual(list(index.vectorizer.vocabulary_.values()),
+                            sorted(index.vectorizer.vocabulary_.values()), "fit 後應依出現順序存放（測試前提）")
+        with tempfile.TemporaryDirectory() as d:
+            index.save(Path(d) / "index.joblib")
+            loaded = TfidfIndex.load(Path(d) / "index.joblib")
+        vocab = loaded.vectorizer.vocabulary_
+        self.assertEqual(list(vocab.values()), sorted(vocab.values()))
+        np.testing.assert_allclose(loaded.scores("機車在路口被汽車撞到受傷"), before)
+
+    def test_drops_stop_words(self):
+        from sklearn.feature_extraction.text import TfidfVectorizer
+        vec = TfidfVectorizer(analyzer="char", min_df=2).fit(CORPUS)
+        vec.stop_words_ = {"罕"}                  # 舊版 scikit-learn 會存被濾掉的詞
+        self.assertNotIn("stop_words_", vars(sort_vocabulary(vec)))
 
 if __name__ == "__main__":
     unittest.main()

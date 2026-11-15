@@ -11,8 +11,11 @@ class Health(BaseModel):
     status: str
     civil: Literal["model", "mock"]
     criminal: Literal["model", "mock"]          # 罪名、法條、刑度、相似判決
+    criminal_sentence: Optional[Literal["electra", "svm"]] = None   # 刑度用哪個模型（刑事是示例資料時為 null）
     followup: Literal["rules", "llm"]
     model: Optional[str] = None
+    amount: Literal["model", "similar", "mock"] = Field(
+        default="similar", description="民事金額範圍：model＝有可用的獲償比例模型（個別案件仍可能退回相似判決）；similar＝只用相似判決")
 
 
 class Option(BaseModel):
@@ -126,7 +129,11 @@ class AmountBucket(BaseModel):
 
 
 class AmountRange(BaseModel):
-    n_cases: int
+    source: Literal["model", "similar"] = Field(
+        default="similar", description="model＝獲償比例模型推估；similar＝相似判決的分位數（沒有模型檔時）")
+    scope: Literal["win", "partial_win"] = Field(
+        default="win", description="partial_win＝只針對「一部勝訴」；win＝勝訴與一部勝訴")
+    n_cases: Optional[int] = Field(default=None, description="buckets 背後的相似判決件數；沒有相似判決時是 null")
     ratio_low: float
     ratio_median: float
     ratio_high: float
@@ -136,6 +143,8 @@ class AmountRange(BaseModel):
     amount_median: Optional[int] = None
     amount_high: Optional[int] = None
     buckets: List[AmountBucket] = Field(default_factory=list, description="獲償比例每兩成一組的件數")
+    n_wins: Optional[int] = Field(default=None, description="相似判決（對審、最多 30 件）裡勝訴與一部勝訴的件數")
+    n_full_wins: Optional[int] = Field(default=None, description="其中全部勝訴（含確認勝訴）的件數")
 
 
 class SimilarCase(BaseModel):
@@ -152,7 +161,7 @@ class SimilarCase(BaseModel):
     awarded_amount: Optional[int] = None
     sentence: Optional[str] = None
     default_judgment: bool = False      # 一造辯論：被告沒有到庭
-    url: Optional[str] = None           # 刑事：司法院裁判書系統的原文網址（刑事判決沒有導讀）
+    url: Optional[str] = None           # 司法院裁判書系統的原文網址（民事舊版檢索資料沒有時為 None）
 
 
 class EvidenceRow(BaseModel):
@@ -225,24 +234,14 @@ class CriminalModelInfo(BaseModel):
     description: str
     n_test: Optional[int] = None
     charge_top1: Optional[float] = None                   # 第一個罪名猜中的比例
-    bucket_accuracy: Optional[float] = None               # 刑度區間猜中的比例
+    bucket_accuracy: Optional[float] = None               # 刑度區間猜中的比例（刑度用 ELECTRA 時是 ELECTRA 的）
     bucket_within_one: Optional[float] = None             # 刑度區間差一格以內的比例
-
-
-class SentenceModel(BaseModel):
-    name: str
-    description: str
-
-
-class SentenceDistribution(BaseModel):
-    """ELECTRA 刑期模型（目前停用）的輸出：有期徒刑落在各區間的機率（只估有期徒刑，不含拘役、罰金）。"""
-    buckets: List[SentenceBucket]
-    mock: bool
-    model: SentenceModel
+    sentence_description: Optional[str] = None            # 刑度另用別的模型時：模型名稱（例如「法律 ELECTRA」）
+    sentence_n_test: Optional[int] = None                 # 刑度模型的測試件數
+    sentence_test: Optional[str] = None                   # 刑度模型的測試資料（例如「2025 年判決」）
 
 
 class CriminalReport(BaseModel):
-    sentence: Optional[SentenceDistribution] = None      # ELECTRA 刑期，目前停用、不回傳
     charges: List[Charge]
     similar: List[SimilarCase]
     model: Optional[CriminalModelInfo] = None
@@ -255,8 +254,23 @@ class GuideParagraph(BaseModel):
     text: str
 
 
+class CriminalGuideParagraph(BaseModel):
+    function: Literal["info", "verdict", "facts", "evidence", "court", "laws", "table", "other"]
+    label: str
+    text: str
+    pre: bool = False                    # 保留原本的換行（法條全文、附表、當事人列表）
+    part: Optional[str] = None           # 段落屬於附件時，例如「附件：起訴書」；資料集節錄是「資料集節錄」
+
+
+class CriminalGuide(BaseModel):
+    source: Literal["judgment", "dataset"]   # judgment：判決全文；dataset：只有資料集的犯罪事實
+    judgment_date: str = ""
+    paragraphs: List[CriminalGuideParagraph]
+
+
 class Guide(BaseModel):
     case: SimilarCase
     paragraphs: List[GuideParagraph]
+    criminal: Optional[CriminalGuide] = None   # 刑事導讀（全文分段）；民事用 paragraphs
     labeler: str
     mock: bool

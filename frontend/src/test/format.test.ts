@@ -17,11 +17,17 @@ describe("money", () => {
 describe("parseAmount", () => {
   it.each([
     ["500000", 500000], ["500,000", 500000], ["50萬", 500000], ["1.5萬", 15000], ["30000元", 30000], [" 2 萬 ", 20000],
+    ["648000", 648000], ["648,000", 648000], ["64萬8千", 648000], ["64萬8000", 648000], ["64萬8000元", 648000],
+    ["NT$648,000", 648000], ["NT$ 50萬", 500000], ["新臺幣50萬元", 500000], ["８千", 8000], ["６４８，０００", 648000],
   ])("%s → %d", (input, expected) => expect(parseAmount(input)).toBe(expected));
   it("看不懂就是 null", () => {
     expect(parseAmount("")).toBeNull();
+    expect(parseAmount("元")).toBeNull();
     expect(parseAmount("五十萬")).toBeNull();
     expect(parseAmount("50k")).toBeNull();
+    expect(parseAmount("5萬20000")).toBeNull();
+    expect(parseAmount("50萬萬")).toBeNull();
+    expect(parseAmount("-500")).toBeNull();
   });
 });
 

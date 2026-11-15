@@ -1,4 +1,6 @@
-# JudgementDigest：刑事及民事類案判決參考平台
+# CasEY：刑事及民事類案判決參考平台
+
+（repo 名稱 JudgementDigest 是開發代號）
 
 面臨法律糾紛時，民眾往往不清楚自身的法律風險，也不知道下一步該怎麼做。自行上網搜尋或詢問生成式 AI，可能得到不存在的判決或沒有依據的說法。
 
@@ -11,12 +13,12 @@
 | | 輸入 | 輸出 | 第一版（目前） |
 |---|---|---|---|
 | **民事結果參考** | 原告主張＋使用者填得出來的案件特徵 | 相似判決的勝敗件數、模型參考（機率放在模型細節） | 🟢 相似判決統計；只用原告主張的 TF-IDF＋案件特徵 |
-| **民事金額範圍** | 請求金額＋相似的勝訴判決 | 判准金額的 80% 範圍 | 🟢 相似判決的獲償比例 |
+| **民事金額範圍** | 請求金額＋原告主張＋案件特徵 | 「若為一部勝訴」的獲償比例 80% 範圍，附相似勝訴判決的分布對照 | 🟢 獲償比例模型（`civil_amount_v1`）；沒有模型檔或資訊不夠時用相似判決的獲償比例 |
 | **相似判決檢索**（刑事、民事共用） | 案情描述 | 最相似的真實判決（字號、結果、刑期／判准金額） | 🟢 民事；🟢 刑事（每個罪名最多 1,500 件） |
 | **證據對照、常見抗辯** | 相似判決＋使用者有的證據 | 相似判決提到哪些證據（提到 ≠ 採信）、被告常見的抗辯 | 🟢 關鍵字規則 |
 | **輸入補全** | 案情描述 | 固定問卷＋追問缺漏的事實，送出前遮名預覽；把描述整理成判決書寫法，確認後用來搜尋 | 🟢 固定題庫；使用者同意後可用 LLM 追問與整理（Gemini） |
 | **判決導讀** | 相似判決 | 標出爭點、證據、法院判斷等段落 | 🟡 規則初步標示；待段落功能標註 |
-| **刑事** | 犯罪事實 | 罪名、法條、刑期區間 | 🟢 TF-IDF＋LinearSVC＋機率校正（`criminal/models/service.py`）；刑度另有 ELECTRA 版，目前停用 |
+| **刑事** | 犯罪事實 | 罪名、法條、刑期區間 | 🟢 TF-IDF＋LinearSVC＋機率校正（`criminal/models/service.py`）；刑度用法律 ELECTRA（`artifacts/criminal_term`，沒有時用 SVM） |
 | **說明與報告** | 結果頁 | 名詞與糾紛類型說明、下載 PDF | 🟢 |
 | **法官論理傾向分析** | 段落功能標註 | 法官事實認定與論理的傾向（民眾版不呈現） | ⬜ 規劃中 |
 
@@ -58,7 +60,7 @@ flowchart LR
 ## 資料
 
 - 來源：[司法院裁判書查詢系統](https://judgment.judicial.gov.tw/FJUD/default.aspx)，全國地方法院判決（含簡易庭）
-- 規模：民事資料庫 236,009 筆判決（2022 年 1 月至 2026 年 4 月）；其中檢索語料 158,327 件、模型訓練 46,683 件。刑事：全國地院第一審判決 2016–2025（有罪、單一被告），CAIL 格式資料集 v2 共 1,132,585 筆；研究用均衡抽樣 10 萬筆（罪名 80 類、法條 102 類），平台模型用隨機 30 萬筆，刑事檢索語料 88,376 件
+- 規模：民事資料庫 236,009 筆判決（2022 年 1 月至 2026 年 4 月）；其中檢索語料 158,330 件、模型訓練 46,683 件。刑事：全國地院第一審判決 2016–2025（有罪、單一被告），CAIL 格式資料集 v2 共 1,132,585 筆；研究用均衡抽樣 10 萬筆（罪名 80 類、法條 102 類），平台模型用隨機 30 萬筆，刑事檢索語料 88,376 件
 - 處理：以規則切分段落，擷取事實、判決結果、金額、刑期、法官等欄位，欄位定義見 [docs/欄位說明.md](docs/欄位說明.md)
 - 刑事另從[司法院資料開放平臺](https://opendata.judicial.gov.tw/)取得全國地院刑事判決（`data_pipeline/opendata_*.py`）
 - 資料庫、HTML 原檔與模型權重不放在 repo 裡（檔案太大，且含當事人資訊）
@@ -88,7 +90,7 @@ flowchart LR
 - 2025 的法條掉最多，主因是 2024 年洗錢防制法修法換條號（第 14 條→第 19 條）。新舊條號合併後，SVM 的 2025 法條 micro-F1 從 0.776 升到 0.820
 - 刑期加入罪名有幫助：SVM 加上預測的罪名，CAIL 分數 0.727→0.755；加上正確罪名是 0.770
 - 事實裡的本案罪名、法條遮成「××」。補強遮蔽規則後（PR #14）重跑 SVM，各指標變動都在 0.01 以內
-- **平台模型**（`criminal_v1`：SVM＋機率校正，隨機 30 萬筆訓練，另外 1 萬筆測試）：罪名 top-1 0.979、法條 micro-F1 0.954、6 個刑度區間 accuracy 0.810（差一區以內 0.980）。訓練資料多、資料是自然分布、拘役和罰金併成一區，所以比研究數字高，兩者不能直接比；沒有做交叉驗證或 2025 測試
+- **平台模型**（`criminal_v1`：SVM＋機率校正，隨機 30 萬筆訓練，事實用新的遮蔽規則重遮；另外 1 萬筆測試）：罪名 top-1 0.981、法條 micro-F1 0.955、6 個刑度區間 accuracy 0.811（差一區以內 0.980）。訓練資料多、資料是自然分布、拘役和罰金併成一區，所以比研究數字高，兩者不能直接比；沒有做交叉驗證或 2025 測試
 
 ## Repo 結構
 
@@ -96,14 +98,14 @@ flowchart LR
 JudgementDigest/
 ├── config.py          資料庫、資料集、模型檔的路徑（可用環境變數改）
 ├── data_pipeline/     資料蒐集與處理：爬蟲、開放資料、HTML 解析、民事與刑事結構化欄位
-├── civil/             民事：dataset/（建資料集的程式）、models/（勝訴機率、金額）、insights.py（證據、抗辯、金額範圍）
+├── civil/             民事：dataset/（建資料集的程式）、models/（勝訴機率、獲償比例）、features.py、insights.py（證據、抗辯、金額範圍）
 ├── criminal/          刑事：dataset/（事實取得與遮蔽）、models/（平台模型 service.py、基準模型）
 ├── retrieval/         相似判決檢索：engine.py（共用）、civil.py、build.py、masking.py（遮名）
 ├── annotation/        段落功能標註：標註手冊 v0.3、LLM 標註（annotate.py）、抽樣與抽查
 ├── backend/           API 伺服器（FastAPI）
-├── frontend/          網頁（React＋Vite）
-├── scripts/           輔助工具（瀏覽資料庫）
-├── docs/              爬蟲用法、欄位說明、資料版本、刑事結構化規則、repo 結構
+├── frontend/          網頁（React＋Vite，CasEY 改版）
+├── scripts/           輔助工具（瀏覽資料庫、從 Hugging Face 同步模型）
+├── docs/              爬蟲用法、欄位說明、資料版本、刑事結構化規則、repo 結構、介面設計（design/）
 ├── docker-compose.yml
 └── tests/
 ```
@@ -121,7 +123,7 @@ docker compose up --build
 
 開 http://localhost:8080 。8080 被占用時改用別的 port：`JD_PORT=8180 docker compose up --build`。
 
-模型與檢索資料（`artifacts/`）不在 repo 裡，由組內另外分享：
+模型與檢索資料（`artifacts/`）不在 repo 裡。模型與檢索資料都從 Hugging Face 下載（見下面的「模型檔（Hugging Face）」）：
 
 | 情況 | 民事顯示 | 適合 |
 |---|---|---|
@@ -129,6 +131,43 @@ docker compose up --build
 | 把分享的 `artifacts/` 放在 repo 根目錄 | 真實的模型與判決 | 測試真實結果、部署 |
 
 不用改設定，後端啟動時會自己判斷。
+
+#### 模型檔（Hugging Face）
+
+模型檔放在 Hugging Face 的私人 repo [`JudgementDigest/judgementdigest-artifacts`](https://huggingface.co/JudgementDigest/judgementdigest-artifacts)，每個資料夾對應 `artifacts/` 底下的同名資料夾。目前有：
+
+| 資料夾 | 內容 | 同步指令 |
+|---|---|---|
+| `criminal_term/` | 刑度 ELECTRA（約 410 MB） | `scripts/sync_criminal_term.sh` |
+| `criminal_v1/` | 刑事罪名、法條 SVM（約 220 MB） | `scripts/sync_criminal_models.sh` |
+| `civil_winloss_v1/` | 民事勝敗模型（約 9 MB） | `scripts/sync_civil_models.sh` |
+| `civil_amount_v1/` | 民事獲償比例模型（約 8 MB） | 同上（民事三個資料夾一起下載） |
+| `retrieval_civil_v4/` | 民事相似判決檢索（約 2.6 GB） | 同上，或 `bash scripts/sync_retrieval.sh civil` |
+| `retrieval_criminal_v1/` | 刑事相似判決檢索（約 481 MB） | `scripts/sync_criminal_models.sh`（和刑事 SVM 一起下載），或 `bash scripts/sync_retrieval.sh criminal` |
+
+刑事檢索也已上傳。可用 `bash scripts/sync_retrieval.sh civil`、`criminal` 或 `all` 單獨同步檢索資料；加 `--dry-run` 先看清單。本機有自訂導讀時先備份。分析用原始資料庫尚未納入同步。分享決策與上傳方式見 [`docs/模型檔上傳.md`](docs/模型檔上傳.md)。
+
+第一次使用：
+
+1. 請管理者把你加進 repo 所在的 HF 組織（repo 是私人的，組織成員才看得到）。
+2. 安裝 Hugging Face CLI 並登入（token 在 https://huggingface.co/settings/tokens 建立，選 Read 權限）：
+   ```bash
+   pip install -U "huggingface_hub[cli]"
+   hf auth login
+   ```
+3. 在 repo 根目錄執行：
+   ```bash
+   scripts/sync_criminal_term.sh
+   scripts/sync_criminal_models.sh
+   scripts/sync_civil_models.sh
+   ```
+   檔案會下載到 `artifacts/` 底下的同名資料夾。再執行一次只會下載有改過的檔案，所以模型更新後重跑同一個指令就好。
+
+要固定某一版時，把版本傳進去（可以是 commit、tag 或分支）：`scripts/sync_criminal_term.sh --revision <commit>`。只想看會下載什麼：`scripts/sync_criminal_term.sh --dry-run`。其他腳本用法相同。
+
+下載完要重啟後端才會讀到新模型：`docker compose up -d --force-recreate backend`（本機開發則重開 `uvicorn`）。`/api/health` 的 `criminal_sentence` 是 `electra` 表示讀到 ELECTRA，`amount` 是 `model` 表示讀到獲償比例模型（`civil` 要民事檢索資料也在才會是 `model`）。
+
+更新模型的人：上傳到同一個 repo 的同名資料夾（`hf upload JudgementDigest/judgementdigest-artifacts <本機資料夾> criminal_term --commit-message "..."`），並在 PR 或群組說明換了什麼、分數多少。
 
 要用 LLM 追問時，把 `.env.example` 複製成 `.env` 並填入自己的 key；沒有 `.env` 時追問會用固定題庫。
 
@@ -153,7 +192,8 @@ cd frontend && npm install && npm run dev     # 前端（另開一個終端機�
 ```bash
 python -m civil.models.service evaluate       # 5 折評估
 python -m civil.models.service train          # → artifacts/civil_winloss_v1/
-python -m retrieval.build                     # → artifacts/retrieval_civil_v3/（要有 judgments.db，約 35 分鐘）
+python -m civil.models.amount_service train   # → artifacts/civil_amount_v1/（選用：金額範圍改用模型推估）
+python -m retrieval.build                     # → artifacts/retrieval_civil_v4/（要有 judgments.db，約 35 分鐘）
 ```
 
 爬取與資料處理：
@@ -173,7 +213,7 @@ python scripts/browse_db.py
 - 結果只代表「打到判決」的案件；約 26–29% 的通常程序民事案件以和解、撤回、調解結束，沒有判決書
 - 模型讀的是法官整理過的事實，口語描述的機率會偏低、分不太出輸贏；訓練時加入短版文字沒有改善（見 `retrieval/README.md`）
 - 相似判決用字元 TF-IDF 比對。使用者確認過 LLM 整理的文字時用整理後的文字，否則用原本的描述；整理可能多加事實，所以要使用者確認，也會提醒多出來的數字
-- 遮名是規則版，判決裡的第三人姓名和車牌仍可能漏掉，正式公開前要再處理
+- 民事相似判決的姓名用規則加人名辨識（CKIP）遮掉。逐字讀隨機 140 件判決，2 件有漏遮的姓名（都已修正），估計每件判決有漏遮的機率 1.4%，95% 信心上限 4.4%；仍可能漏掉少見寫法的名字，也可能把暱稱等不是姓名的字遮掉（見 `docs/遮名.md`）。刑事判決的遮名還沒做
 - 法院「為什麼採信」很難自動判斷；證據比對只說「相似判決提到哪些證據」，不代表法院會採信
 - 法官事實認定論理傾向分析仍在規劃中；法官層級的結果會附樣本數與限制說明，民眾版只呈現法院與案件類型層級
 - 平台不保存使用者輸入的資料

@@ -7,11 +7,17 @@
   v4   再刪「假執行」的聲明殘段；整段 NFKC
   v4b  同 v4，但只轉 BERT 字典沒有的字（帶括號的編號、全形英數），中文標點保留
   v5   聲明整段刪、段尾編號刪；正規化同 v4b，另把 ㊀–㊉ 轉成 ㈠–㈩
+  v6   文字規則同 v5；差別在樣本母體與結構化變數改從分析用資料庫算（civil/dataset/fields.py）
 """
 import re
 import unicodedata
 
-VERSIONS = ("v3", "v4", "v4b", "v5")
+VERSIONS = ("v3", "v4", "v4b", "v5", "v6")
+
+
+def v5_rules(version: str) -> bool:
+    """v5 起的文字規則（v6 沿用 v5，只換了樣本母體與結構化變數的來源）。"""
+    return version in ("v5", "v6")
 
 
 def normalize_text(t: str, version: str = "v5") -> str:
@@ -23,7 +29,7 @@ def normalize_text(t: str, version: str = "v5") -> str:
     """
     if version == "v4":
         return unicodedata.normalize("NFKC", t)
-    if version == "v5":   # ㊀（U+3280）NFKC 後是沒有括號的「一」，先轉成 ㈠（U+3220）
+    if v5_rules(version):   # ㊀（U+3280）NFKC 後是沒有括號的「一」，先轉成 ㈠（U+3220）
         t = "".join(chr(ord(c) - 0x60) if 0x3280 <= ord(c) <= 0x3289 else c for c in t)
     return "".join(unicodedata.normalize("NFKC", c)
                    if (0x3220 <= ord(c) <= 0x3243 or 0x2460 <= ord(c) <= 0x24FF
@@ -38,7 +44,7 @@ PROC_HEAD_RE = re.compile(r"管轄|準據法|合先敘明")
 
 def leak_re(version: str = "v5") -> "re.Pattern":
     """法院判斷用語（敏感度分析 A6 的規則）＋ 法院整理的爭點、不爭執事項。v5 起「經查證」不算「經查」。"""
-    return re.compile(r"本院(?:認|判斷|審酌|斟酌|查|按)|經查" + ("(?!證)" if version == "v5" else "") +
+    return re.compile(r"本院(?:認|判斷|審酌|斟酌|查|按)|經查" + ("(?!證)" if v5_rules(version) else "") +
                       r"|得心證|堪信為真|足認"
                       r"|不爭執事項|爭執事項|兩造不爭執|協同兩造|兩造之爭點|本件爭點")
 
@@ -140,8 +146,8 @@ def strip_prayer_v5(text: str) -> str:
 
 
 def strip_for_version(text: str, version: str = "v5") -> str:
-    """依資料集版本刪除聲明（v3 只刪聲明句；v4、v4b 另刪假執行殘段；v5 聲明整段刪）。"""
-    if version == "v5":
+    """依資料集版本刪除聲明（v3 只刪聲明句；v4、v4b 另刪假執行殘段；v5、v6 聲明整段刪）。"""
+    if v5_rules(version):
         return strip_prayer_v5(text)
     return strip_prayer(text, drop_provisional=version in ("v4", "v4b"))
 

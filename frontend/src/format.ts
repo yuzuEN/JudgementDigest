@@ -52,12 +52,31 @@ export function splitMasked(text: string): { text: string; masked: boolean }[] {
     .map((part) => ({ text: part, masked: /^【[^】]{1,10}】$/.test(part) }));
 }
 
-/** 金額輸入：允許「50萬」「500,000」「500000元」。看不懂就回傳 null。 */
+/**
+ * 金額輸入：允許「648000」「648,000」「50萬」「1.5萬」「64萬8千」「64萬8000」「8千」，
+ * 前後可以有「NT$」「新臺幣」「元」，數字可以是全形。看不懂就回傳 null；中文數字（五十萬）不認。
+ */
 export function parseAmount(input: string): number | null {
-  const s = input.replace(/[,，\s元]/g, "");
+  const s = input
+    .replace(/[０-９]/g, (d) => String.fromCharCode(d.charCodeAt(0) - 0xfee0))
+    .replace(/[．]/g, ".")
+    .replace(/[,，\s]/g, "")
+    .replace(/^(?:NT\$|NTD|\$|新臺幣|新台幣)/i, "")
+    .replace(/元$/, "");
   if (!s) return null;
-  const m = s.match(/^(\d+(?:\.\d+)?)(萬)?$/);
-  if (!m) return null;
-  const n = parseFloat(m[1]) * (m[2] ? 10000 : 1);
+  let n: number;
+  const wan = s.match(/^(\d+(?:\.\d+)?)萬(?:(\d+(?:\.\d+)?)(千)?)?$/);
+  const qian = s.match(/^(\d+(?:\.\d+)?)千$/);
+  if (wan) {
+    const rest = wan[2] ? parseFloat(wan[2]) * (wan[3] ? 1000 : 1) : 0;
+    if (!wan[3] && rest >= 10000) return null;          // 「5萬20000」看不懂
+    n = parseFloat(wan[1]) * 10000 + rest;
+  } else if (qian) {
+    n = parseFloat(qian[1]) * 1000;
+  } else if (/^\d+(?:\.\d+)?$/.test(s)) {
+    n = parseFloat(s);
+  } else {
+    return null;
+  }
   return Number.isFinite(n) ? Math.round(n) : null;
 }

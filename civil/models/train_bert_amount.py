@@ -23,7 +23,6 @@ import pandas as pd
 import torch
 from scipy.stats import spearmanr
 from torch.utils.data import DataLoader
-from transformers import AutoModelForSequenceClassification, BertTokenizerFast, get_linear_schedule_with_warmup
 
 import config  # noqa: E402
 from civil.models.train_bert import Texts, make_collate_ids
@@ -54,6 +53,9 @@ def main():
     ap.add_argument("--limit", type=int, default=0)
     ap.add_argument("--suffix", default="", help="加在輸出資料夾名稱後面（例如 _ep5），不蓋掉原本的結果")
     a = ap.parse_args()
+
+    # Load training dependencies only when training starts, not when importing helpers.
+    from transformers import AutoModelForSequenceClassification, BertTokenizerFast, get_linear_schedule_with_warmup
 
     torch.manual_seed(42)
     np.random.seed(42)

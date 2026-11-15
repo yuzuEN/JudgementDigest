@@ -1293,6 +1293,39 @@ class TestPartyPosture(unittest.TestCase):
         self.assertEqual(d["plaintiff_has_lawyer"], 1)
         self.assertEqual(d["defendant_has_lawyer"], 0)
 
+    # ── 2.5.2：defendant_is_corp 改用 parties.py 從當事人欄重新解析 ──
+    def _first_instance(self, defendant, block):
+        text = f"臺灣臺北地方法院民事判決\n114年度訴字第1號\n原　　　告　陳大文\n{block}\n上列當事人間請求損害賠償事件，本院判決如下：\n主　　文\n"
+        return S.derive_structured_fields(self._row(
+            plaintiff="陳大文", defendant=defendant, party_roles=f"原告：陳大文；被告：{defendant}", full_text=text))
+
+    def test_sole_proprietorship_is_a_natural_person(self):
+        """「X即Y」獨資：當事人是自然人；括號裡的商號名稱不算法人。"""
+        d = self._first_instance("林小明即小明國際貿易商行", "被　　　告　林小明即小明國際貿易商行")
+        self.assertEqual(d["defendant_is_corp"], 0)
+
+    def test_associations_and_committees_are_corp(self):
+        """REGRESSION（2.5.1 算 0）：重劃會、大廈管理負責人、同業公會不在舊的法人清單裡。"""
+        for name in ("臺中市高鐵新市鎮自辦市地重劃區重劃會", "士林銀座大廈管理負責人", "新北市室內設計裝修商業同業公會"):
+            d = self._first_instance(name, f"被　　　告　{name}\n法定代理人　王大同")
+            self.assertEqual(d["defendant_is_corp"], 1, name)
+
+    def test_name_cut_by_the_parser_is_read_from_the_party_block(self):
+        """解析器把名稱截在「設」之前（「新北市室內」），當事人欄裡是完整名稱。"""
+        d = self._first_instance("新北市室內", "被　　　告　新北市室內設計裝修商業同業公會")
+        self.assertEqual(d["defendant_is_corp"], 1)
+
+    def test_any_corp_among_several_defendants(self):
+        d = self._first_instance("王小華；甲建設股份有限公司", "被　　　告　王小華\n　　　　　　甲建設股份有限公司\n法定代理人　李四")
+        self.assertEqual(d["defendant_is_corp"], 1)
+        d = self._first_instance("王小華；李大同", "被　　　告　王小華\n　　　　　　李大同")
+        self.assertEqual(d["defendant_is_corp"], 0)
+
+    def test_falls_back_to_parser_fields_when_block_has_no_defendant(self):
+        """當事人欄解析不出被告（例如全文沒有分行）：改用解析器的被告欄位。"""
+        self.assertEqual(S.defendant_is_corp_of("乙股份有限公司", "原告甲訴訟代理人張三律師被告乙股份有限公司"), 1)
+        self.assertEqual(S.defendant_is_corp_of("王小明", "原告甲被告王小明"), 0)
+
 
 # ═══════════════════════════════════════════════════════════════════════════
 class TestSourceColumnsComplete(unittest.TestCase):
@@ -1744,5 +1777,6 @@ class TestAmountRules251(unittest.TestCase):
              "其門牌號碼為臺北市某區某路一段一二三號之三樓房屋，向主管機關辦理所有權移轉登記予原告。訴訟費用由被告負擔。")
         self.assertEqual(S.extract_relief_type(v), "非金錢給付")
 
-    def test_version_is_251(self):
-        self.assertEqual(S.STRUCTURING_VERSION, "2.5.1")
+    def test_version_is_at_least_251(self):
+        """金額規則是 2.5.1 加入的；之後的版本（2.5.2 改當事人）照樣包含。"""
+        self.assertGreaterEqual(tuple(map(int, S.STRUCTURING_VERSION.split("."))), (2, 5, 1))

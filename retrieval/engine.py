@@ -16,6 +16,17 @@ VECTORIZER_PARAMS = dict(analyzer="char", ngram_range=(1, 3), min_df=10, max_fea
                          sublinear_tf=True, dtype=np.float32)
 
 
+def sort_vocabulary(vectorizer: TfidfVectorizer) -> TfidfVectorizer:
+    """存檔前依特徵編號重排詞彙，並拿掉 stop_words_。
+
+    fit 之後 vocabulary_ 依「第一次出現」的順序存放，照順序讀出來就是訓練用的第一份判決的開頭（含人名）。
+    特徵編號本來就依字典序排，重排只改存放順序，transform 的結果不變。
+    """
+    vectorizer.vocabulary_ = dict(sorted(vectorizer.vocabulary_.items(), key=lambda kv: kv[1]))
+    vectorizer.__dict__.pop("stop_words_", None)
+    return vectorizer
+
+
 class TfidfIndex:
     def __init__(self, **params):
         self.params = {**VECTORIZER_PARAMS, **params}
@@ -83,6 +94,7 @@ class TfidfIndex:
 
     def save(self, path: Path) -> None:
         Path(path).parent.mkdir(parents=True, exist_ok=True)
+        sort_vocabulary(self.vectorizer)
         joblib.dump({"params": self.params, "vectorizer": self.vectorizer, "matrix": self.matrix}, path)
 
     @classmethod

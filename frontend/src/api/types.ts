@@ -9,6 +9,10 @@ export interface Health {
   criminal: "model" | "mock";
   followup: "rules" | "llm";
   model: string | null;
+  /** 民事金額範圍：有可用的獲償比例模型，或只用相似判決 */
+  amount?: "model" | "similar" | "mock";
+  /** 刑事的刑期用哪個模型；刑事是示例資料時為 null */
+  criminal_sentence?: "electra" | "svm" | null;
 }
 
 export interface MidOption {
@@ -68,7 +72,12 @@ export interface CivilPrediction {
 }
 
 export interface AmountRange {
-  n_cases: number;
+  /** model＝獲償比例模型推估；similar＝相似判決的分位數（沒有模型檔時）。舊版後端沒有這個欄位，視為 similar */
+  source?: "model" | "similar";
+  /** partial_win＝只針對「一部勝訴」；win＝勝訴與一部勝訴 */
+  scope?: "win" | "partial_win";
+  /** buckets 背後的相似判決件數；沒有相似判決時是 null */
+  n_cases?: number | null;
   ratio_low: number;
   ratio_median: number;
   ratio_high: number;
@@ -78,6 +87,9 @@ export interface AmountRange {
   amount_median?: number | null;
   amount_high?: number | null;
   buckets?: { low: number; high: number; count: number }[];
+  /** 相似判決（對審、最多 30 件）裡勝訴與一部勝訴的件數，以及其中全部勝訴的件數 */
+  n_wins?: number | null;
+  n_full_wins?: number | null;
 }
 
 export interface SimilarCase {
@@ -154,16 +166,13 @@ export interface CriminalModelInfo {
   charge_top1?: number | null;
   bucket_accuracy?: number | null;
   bucket_within_one?: number | null;
-}
-
-export interface SentenceDistribution {
-  buckets: { label: string; share: number }[];
-  mock: boolean;
-  model: { name: string; description: string };
+  /** 刑期另外用 ELECTRA 時才有；這時 bucket_* 是 ELECTRA 的分數 */
+  sentence_description?: string | null;
+  sentence_n_test?: number | null;
+  sentence_test?: string | null;
 }
 
 export interface CriminalReport {
-  sentence?: SentenceDistribution | null;   // ELECTRA 刑期，後端目前停用
   charges: Charge[];
   similar: SimilarCase[];
   model?: CriminalModelInfo | null;
@@ -171,10 +180,17 @@ export interface CriminalReport {
 }
 
 export type GuideFunction = "claim" | "defense" | "issue" | "evidence" | "court";
+export type CriminalGuideFunction = "info" | "verdict" | "facts" | "evidence" | "court" | "laws" | "table" | "other";
 
 export interface Guide {
   case: SimilarCase;
   paragraphs: { function: GuideFunction; label: string; text: string }[];
+  /** 刑事導讀：全文依原本順序分段；沒有全文時是 null（只顯示摘要與原文連結） */
+  criminal?: {
+    source: "judgment" | "dataset";
+    judgment_date?: string;
+    paragraphs: { function: CriminalGuideFunction; label: string; text: string; pre?: boolean; part?: string | null }[];
+  } | null;
   labeler: string;
   mock: boolean;
 }

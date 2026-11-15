@@ -10,7 +10,7 @@
   3. 文字：TF-IDF 原告＋被告（同 tfidf.py）
   4. 文字＋結構化：TF-IDF 稀疏矩陣直接接上結構化變數的 one-hot，一起 fit（C=1）。
      不用「把文字分數當變數」的堆疊法，因為訓練列的折外分數來自看過測試折的模型，會洩漏。
-結構化欄位取自 analysis_fields.pkl（律師、法人、反訴、案由、請求權）；y 用文字資料集的結果。
+結構化欄位取自 load_fields（v6 起從分析用資料庫算，v5 以前是 analysis_fields.pkl；律師、法人、反訴、案由、請求權）；y 用文字資料集的結果。
 輸出：text_vs_structured_{版本}.csv、text_vs_structured_oof_{版本}.csv
 """
 import argparse
@@ -23,6 +23,7 @@ from sklearn.linear_model import LogisticRegression
 from sklearn.metrics import roc_auc_score
 
 import config
+from civil.dataset.fields import load_fields
 from civil.models.tfidf import logreg, vec
 
 CATS = ["mid", "basis", "proc", "court_m", "year"]
@@ -38,7 +39,7 @@ FEATS = feats()
 
 def load(version: str, crim: bool = False) -> pd.DataFrame:
     t = pd.read_csv(config.dataset_path(version), encoding="utf-8")
-    f = pd.read_pickle(config.FIELDS_PKL)
+    f = load_fields(version)
     d = t.merge(f[["id", "claim_basis_group", "plaintiff_has_lawyer", "defendant_has_lawyer",
                    "defendant_is_corp", "has_counterclaim", "proc", "judgment_date", "court_s"]],
                 on="id", how="left", validate="1:1")

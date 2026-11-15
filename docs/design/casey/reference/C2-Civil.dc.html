@@ -1,0 +1,133 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<title>CasEY 第三章：民事參考結果</title>
+<script src="./support.js"></script>
+<link rel="stylesheet" href="./jd.css">
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;700;800&display=swap" rel="stylesheet">
+<style>body{margin:0}</style>
+</helmet>
+<div class="jd {{theme}}">
+  <dc-import name="CTop" at="7" who="b" line="{{line}}" note="false" hint-size="100%,420px"></dc-import>
+
+  <sc-if value="{{sample}}" hint-placeholder-val="{{ false }}">
+    <div class="wrap" style="padding-top:20px"><div class="smp" role="status"><span class="ic ic-book"></span><div><p class="b">這一頁是示例資料</p><p class="small">目前沒有連到比對模型，下面的數字是示範用的，不是你這個案子的查詢結果。每個分頁和下載的 PDF 都會標上「示例資料」。</p></div></div></div>
+  </sc-if>
+
+  <main class="wrap" style="padding-top:28px;padding-bottom:56px">
+    <div class="stack" style="margin-bottom:24px">
+      <div class="row noprint"><a class="btn btn-g" href="C2-Confirm.dc.html"><span class="ic ic-back"></span>回上一步</a><a class="btn btn-g" href="C2-Start.dc.html"><span class="ic ic-pencil"></span>修改描述</a></div>
+      <sc-if value="{{tabs}}" hint-placeholder-val="{{ false }}">
+        <div class="row noprint" role="tablist" aria-label="結果類型" style="gap:8px"><span class="btn btn-p" role="tab" aria-selected="true">民事</span><a class="btn btn-g" role="tab" aria-selected="false" href="C2-Criminal.dc.html">刑事</a><span class="small muted">你選了「不確定」，兩邊都幫你看。</span></div>
+      </sc-if>
+      <div class="row row-sb" style="align-items:flex-start;gap:16px">
+        <div class="stack-s" style="flex:1 1 420px;min-width:0"><h1 class="h1">民事參考結果：侵權：交通事故</h1><p class="lead">比對了 <b class="num" style="color:var(--ink)">30 件</b>案由相同的真實判決。一次看一個分頁。</p></div>
+        <div class="stack-s" style="justify-items:end"><div class="noprint" style="display:grid;gap:6px;justify-items:end"><a class="btn btn-s" href="#"><span class="ic ic-dl"></span>下載 PDF</a></div></div>
+      </div>
+    </div>
+
+    <div class="tabs noprint" role="tablist" aria-label="結果分頁">
+      <sc-for list="{{tabs5}}" as="t" hint-placeholder-count="5"><button class="tab {{t.cls}}" type="button" role="tab" aria-selected="{{t.on}}" onClick="{{t.go}}">{{t.name}}</button></sc-for>
+    </div>
+    <div class="tabpanel {{panelCls}}" role="tabpanel">
+
+      <sc-if value="{{tab1}}" hint-placeholder-val="{{ true }}">
+        <div class="row row-sb"><h2 class="h2">相似判決的結果</h2><sc-if value="{{sample}}" hint-placeholder-val="{{ false }}"><span class="smp-tag"><span class="ic ic-book"></span>示例資料</span></sc-if></div>
+        <p class="muted">30 件相似的判決，結果是：</p>
+        <div class="obar" role="img" aria-label="全部勝訴 0 件、一部勝訴 30 件、敗訴 0 件"><div class="seg-part" style="width:100%"></div></div>
+        <div style="max-width:420px">
+          <div class="lg"><span class="sw full"></span><span class="t">全部勝訴</span><span class="v">0 件</span></div>
+          <div class="lg"><span class="sw part"></span><span class="t">一部勝訴</span><span class="v">30 件</span></div>
+          <div class="lg"><span class="sw lose"></span><span class="t">敗訴</span><span class="v">0 件</span></div>
+        </div>
+        <div class="note"><span class="ic ic-info"></span><div class="stack-s"><p class="b">參考訊號：較弱</p><p class="small">30 件都是「一部勝訴」，判准的金額落差很大。這組判決還不足以讓人看出傾向，請把重點放在金額範圍和相似判決。</p></div></div>
+        <p class="small muted"><span class="ic ic-info" style="vertical-align:-4px;margin-right:6px"></span>其中有 <b>5 件被告沒有到庭</b>（一造辯論）。法院只聽到原告一方的說法，結果可能和雙方都出庭的案件不同。</p>
+        <details open="{{open}}"><summary>模型細節</summary><div class="dbody stack-s"><p>模型參考：勝訴機率 <b class="num">46%</b></p><p class="small muted">這是模型根據文字估出來的數字，不是你會贏的機率，只在判斷方向時當輔助。</p></div></details>
+      </sc-if>
+
+      <sc-if value="{{tab2}}" hint-placeholder-val="{{ false }}">
+        <dc-import name="Amount" variant="{{amountVariant}}" sample="{{sample}}" open="{{open}}" hint-size="100%,700px"></dc-import>
+      </sc-if>
+
+      <sc-if value="{{tab3}}" hint-placeholder-val="{{ false }}">
+        <div class="row row-sb"><h2 class="h2">證據對照</h2><sc-if value="{{sample}}" hint-placeholder-val="{{ false }}"><span class="smp-tag"><span class="ic ic-book"></span>示例資料</span></sc-if></div>
+        <p class="muted">相似的勝訴判決裡，有多少比例提到這項證據；右邊是你在第 3 關勾的證物。</p>
+        <div style="max-width:760px">
+          <sc-for list="{{evidenceRes}}" as="e" hint-placeholder-count="7">
+            <div class="evr" style="display:grid;grid-template-columns:150px minmax(0,1fr) 56px 120px;gap:12px;align-items:center"><span class="b">{{e.name}}</span><div class="mini" role="img" aria-label="{{e.alt}}"><i style="width:{{e.pct}}%"></i></div><span class="num b" style="text-align:right">{{e.pct}}%</span>
+              <span><sc-if value="{{e.has}}" hint-placeholder-val="{{ true }}"><span class="has"><span class="ic ic-check"></span>你有提到</span></sc-if><sc-if value="{{e.no}}" hint-placeholder-val="{{ false }}"><span class="has no"><span class="ic ic-minus"></span>你沒有提到</span></sc-if></span></div>
+          </sc-for>
+        </div>
+        <p class="small muted">沒提到不代表會輸，只是勝訴的案子比較常拿出這些。</p>
+      </sc-if>
+
+      <sc-if value="{{tab4}}" hint-placeholder-val="{{ false }}">
+        <div class="row row-sb"><h2 class="h2">對方可能會怎麼說</h2><sc-if value="{{sample}}" hint-placeholder-val="{{ false }}"><span class="smp-tag"><span class="ic ic-book"></span>示例資料</span></sc-if></div>
+        <p class="muted">相似判決裡，被告常提出的說法（抗辯）。數字是出現的比例。</p>
+        <div class="stack-s" style="max-width:760px">
+          <sc-for list="{{defenses}}" as="d" hint-placeholder-count="3">
+            <details open="{{open}}"><summary><span style="flex:1">{{d.name}}</span><span class="num">{{d.pct}}%</span></summary><div class="dbody stack-s"><div class="mini" role="img" aria-label="{{d.alt}}"><i style="width:{{d.pct}}%"></i></div><p class="small muted">{{d.desc}}</p><sc-if value="{{d.term}}" hint-placeholder-val="{{ false }}"><a class="lnk small" href="C2-Guide.dc.html" style="text-decoration-style:dotted">什麼是「與有過失」？</a></sc-if></div></details>
+          </sc-for>
+        </div>
+      </sc-if>
+
+      <sc-if value="{{tab5}}" hint-placeholder-val="{{ false }}">
+        <div class="row row-sb"><h2 class="h2">相似的真實判決</h2><div class="row"><button class="sw-t {{onlyWin}}" type="button" aria-pressed="{{onlyWinOn}}" onClick="{{toggleWin}}"><i></i>只看原告勝訴的</button><sc-if value="{{sample}}" hint-placeholder-val="{{ false }}"><span class="smp-tag"><span class="ic ic-book"></span>示例資料</span></sc-if></div></div>
+        <p class="small muted">依相似度排序。「被告未到庭」代表一造辯論，只聽了原告一方的說法。<a class="lnk" href="C2-Guide.dc.html" style="margin-left:6px">相似度是什麼？</a></p>
+        <sc-if value="{{showRows}}" hint-placeholder-val="{{ true }}">
+          <div style="overflow-x:auto"><table class="tbl">
+            <thead><tr><th>字號</th><th>法院</th><th>年份</th><th>結果</th><th class="r">判准／請求（元）</th><th class="r">相似度</th><th>動作</th></tr></thead>
+            <tbody><tr>
+              <td><b>113 年度簡字第 106 號</b><br><span class="xs muted">民事判決</span></td><td>臺灣雲林地方法院</td><td class="num">113</td><td><span class="oc oc-part">一部勝訴</span></td>
+              <td class="r"><b>420,350</b> ／ 918,252</td><td class="r"><span class="sim">0.14<a class="ic ic-help" href="C2-Guide.dc.html" aria-label="相似度說明" style="color:var(--link)"></a></span></td>
+              <td><div class="row" style="gap:8px;flex-wrap:nowrap"><a class="btn btn-s" href="C2-Judgment.dc.html" style="min-height:44px;padding:0 14px">判決導讀</a><a class="lnk" href="https://judgment.judicial.gov.tw">原文<span class="ic ic-ext" style="width:1em;height:1em"></span></a></div></td>
+            </tr></tbody></table></div>
+          <div class="row row-sb noprint"><p class="small muted">已顯示 1 件，共 30 件</p><button class="btn btn-g" type="button"><span class="ic ic-plus"></span>顯示更多</button></div>
+        </sc-if>
+        <sc-if value="{{noRows}}" hint-placeholder-val="{{ false }}"><div style="border:2px dashed var(--line2);border-radius:14px;padding:24px;display:grid;gap:6px;text-align:center"><p class="b">沒有符合的判決</p><p class="small muted">這 30 件相似判決都是「一部勝訴」，沒有「全部勝訴」的。關掉「只看原告勝訴的」就能看到。</p></div></sc-if>
+      </sc-if>
+    </div>
+
+
+  </main>
+  <footer class="ftr"><div class="wrap row row-sb" style="align-items:center;gap:12px 16px"><p style="flex:1 1 320px;margin:0">本服務提供的是過去判決的統計參考，<b>不是法律意見</b>，也不是對你案子的預測。</p><span class="tipw"><button class="tipb" type="button" aria-describedby="tip-n"><span class="ic ic-info" style="width:1.1em;height:1.1em"></span>請注意</button>
+        <div class="tipp small" id="tip-n" role="tooltip"><p class="b">請注意</p><ul><li>這份結果<b>不是法律意見</b>，也不是對你案子的預測。</li><li>最後會不會判、判多少，要看每個案子的細節和法院的認定。</li><li>和解、撤回的案件不在統計裡，所以看到的只是「進到判決」的那一部分。</li><li>需要專業協助，可以洽詢<a href="https://www.laf.org.tw">法律扶助基金會<span class="ic ic-ext" style="vertical-align:-3px;margin-left:2px"></span></a>。</li></ul></div></span><a class="noprint" href="C2-Guide.dc.html">說明與法律小知識</a></div></footer>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"dark":{"editor":"boolean","default":false},"sample":{"editor":"boolean","default":false},"tabs":{"editor":"boolean","default":false},"amountVariant":{"editor":"enum","options":["model","similar","noamount","insufficient"],"default":"model"},"startTab":{"editor":"int","default":1,"min":1,"max":5},"$preview":{"width":1280,"height":2400}}'>
+class Component extends DCLogic {
+  renderVals() {
+    const st = this.state || {};
+    const tab = st.tab !== undefined ? st.tab : (Number(this.props.startTab) || 1);
+    const win = !!st.win;
+    const set = (o) => () => this.setState(o);
+    const lines = {
+      1: '資料整理好了。我是解說員，只負責說明過去類似判決的統計，不會預測你這件的結果。先看整體。',
+      2: '這是相似判決的判准金額。範圍通常很寬，請當作粗略參考。',
+      3: '這是勝訴的相似判決常提到的證據。你有的我幫你標出來。',
+      4: '這些是對方在相似判決裡常說的話。先看過，到時比較不會慌。',
+      5: '這些是最相似的判決。每一件都可以點「判決導讀」，我會把主張、抗辯和法院的判斷分顏色給你看。'
+    };
+    const ev = [true, true, false, false, false, true];
+    const evRes = [['診斷證明', 93, ev[0]], ['收據', 93, ev[1]], ['照片、監視器', 77, ev[5]], ['交通事故鑑定', 77, false], ['薪資證明', 40, false], ['轉帳紀錄', 30, ev[2]], ['LINE、簡訊', 3, ev[3]]];
+    return {
+      theme: this.props.dark ? 'dark' : '', line: lines[tab], sample: !!this.props.sample, tabs: !!this.props.tabs,
+      amountVariant: this.props.amountVariant || 'model', open: false,
+      panelCls: this.props.sample ? 'sample-card' : '',
+      tabs5: ['整體結果', '可能的金額', '證據對照', '對方的說法', '相似判決'].map((name, i) => ({ name, on: tab === i + 1, cls: tab === i + 1 ? 'on' : '', go: set({ tab: i + 1 }) })),
+      tab1: tab === 1, tab2: tab === 2, tab3: tab === 3, tab4: tab === 4, tab5: tab === 5,
+      evidenceRes: evRes.map(([name, pct, has]) => ({ name, pct, has: !!has, no: !has, alt: name + '：' + pct + '% 的相似勝訴判決有提到' })),
+      defenses: [['請求的金額太高', 53, '對方認為你要求的賠償超過實際的損失。', 0], ['你也有過失（與有過失）', 23, '對方主張事故你也有一部分責任，賠償應該扣掉你的部分。', 1], ['損害和行為沒有因果關係', 13, '對方主張你的傷害或損失，不是這次事故造成的。', 0]].map(([name, pct, desc, term]) => ({ name, pct, desc, term: !!term, alt: name + '：出現在 ' + pct + '% 的相似判決' })),
+      onlyWin: win ? 'on' : '', onlyWinOn: win, toggleWin: set({ win: !win }), showRows: !win, noRows: win
+    };
+  }
+}
+</script>
+</body>
+</html>

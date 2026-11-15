@@ -1,0 +1,144 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<title>CasEY 首頁</title>
+<script src="./support.js"></script>
+<link rel="stylesheet" href="./jd.css">
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;700;800&display=swap" rel="stylesheet">
+<style>body{margin:0}</style>
+</helmet>
+<div class="jd {{theme}}">
+  <dc-import name="CTop" at="0" who="a" line="你好，我是 CasEY 的整理員。遇到糾紛，先看看類似的案件通常怎麼判。我會一關一關帶你把事情整理好，再由解說員告訴你過去的判決怎麼說。" note="true" hint-size="100%,420px"></dc-import>
+
+  <section class="sec" style="padding-top:40px">
+    <div class="wrap two two-wide" style="align-items:center;gap:48px">
+      <div class="stack-l">
+        <p class="kicker">免註冊 · 免費 · 用真實判決回答</p>
+        <h1 class="display">遇到糾紛，先看看<br>類似的案件通常怎麼判</h1>
+        <p class="lead">用白話描述你遇到的事，CasEY 從全國地方法院的真實判決裡，找出情況相近的案件，讓你知道過去大多是怎麼收場的。</p>
+        <div class="stack-s" style="justify-items:start">
+          <a class="btn btn-p btn-lg" href="C2-C2-Start.dc.html">開始查詢<span class="ic ic-right"></span></a>
+          <p class="small muted">免註冊，5 分鐘免費查詢</p>
+        </div>
+        <p class="small muted" style="max-width:520px"><span class="ic ic-info" style="vertical-align:-4px;margin-right:6px"></span>結果是統計上的參考，不是法律意見，也不是對你案子的預測。</p>
+      </div>
+      <div class="card sample-card stack" aria-label="結果預覽（示例）">
+        <div class="row row-sb"><p class="b">結果大概長這樣</p><span class="smp-tag">示例</span></div>
+        <p class="small muted">民事 · 交通事故 · 比對了 30 件相似判決</p>
+        <div class="obar" role="img" aria-label="全部勝訴 0 件、一部勝訴 30 件、敗訴 0 件"><div class="seg-part" style="width:100%"></div></div>
+        <p class="small">30 件裡：<b>全部勝訴 0 件、一部勝訴 30 件、敗訴 0 件</b></p>
+        <hr class="divider">
+        <p class="small muted">如果判決是「一部勝訴」，可能判准的金額</p>
+        <p class="amt" style="font-size:30px">約 2 萬～58 萬元</p>
+        <p class="small muted">10 件約有 8 件落在這個範圍。範圍很寬，請當作粗略參考。</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- 你會得到什麼 -->
+  <section class="sec sec-alt">
+    <div class="wrap stack-l">
+      <div class="stack-s"><h2 class="h2">你會得到什麼</h2><p class="muted">依案件類型，給你不同的參考資料。每一項都附上真實判決，可以點進去看。</p></div>
+      <div class="auto2">
+        <div class="card stack">
+          <div class="row"><span class="logo-mark" style="width:44px;height:44px"><span class="ic ic-file ic-lg"></span></span><h3 class="h3">民事：要錢、還錢、履行契約</h3></div>
+          <ul class="stack-s" style="list-style:none;padding:0!important">
+            <li class="row" style="flex-wrap:nowrap;align-items:flex-start"><span class="ic ic-check" style="margin-top:4px;color:var(--brand)"></span>相似判決裡，原告贏的比例</li>
+            <li class="row" style="flex-wrap:nowrap;align-items:flex-start"><span class="ic ic-check" style="margin-top:4px;color:var(--brand)"></span>可能判准的金額範圍</li>
+            <li class="row" style="flex-wrap:nowrap;align-items:flex-start"><span class="ic ic-check" style="margin-top:4px;color:var(--brand)"></span>相似的真實判決</li>
+            <li class="row" style="flex-wrap:nowrap;align-items:flex-start"><span class="ic ic-check" style="margin-top:4px;color:var(--brand)"></span>勝訴的案子通常拿出哪些證據</li>
+            <li class="row" style="flex-wrap:nowrap;align-items:flex-start"><span class="ic ic-check" style="margin-top:4px;color:var(--brand)"></span>對方常見的說法（抗辯）</li>
+          </ul>
+        </div>
+        <div class="card stack">
+          <div class="row"><span class="logo-mark" style="width:44px;height:44px"><span class="ic ic-scale ic-lg"></span></span><h3 class="h3">刑事：被調查，或想告對方</h3></div>
+          <ul class="stack-s" style="list-style:none;padding:0!important">
+            <li class="row" style="flex-wrap:nowrap;align-items:flex-start"><span class="ic ic-check" style="margin-top:4px;color:var(--brand)"></span>可能的罪名與法條</li>
+            <li class="row" style="flex-wrap:nowrap;align-items:flex-start"><span class="ic ic-check" style="margin-top:4px;color:var(--brand)"></span>刑期落在哪個範圍</li>
+            <li class="row" style="flex-wrap:nowrap;align-items:flex-start"><span class="ic ic-check" style="margin-top:4px;color:var(--brand)"></span>相似的真實判決</li>
+          </ul>
+          <p class="small muted">分不清楚是民事還是刑事？選「不確定」，兩邊都幫你看。</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 怎麼使用 -->
+  <section class="sec">
+    <div class="wrap stack-l">
+      <div class="stack-s"><h2 class="h2">怎麼使用：三章、七關</h2><p class="muted">一次只做一件事。每一關都看得到進度，可以隨時回上一關，資料會保留。</p></div>
+      <div class="auto3">
+        <div class="card stack-s"><span class="oc oc-part" style="align-self:start">第一章</span><h3 class="h3">描述案情</h3><p class="small muted"><b>類型、案情、資料</b>。選案件類型，用白話說發生了什麼事，再補金額、對方和手上的證物。</p></div>
+        <div class="card stack-s"><span class="oc oc-part" style="align-self:start">第二章</span><h3 class="h3">確認內容</h3><p class="small muted"><b>遮名、補充、改寫</b>。送出前先遮掉姓名、身分證字號、電話，可以補充細節，也可以看判決書寫法。</p></div>
+        <div class="card stack-s"><span class="oc oc-part" style="align-self:start">第三章</span><h3 class="h3">參考結果</h3><p class="small muted">解說員用分頁說明相似判決的結果。可以下載 PDF，帶去給律師、法扶或家人看。</p></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 資料來源 + 不是法律意見 -->
+  <section class="sec sec-alt">
+    <div class="wrap two">
+      <div class="stack">
+        <div class="row"><span class="ic ic-db ic-lg" style="color:var(--brand)"></span><h2 class="h2">資料來源</h2></div>
+        <p>全國地方法院公開的真實判決。我們把每一件判決的案由、結果、金額、證據與雙方說法整理起來，再找出和你的情況相近的案件。</p>
+        <p class="small muted">不起訴、撤回，或和解後沒有判決的案件，不在資料裡，所以統計不代表所有紛爭的結果。</p>
+      </div>
+      <div class="card stack" style="border-color:var(--brand)">
+        <div class="row"><span class="ic ic-shield ic-lg" style="color:var(--brand)"></span><h2 class="h2">這不是法律意見</h2></div>
+        <p>結果是過去判決的統計整理，不是對你案子的預測，也不能取代律師。每個案子的細節都不一樣。</p>
+        <p>需要專業協助，可以洽詢<a href="https://www.laf.org.tw">法律扶助基金會<span class="ic ic-ext" style="vertical-align:-3px;margin-left:2px"></span></a>。</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- 資料怎麼處理 -->
+  <section class="sec">
+    <div class="wrap stack-l">
+      <div class="row"><span class="ic ic-lock ic-lg" style="color:var(--brand)"></span><h2 class="h2">你的資料怎麼處理</h2></div>
+      <div class="auto2">
+        <div class="stack-s"><h3 class="h3">不用註冊</h3><p class="small muted">不需要帳號，也不用留下聯絡方式。</p></div>
+        <div class="stack-s"><h3 class="h3">先預覽、先遮名</h3><p class="small muted">姓名、身分證字號、電話、email、地址會在送出前遮掉。你看過、確認過才會送出。</p></div>
+        <div class="stack-s"><h3 class="h3">敏感資料要你同意</h3><p class="small muted">如果描述裡有病歷、前科這類內容，會先問你同意，不同意就回去刪掉。</p></div>
+        <div class="stack-s"><h3 class="h3">AI 只在你選擇時才用</h3><p class="small muted">補充細節有兩種：固定題目不會傳給 AI；選「請 AI 幫我看還缺什麼」才會用到 AI。</p></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- FAQ -->
+  <section class="sec sec-alt">
+    <div class="wrap stack-l" style="max-width:820px">
+      <h2 class="h2">常見問題</h2>
+      <div class="stack-s">
+        <details open="{{open1}}"><summary>要付費嗎？</summary><div class="dbody"><p class="muted">不用。免註冊、免費。</p></div></details>
+        <details><summary>結果準不準？</summary><div class="dbody"><p class="muted">它告訴你「過去類似的案件」怎麼判，不是你這件會怎麼判。數字越極端或相似判決越少，越要保守看待。</p></div></details>
+        <details><summary>我分不清楚是民事還是刑事</summary><div class="dbody"><p class="muted">選「不確定」。結果頁會有民事、刑事兩個分頁，你可以都看。</p></div></details>
+        <details><summary>我的名字會被別人看到嗎？</summary><div class="dbody"><p class="muted">送出前會先遮掉姓名、身分證字號、電話、email 和地址，而且你可以先預覽。</p></div></details>
+        <details><summary>看完結果之後可以做什麼？</summary><div class="dbody"><p class="muted">可以下載 PDF，帶去給律師、法扶或家人討論。「說明與法律小知識」也整理了下一步可以怎麼做。</p></div></details>
+      </div>
+      <div class="tc" style="padding-top:8px"><a class="btn btn-p btn-lg btn-block-m" href="C2-Start.dc.html">開始查詢<span class="ic ic-right"></span></a><p class="small muted" style="margin-top:8px">免註冊，5 分鐘免費查詢</p></div>
+    </div>
+  </section>
+
+  <footer class="ftr">
+    <div class="wrap stack-s">
+      <p>本服務提供的是過去判決的統計參考，不是法律意見。</p>
+      <p class="row"><a href="https://www.laf.org.tw">法律扶助基金會</a><a href="#">說明與法律小知識</a><a href="https://judgment.judicial.gov.tw">司法院裁判書查詢系統</a></p>
+    </div>
+  </footer>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"dark":{"editor":"boolean","default":false},"$preview":{"width":1280,"height":3200}}'>
+class Component extends DCLogic {
+  renderVals() {
+    return { theme: this.props.dark ? 'dark' : '', open1: true };
+  }
+}
+</script>
+</body>
+</html>

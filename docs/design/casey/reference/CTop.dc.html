@@ -1,0 +1,78 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<title>元件：頁首、關卡地圖、角色場景</title>
+<script src="./support.js"></script>
+<link rel="stylesheet" href="./jd.css">
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;700;800&display=swap" rel="stylesheet">
+<style>body{margin:0}</style>
+</helmet>
+<div>
+  <header class="hdr noprint">
+    <div class="wrap hdr-in">
+      <a class="logo" href="C2-Home.dc.html"><span class="logo-mark"><span class="ic ic-scale ic-lg"></span></span><span>CasEY<small>類案判決參考</small></span></a>
+      <span style="flex:1"></span>
+      <a class="hdr-help" href="C2-Guide.dc.html"><span class="ic ic-help"></span><span class="hdr-help-t">說明與法律小知識</span></a>
+    </div>
+  </header>
+
+  <sc-if value="{{showMap}}" hint-placeholder-val="{{ true }}">
+    <div class="wrap noprint" style="padding-top:22px">
+      <div style="display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:0;margin-bottom:6px">
+        <p class="xs b" style="grid-column:span 3;text-align:center;color:{{g1c}}">描述案情</p>
+        <p class="xs b" style="grid-column:span 3;text-align:center;color:{{g2c}}">確認內容</p>
+        <p class="xs b" style="grid-column:span 1;text-align:center;color:{{g3c}}">參考結果</p>
+      </div>
+      <ol class="map" aria-label="進度">
+        <sc-for list="{{map}}" as="m" hint-placeholder-count="7">
+          <li class="mn {{m.cls}}" aria-current="{{m.cur}}"><span class="mn-d"><sc-if value="{{m.done}}" hint-placeholder-val="{{ false }}"><span class="ic ic-check"></span></sc-if><sc-if value="{{m.todo}}" hint-placeholder-val="{{ true }}"><b>{{m.n}}</b></sc-if></span><span class="mn-t">{{m.name}}</span></li>
+        </sc-for>
+      </ol>
+    </div>
+  </sc-if>
+
+  <div class="wrap noprint" style="padding-top:22px">
+    <section class="scene" aria-label="CasEY 角色說明" style="{{sceneStyle}}">
+      <div class="scene-fig {{aCls}}" style="{{figStyle}}"><img src="/_blob/63d15a536e16c275aaa66bfc68dd3ba9" alt=""></div>
+      <div class="dlg" role="status">
+        <span class="plate">{{name}}</span>
+        <p>{{line}}</p>
+        <sc-if value="{{note}}" hint-placeholder-val="{{ true }}"><p class="xs muted" style="margin-top:8px">整理員和解說員只是 CasEY 的輔助角色：幫你整理資料、說明統計。他們不是律師或法官，也不提供法律意見。</p></sc-if>
+        <span class="dlg-next" aria-hidden="true"></span>
+      </div>
+      <div class="scene-fig {{bCls}}" style="{{figStyle}}"><img src="/_blob/bd5f2a40fba3712fd91cb8b03b22facd" alt=""></div>
+      <div class="bench" aria-hidden="true"></div>
+    </section>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"at":{"editor":"int","default":1,"min":0,"max":7},"who":{"editor":"enum","options":["a","b"],"default":"a"},"line":{"editor":"text","default":"請說說發生了什麼事。"},"note":{"editor":"boolean","default":false},"$preview":{"width":1280,"height":420}}'>
+class Component extends DCLogic {
+  renderVals() {
+    const at = this.props.at === undefined ? 1 : Number(this.props.at);
+    const who = this.props.who || 'a';
+    const names = ['類型', '案情', '資料', '遮名', '補充', '改寫', '結果'];
+    const grp = (n) => (n <= 3 ? 1 : (n <= 6 ? 2 : 3));
+    const cur = grp(at);
+    const gc = (g) => (g === cur ? 'var(--ink)' : 'var(--ink2)');
+    return {
+      showMap: at > 0,
+      map: names.map((name, i) => { const n = i + 1; const done = at > n; const now = at === n;
+        return { name, n, done, todo: !done, cls: done ? 'done' : (now ? 'now' : ''), cur: now ? 'step' : 'false' }; }),
+      g1c: gc(1), g2c: gc(2), g3c: gc(3),
+      name: who === 'a' ? '整理員' : '解說員',
+      aCls: who === 'a' ? '' : 'dim', bCls: who === 'b' ? '' : 'dim',
+      line: this.props.line || '', note: !!this.props.note,
+      sceneStyle: '', figStyle: ''
+    };
+  }
+}
+</script>
+</body>
+</html>

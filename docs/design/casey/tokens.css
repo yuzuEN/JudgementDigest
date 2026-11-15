@@ -1,0 +1,173 @@
+/*
+ * CasEY design tokens — Tailwind CSS v4 + shadcn/ui (base-nova)
+ * 放進 src/index.css（或 globals.css）。數值來自設計稿的 reference/jd.css。
+ * 若專案裡已有 shadcn 產生的 :root / .dark 變數，請「合併」同名變數，不要整段覆蓋。
+ * 沒有任何紅色／綠色：結果的顏色只用靛藍、淺藍、沙灰斜線，且一律附文字。
+ */
+@import "tailwindcss";
+
+@custom-variant dark (&:is(.dark *));
+
+:root {
+  /* —— shadcn 標準變數 —— */
+  --background: #FAF8F3;
+  --foreground: #1C2630;
+  --card: #FFFFFF;
+  --card-foreground: #1C2630;
+  --popover: #FFFFFF;
+  --popover-foreground: #1C2630;
+  --primary: #1B5B6E;
+  --primary-foreground: #FFFFFF;
+  --secondary: #E1EEF2;
+  --secondary-foreground: #144A5A;
+  --muted: #F2EFE6;
+  --muted-foreground: #46515C;      /* 對比 ≥ 4.5:1，不要再調淺 */
+  --accent: #E1EEF2;
+  --accent-foreground: #144A5A;
+  --destructive: #443F30;           /* 本產品不用紅色；錯誤用 --info / 沙灰系，並附圖示與文字 */
+  --border: #DCD6C8;
+  --input: #B9B3A3;                 /* 輸入框邊框要比一般 border 深，才看得到欄位 */
+  --ring: #1B5B6E;
+  --radius: 0.75rem;                /* 按鈕 12px、卡片 18px（見下方 --radius-card） */
+
+  /* —— CasEY 自訂：文字層級、連結 —— */
+  --ink-3: #5E6872;
+  --link: #14566B;
+  --brand-hover: #144A5A;
+
+  /* —— 結果顏色（不是紅綠；永遠搭配文字標籤）—— */
+  --outcome-full: #25407B;          /* 全部勝訴：深靛 */
+  --outcome-full-fg: #FFFFFF;
+  --outcome-part: #4E8FA6;          /* 一部勝訴：淺藍 */
+  --outcome-part-bg: #DCEBF0;
+  --outcome-part-fg: #10475A;
+  --outcome-lose-line: #8F866F;     /* 敗訴：沙灰斜線＋虛線框 */
+  --outcome-lose-bg: #ECE8DC;
+  --outcome-lose-fg: #443F30;
+  --outcome-lose-pattern: repeating-linear-gradient(45deg, #B3AA94 0 4px, #E9E4D6 4px 8px);
+
+  /* —— 專屬用途色：只能用在這個用途 —— */
+  --mask-bg: #FFE0BA;  --mask-fg: #7A3200;  --mask-line: #E27D12;   /* 遮名：只有橘色 */
+  --sample-bg: #ECE8F7; --sample-fg: #362E63; --sample-line: #A99FD6; /* 示例資料：只有紫灰 */
+  --info-bg: #EAF1F5;  --info-line: #AFC6D2;
+
+  /* —— 判決導讀五類標色 —— */
+  --passage-claim: #E2EAF8;  /* 原告主張 */
+  --passage-defense: #EEE5F4; /* 被告抗辯 */
+  --passage-issue: #F5EBC8;  /* 爭點 */
+  --passage-evidence: #DCEEE8; /* 證據 */
+  --passage-court: #FFFFFF;  /* 法院判斷 */
+
+  --shadow-card: 0 1px 2px rgba(28,38,48,.06), 0 4px 16px rgba(28,38,48,.05);
+}
+
+.dark {
+  --background: #101519;
+  --foreground: #EAE8E1;
+  --card: #182027;
+  --card-foreground: #EAE8E1;
+  --popover: #182027;
+  --popover-foreground: #EAE8E1;
+  --primary: #8CCBDD;
+  --primary-foreground: #0B2530;
+  --secondary: #1A3641;
+  --secondary-foreground: #A8D9E7;
+  --muted: #0C1115;
+  --muted-foreground: #BCC3CA;
+  --accent: #1A3641;
+  --accent-foreground: #A8D9E7;
+  --destructive: #D9D4C2;
+  --border: #2B3640;
+  --input: #56626D;
+  --ring: #8CCBDD;
+
+  --ink-3: #9AA4AD;
+  --link: #9AD3E3;
+  --brand-hover: #A8D9E7;
+
+  --outcome-full: #9DB2EE;  --outcome-full-fg: #0F1C3D;
+  --outcome-part: #5FA9C0;  --outcome-part-bg: #1B3944;  --outcome-part-fg: #B5E0EE;
+  --outcome-lose-line: #8A8573; --outcome-lose-bg: #29271F; --outcome-lose-fg: #D9D4C2;
+  --outcome-lose-pattern: repeating-linear-gradient(45deg, #6E6958 0 4px, #2C2A22 4px 8px);
+
+  --mask-bg: #4C2C0C;  --mask-fg: #FFCB94;  --mask-line: #E8913A;
+  --sample-bg: #26233F; --sample-fg: #DAD5FF; --sample-line: #6C63A8;
+  --info-bg: #162630;  --info-line: #35505E;
+
+  --passage-claim: #1D2B47; --passage-defense: #2E2442; --passage-issue: #3A3220;
+  --passage-evidence: #173229; --passage-court: #182027;
+  --shadow-card: none;
+}
+
+@theme inline {
+  --font-sans: "Noto Sans TC", system-ui, -apple-system, "PingFang TC", "Microsoft JhengHei", sans-serif;
+
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+
+  --color-link: var(--link);
+  --color-ink-3: var(--ink-3);
+
+  --color-outcome-full: var(--outcome-full);
+  --color-outcome-full-fg: var(--outcome-full-fg);
+  --color-outcome-part: var(--outcome-part);
+  --color-outcome-part-bg: var(--outcome-part-bg);
+  --color-outcome-part-fg: var(--outcome-part-fg);
+  --color-outcome-lose-line: var(--outcome-lose-line);
+  --color-outcome-lose-bg: var(--outcome-lose-bg);
+  --color-outcome-lose-fg: var(--outcome-lose-fg);
+
+  --color-mask: var(--mask-bg);
+  --color-mask-fg: var(--mask-fg);
+  --color-mask-line: var(--mask-line);
+  --color-sample: var(--sample-bg);
+  --color-sample-fg: var(--sample-fg);
+  --color-sample-line: var(--sample-line);
+  --color-info: var(--info-bg);
+  --color-info-line: var(--info-line);
+
+  --color-passage-claim: var(--passage-claim);
+  --color-passage-defense: var(--passage-defense);
+  --color-passage-issue: var(--passage-issue);
+  --color-passage-evidence: var(--passage-evidence);
+  --color-passage-court: var(--passage-court);
+
+  --radius-card: 18px;
+  --radius-control: 12px;
+  --shadow-card: var(--shadow-card);
+}
+
+@layer base {
+  * { @apply border-border; }
+  html { font-size: 16px; }
+  body {
+    @apply bg-background text-foreground font-sans antialiased;
+    line-height: 1.75;                 /* 中文內文行高，別改成 1.5 以下 */
+  }
+  :focus-visible { outline: 3px solid var(--ring); outline-offset: 2px; border-radius: 6px; }
+}
+
+/* 斜線圖樣：敗訴段落、模型推估的虛線填色。用 class 套在 div 上。 */
+@utility bg-outcome-lose-pattern { background-image: var(--outcome-lose-pattern); }
+
+/* 列印版（結果頁「下載 PDF」）：展開所有分頁、保留顏色 */
+@media print {
+  .no-print { display: none !important; }
+  * { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+}
