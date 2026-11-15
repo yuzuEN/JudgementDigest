@@ -234,7 +234,7 @@ def export(db: Path, out: Path, n_per_label: int, seed: int) -> None:
                 hint = "有" if label in CUES and CUES[label].search(text) else ("無" if label in CUES else "")
             anchored = quote_anchored(label, quote)
             anchored = "" if anchored is None else ("是" if anchored else "否")
-            span = resolve_quote(quote, text) if quote else None
+            span = resolve_quote(quote, text, label) if quote else None
             full = text[span[0]:span[1]] if span else "（找不到）"
             for j, v in enumerate([s, batch, label, pol, quote, full, text, hint, anchored, versus, None, None, None],
                                   start=1):

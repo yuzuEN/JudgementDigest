@@ -15,7 +15,10 @@ v0.5 新增：
   - 預算預設 $4：論點單位比 v0.4 的段落長（中位數 281 字，但長的到 1,200 字）
 v0.6 新增：
   - 引文超過 100 字時可以寫「開頭〔略〕結尾」。程式先整段比對；找不到才依〔略〕切成開頭、結尾，
-    先找結尾、再往回找最靠近的開頭，還原完整範圍（resolve_quote）。範圍超過 400 字或開頭、結尾不到 8 字都算不合法
+    先找結尾、再往回找最靠近的開頭，還原完整範圍（resolve_quote）。
+    合法條件：開頭至少 8 字、結尾至少 4 字；範圍上限 400 字，RULE 800 字
+    （依 v0.6 試標 3,177 筆調整：非 RULE 的範圍最長 385 字；RULE 一次陳述多條法條時常到 400–600 字，
+     1,000 字以上的是把整個單位框起來，仍算不合法；結尾常是「並不可採」「核定相當之數額」這類 4–7 字的短結論）
   - quotes 欄位存模型原本寫的引文；完整範圍隨時可以用 resolve_quote(引文, 單位原文) 算回來，不另外存
 
 用法（建議照順序，每步確認沒問題再往下）：
@@ -45,11 +48,13 @@ from annotation.cues import MARK  # noqa: E402
 from annotation.prompts_v6 import (EV_BASIS, LABELS_CIVIL, MANUAL_VERSION, POLARITY_BY_LABEL_CIVIL,  # noqa: E402
                                    POLARITY_CIVIL, PROMPT_VERSION, SYSTEM_CIVIL, USER_TEMPLATE)
 
-MAX_SPAN = 400   # 用〔略〕還原的範圍上限（字）：避免模型把整個單位框起來
-MIN_PART = 8     # 開頭、結尾各至少幾個字：太短（例如「原告」）幾乎一定在單位裡重複出現
+MAX_SPAN = 400                    # 用〔略〕還原的範圍上限（字）：避免模型把整個單位框起來
+MAX_SPAN_BY_LABEL = {"RULE": 800}  # 大前提常一次陳述好幾條法條
+MIN_HEAD = 8                       # 開頭至少幾個字：開頭是往回找的，太短（例如「原告」）容易對到別處
+MIN_TAIL = 4                       # 結尾至少幾個字：結尾先找、而且常是短結論（「並不可採」）
 
 
-def resolve_quote(quote: str, para: str, max_span: int = MAX_SPAN, min_part: int = MIN_PART):
+def resolve_quote(quote: str, para: str, label: str = None, min_head: int = MIN_HEAD, min_tail: int = MIN_TAIL):
     """
     引文在單位原文裡的完整範圍 (start, end)；找不到或不合法回傳 None。
       1. 整段比對：原文本來就含有省略號的引文，也會在這一步直接找到
@@ -64,8 +69,9 @@ def resolve_quote(quote: str, para: str, max_span: int = MAX_SPAN, min_part: int
     if quote.count(MARK) != 1:
         return None
     head, tail = (x.strip() for x in quote.split(MARK))
-    if len(head) < min_part or len(tail) < min_part:
+    if len(head) < min_head or len(tail) < min_tail:
         return None
+    max_span = MAX_SPAN_BY_LABEL.get(label, MAX_SPAN)
     e = para.find(tail)
     while e >= 0:
         s = para.rfind(head, 0, e)
@@ -143,7 +149,7 @@ def parse_response(raw: str, para: str, valid_labels=LABELS_CIVIL, valid_polarit
     for item in labels:
         code = item.get("code", "")
         quote = item.get("quote") or ""
-        valid = 1 if code == "NONE" else int(resolve_quote(quote, para) is not None)
+        valid = 1 if code == "NONE" else int(resolve_quote(quote, para, code) is not None)
         polarity = check_polarity(code, item.get("polarity"), valid_polarity)
         subtype = None
         if code == "EV":
@@ -196,6 +202,28 @@ def reparse(db: Path) -> tuple:
     return len(failed), fixed
 
 
+def revalidate(db: Path) -> tuple:
+    """
+    依目前的 resolve_quote 規則，重新判定所有標註的 quote_valid（引文驗證規則調整後用）。
+    只更新 quote_valid 一欄，不刪除、不新增任何列，不呼叫 API。回傳 (改變的筆數, 仍不合法的筆數)。
+    """
+    with closing(sqlite3.connect(db)) as con:
+        rows = con.execute(
+            "SELECT a.id, a.label, a.quote, a.quote_valid, p.para_text FROM annotations a "
+            "JOIN paragraphs p USING (sample_id) "
+            "WHERE a.label NOT IN ('NONE', 'PARSE_ERROR') AND a.label NOT LIKE 'INVALID:%'").fetchall()
+        changed, invalid = 0, 0
+        for rid, label, quote, old, para in rows:
+            new = int(resolve_quote(quote, para, label) is not None)
+            invalid += (new == 0)
+            if new != old:
+                con.execute("UPDATE annotations SET quote_valid = ? WHERE id = ?", (new, rid))
+                changed += 1
+        con.commit()
+    print(f"重新判定引文 {len(rows)} 筆：{changed} 筆改變，仍不合法 {invalid} 筆（未呼叫 API）")
+    return changed, invalid
+
+
 def main():
     ap = argparse.ArgumentParser(description="以 Claude API 標註段落")
     ap.add_argument("--db", type=Path, default=config.ARTIFACTS_DIR / OUT_NAME / "annotation.sqlite")
@@ -205,11 +233,12 @@ def main():
     ap.add_argument("--budget", type=float, default=4.0, help="本次估算花費超過此金額（美元）就停止")
     ap.add_argument("--max-tokens", type=int, default=4000, help="thinking 區塊也算輸出 token，要留足夠空間")
     ap.add_argument("--reparse", action="store_true",
-                    help="不呼叫 API：用已存的原始回應重新解析之前的 PARSE_ERROR（解析規則更新後用）")
+                    help="不呼叫 API：用已存的原始回應重新解析之前的 PARSE_ERROR，並依目前規則重新判定所有引文")
     args = ap.parse_args()
 
     if args.reparse:
         reparse(args.db)
+        revalidate(args.db)
         return
 
     con = sqlite3.connect(args.db)

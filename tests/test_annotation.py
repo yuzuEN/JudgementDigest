@@ -14,7 +14,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from annotation import prompts_v5, prompts_v6  # noqa: E402
-from annotation.annotate import check_polarity, parse_response, reparse, resolve_quote  # noqa: E402
+from annotation.annotate import check_polarity, parse_response, reparse, resolve_quote, revalidate  # noqa: E402
 from annotation.cues import CUES, INTEREST_SERVICE, MARK, cue_hits, quote_anchored  # noqa: E402
 from annotation.sample import MAX_UNIT, SCHEMA, build_sample, used_case_ids  # noqa: E402
 from annotation.spot_check import (COL, concl_directions, export, majority, outcome_flag,  # noqa: E402
@@ -215,11 +215,21 @@ class TestResolveQuote(unittest.TestCase):
 
     def test_invalid(self):
         self.assertIsNone(resolve_quote("不在原文裡的句子", self.PARA))
-        self.assertIsNone(resolve_quote("原告〔略〕為有理由", self.PARA))                 # 開頭太短（< 8 字）
+        self.assertIsNone(resolve_quote("原告〔略〕為有理由，應予准許", self.PARA))         # 開頭太短（< 8 字）
+        self.assertIsNone(resolve_quote("原告依消費借貸之法律關係〔略〕准許", self.PARA))     # 結尾太短（< 4 字）
         self.assertIsNone(resolve_quote("為有理由，應予准許〔略〕原告依消費借貸之法律關係", self.PARA))  # 順序顛倒
         self.assertIsNone(resolve_quote("原告依消費借貸之法律關係〔略〕給付本金50萬元〔略〕為有理由", self.PARA))  # 兩個〔略〕
         long_para = "原告依消費借貸之法律關係" + "甲" * 500 + "為有理由，應予准許"
         self.assertIsNone(resolve_quote("原告依消費借貸之法律關係〔略〕為有理由，應予准許", long_para))  # 超過 400 字
+
+    def test_short_tail_and_rule_span(self):
+        """依 v0.6 試標調整：結尾 4 字以上即可；RULE 的範圍上限 800 字，其他 400 字。"""
+        self.assertIsNotNone(resolve_quote("原告依消費借貸之法律關係〔略〕應予准許", self.PARA))   # 結尾 4 字
+        para = "按因故意或過失，不法侵害他人之權利者，負損害賠償責任" + "乙" * 500 + "民法第184條定有明文"
+        q = "按因故意或過失，不法侵害他人之權利者〔略〕民法第184條定有明文"
+        self.assertIsNotNone(resolve_quote(q, para, "RULE"))
+        self.assertIsNone(resolve_quote(q, para, "SUB"))
+        self.assertIsNone(resolve_quote(q, "按因故意或過失，不法侵害他人之權利者" + "乙" * 1000 + "民法第184條定有明文", "RULE"))
 
     def test_parse_uses_resolve(self):
         raw = ('{"labels": [{"code": "CONCL", "quote": "原告依消費借貸之法律關係〔略〕按週年利率5%計算之利息，為有理由", '
@@ -255,6 +265,25 @@ class TestReparse(unittest.TestCase):
             rows = read(db, "SELECT sample_id, label, polarity, quote_valid, subtype FROM annotations ORDER BY sample_id")
             self.assertEqual(rows, [(1001, "DAM", "全額准許", 1, None), (1002, "PARSE_ERROR", None, 0, None)])
             self.assertEqual(reparse(db), (1, 0))   # 再跑一次不會重複寫入
+
+
+class TestRevalidate(unittest.TestCase):
+    def test_revalidate_updates_only_quote_valid(self):
+        """引文規則調整後重新判定：只改 quote_valid，不刪列、不改其他欄位。"""
+        with tempfile.TemporaryDirectory() as tmp:
+            db = Path(tmp) / "a.sqlite"
+            para = "原告依消費借貸之法律關係，請求被告給付50萬元，為有理由，應予准許。"
+            with closing(sqlite3.connect(db)) as con:
+                con.executescript(SCHEMA)
+                con.execute("INSERT INTO paragraphs (sample_id, para_text) VALUES (1, ?)", (para,))
+                con.executemany(INSERT, [
+                    (1, "m", 1, "CONCL", "有理由", "原告依消費借貸之法律關係〔略〕應予准許", "high", 0, None, "v0.6", "p6.0", "{}", "t"),
+                    (1, "m", 1, "CONCL", "有理由", "不在原文", "high", 0, None, "v0.6", "p6.0", "{}", "t"),
+                    (1, "m", 1, "NONE", None, "", "high", 1, None, "v0.6", "p6.0", "{}", "t")])
+                con.commit()
+            self.assertEqual(revalidate(db), (1, 1))
+            self.assertEqual(read(db, "SELECT quote_valid FROM annotations ORDER BY id"), [(1,), (0,), (1,)])
+            self.assertEqual(revalidate(db), (0, 1))   # 再跑一次不會改變
 
 
 class TestSpotCheck(unittest.TestCase):
