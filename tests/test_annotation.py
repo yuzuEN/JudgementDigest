@@ -240,6 +240,9 @@ class TestResolveQuote(unittest.TestCase):
         """用〔略〕時只檢查結尾：結論寫在開頭、結尾沒有，判成未錨定。"""
         self.assertTrue(quote_anchored("CONCL", "原告依消費借貸之法律關係〔略〕按週年利率5%計算之利息，為有理由"))
         self.assertFalse(quote_anchored("CONCL", "為有理由，原告依消費借貸之法律關係〔略〕自起訴狀繕本送達翌日起"))
+        # RULE、EXP 的標記用語常在開頭：開頭＋結尾都看
+        self.assertTrue(quote_anchored("RULE", "按因故意或過失，不法侵害他人之權利者〔略〕應負舉證責任"))
+        self.assertTrue(quote_anchored("EXP", "衡諸常情，一般人不會將印章交給他人〔略〕不足採信"))
 
 
 class TestReparse(unittest.TestCase):

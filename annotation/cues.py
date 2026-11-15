@@ -87,16 +87,20 @@ def cue_hits(text: str) -> list:
 
 
 MARK = "〔略〕"   # v0.6：引文超過 100 字時，寫「開頭〔略〕結尾」
+HEAD_MARKED = ("RULE", "EXP")   # 標記用語常在開頭的標籤：錨定檢查看開頭＋結尾
 
 
 def quote_anchored(label: str, quote: str):
     """
     引文是否含該標籤的動作用語：True／False；該標籤沒有定義檢查時回傳 None。
-    v0.6：引文用了〔略〕時，只檢查結尾（手冊規則三：完成動作的用語必須寫在結尾）。
-    只看模型寫出來的字，不看程式補出來的中間，不然範圍一長幾乎一定會含有某個用語，檢查就沒有意義。
+    v0.6：引文用了〔略〕時，只看模型寫出來的字，不看程式補出來的中間，不然範圍一長幾乎一定會含有某個用語。
+      - 結論在句尾的標籤（CONCL、DAM、SUB、EV⋯⋯）：只檢查結尾（手冊規則三：完成動作的用語寫在結尾）
+      - RULE、EXP：標記用語常在開頭（「按」「所謂」「衡諸常情，⋯⋯」），開頭和結尾都檢查
+        （v0.6 試標：RULE 只看結尾 72.4%，開頭＋結尾 86.2%）
     """
     rx = QUOTE_ACT.get(label)
     if rx is None:
         return None
-    text = (quote or "").split(MARK)[-1]
+    parts = (quote or "").split(MARK)
+    text = " ".join(parts) if label in HEAD_MARKED else parts[-1]
     return bool(rx.search(text))
