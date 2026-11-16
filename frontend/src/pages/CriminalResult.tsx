@@ -9,7 +9,7 @@ import type { Charge, CriminalModelInfo, CriminalReport } from "../api/types";
 import { Bar } from "../components/casey/Bars";
 import { EmptyState } from "../components/casey/EmptyState";
 import { InfoNote, LoadingPanel, PanelTitle, ResultTabs, useResultTab } from "../components/casey/ResultTabs";
-import { ErrorBox, InfoLink, LAF_URL, SIMILARITY_NOTE } from "../components/Common";
+import { corpusLead, ErrorBox, InfoLink, LAF_URL, SharedTerms } from "../components/Common";
 import { LinkButton } from "../components/LinkButton";
 import { ResultFrame } from "../components/ResultFrame";
 import { percent } from "../format";
@@ -226,7 +226,7 @@ function CasesPanel({ report }: { report: CriminalReport }) {
   return (
     <>
       <PanelTitle mock={report.mock}>相似的真實判決</PanelTitle>
-      <p className="text-[15px] text-muted-foreground">依相似度排序。相似度不是百分比，是 0 到 1 之間的小數。</p>
+      {report.similar.length > 0 && <p className="text-[15px] text-muted-foreground">{corpusLead(report.mock ? null : report.n_corpus, report.similar.length)}<InfoLink to="相似判決怎麼找" label="相似判決怎麼找的說明" /></p>}
       {report.similar.length === 0 ? (
         <EmptyState title="刑事相似判決檢索尚未開放">目前可查看罪名與刑期範圍。</EmptyState>
       ) : (
@@ -237,7 +237,6 @@ function CasesPanel({ report }: { report: CriminalReport }) {
                 <TableHead scope="col">字號</TableHead>
                 <TableHead scope="col">罪名</TableHead>
                 <TableHead scope="col">宣告刑</TableHead>
-                <TableHead scope="col" className="text-right"><span className="inline-flex items-center gap-1">相似度<InfoLink to="相似度" label="相似度說明" /></span></TableHead>
                 <TableHead scope="col" className="no-print">判決原文</TableHead>
               </TableRow>
             </TableHeader>
@@ -247,21 +246,21 @@ function CasesPanel({ report }: { report: CriminalReport }) {
                   <TableCell className="py-3.5 align-top whitespace-normal">
                     <b>{c.case_number}</b><br />
                     <span className="line-clamp-3 text-sm text-muted-foreground print:line-clamp-none">{c.summary}</span>
+                    <SharedTerms terms={c.shared_terms} />
                   </TableCell>
                   <TableCell className="py-3.5 align-top whitespace-nowrap">{c.mid}</TableCell>
                   <TableCell className="py-3.5 align-top whitespace-nowrap">{c.sentence ?? "—"}</TableCell>
-                  <TableCell className="py-3.5 text-right align-top font-bold tabular-nums">{c.similarity.toFixed(2)}</TableCell>
                   <TableCell className="no-print py-3.5 align-top">
-                    <div className="flex flex-wrap items-center gap-2">
+                    {/* 和民事一樣：原文連結放在判決導讀按鈕下面，欄寬變大時也不會並排 */}
+                    <div className="flex flex-col items-start gap-1">
                       <LinkButton variant="outline" size="sm" to={`/judgment/criminal/${c.case_id}`}>判決導讀</LinkButton>
-                      {c.url && <a href={c.url} target="_blank" rel="noreferrer" aria-label="判決原文" className="inline-flex min-h-11 items-center gap-1 font-semibold">原文<ExternalLinkIcon className="size-4" aria-hidden="true" /></a>}
+                      {c.url && <a href={c.url} target="_blank" rel="noreferrer" aria-label="判決原文" className="inline-flex min-h-11 items-center gap-1 text-sm font-semibold">原文<ExternalLinkIcon className="size-4" aria-hidden="true" /></a>}
                     </div>
                   </TableCell>
                 </TableRow>
               ))}
             </TableBody>
           </Table>
-          <p className="text-[15px] text-muted-foreground">{SIMILARITY_NOTE}</p>
         </>
       )}
     </>

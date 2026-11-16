@@ -162,6 +162,7 @@ class SimilarCase(BaseModel):
     sentence: Optional[str] = None
     default_judgment: bool = False      # 一造辯論：被告沒有到庭
     url: Optional[str] = None           # 司法院裁判書系統的原文網址（民事舊版檢索資料沒有時為 None）
+    shared_terms: List[str] = []        # 和使用者描述共有、對相似度貢獻最大的詞（只從使用者的描述取；示例資料沒有）
 
 
 class EvidenceRow(BaseModel):
@@ -194,6 +195,7 @@ class CivilReport(BaseModel):
     evidence: List[EvidenceRow]
     defenses: List[DefenseRow]
     n_compared: int
+    n_corpus: Optional[int] = None      # 檢索語料的總件數（相似判決是從這麼多件裡找出來的）
     mock: bool
 
 
@@ -245,6 +247,7 @@ class CriminalReport(BaseModel):
     charges: List[Charge]
     similar: List[SimilarCase]
     model: Optional[CriminalModelInfo] = None
+    n_corpus: Optional[int] = None      # 刑事檢索語料的總件數
     mock: bool = Field(description="罪名、刑度與相似判決是否為示例資料")
 
 

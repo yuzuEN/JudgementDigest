@@ -14,7 +14,28 @@ export function InfoLink({ to, label }: { to: string; label: string }) {
   );
 }
 
-export const SIMILARITY_NOTE = "相似度是用字接近的程度（0 到 1），只用來排列結果，不是百分比，也不代表案情或結果相同。";
+/**
+ * 相似判決表格上方的說明：從多少件判決裡找出來的、怎麼排序、共同關鍵詞是什麼。
+ * 不顯示相似度的數字：口語描述和判決的寫法不同，最接近的判決通常也只有 0.1–0.2，數字看起來很低，
+ * 反而讓人以為不像；排序和共同關鍵詞已經說明了接近的程度與原因。
+ */
+export function corpusLead(nCorpus: number | null | undefined, shown: number): string {
+  const from = nCorpus ? `從 ${nCorpus.toLocaleString("en-US")} 件判決中，` : "";
+  return `${from}找出和你的描述用字最接近的 ${shown} 件，越上面越接近。「共同關鍵詞」是你的描述和這件判決共有的詞。用字接近不代表案情或結果相同，請點判決導讀自己判斷。`;
+}
+
+/** 每件相似判決下方：和使用者描述共有、最能說明為什麼找到這件的詞（後端只從使用者的描述取）。 */
+export function SharedTerms({ terms }: { terms?: string[] | null }) {
+  if (!terms || terms.length === 0) return null;
+  return (
+    <span className="mt-1 flex flex-wrap items-center gap-1.5 text-sm">
+      <span className="text-muted-foreground">共同關鍵詞</span>
+      {terms.map((t) => (
+        <span key={t} className="rounded-full border border-input bg-secondary px-2 leading-6 text-secondary-foreground">{t}</span>
+      ))}
+    </span>
+  );
+}
 
 /** 出錯時：說明恢復方式，提供重試。只影響出錯的那一個區塊。 */
 export function ErrorBox({ message, onRetry, hint = "請稍後再試。", children }: {

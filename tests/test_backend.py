@@ -21,7 +21,9 @@ from backend.civil_service import MAX_DEFAULT_SHOWN, CivilService  # noqa: E402
 from backend.main import create_app  # noqa: E402
 from backend.schemas import CivilInput  # noqa: E402
 from backend.settings import Settings  # noqa: E402
+from civil.dataset.text import prepare_input  # noqa: E402
 from civil.models import amount_service, service  # noqa: E402
+from criminal.models.service import normalize as criminal_normalize  # noqa: E402
 from retrieval import build  # noqa: E402
 from tests.test_amount_service import amount_frame  # noqa: E402
 from tests.test_civil_service import LOSE, WIN, synthetic  # noqa: E402
@@ -159,6 +161,10 @@ class TestCriminalWithModel(unittest.TestCase):
         self.assertTrue(r["similar"] and all(c["mid"] == "酒駕罪" for c in r["similar"]))
         self.assertTrue(r["similar"][0]["url"].startswith("https://judgment.judicial.gov.tw/"))
         self.assertIn(r["similar"][0]["sentence"], ("有期徒刑 4 月", "拘役 20 日"))
+        self.assertGreater(r["n_corpus"], 0)
+        self.assertTrue(all(isinstance(c["shared_terms"], list) and "_row" not in c for c in r["similar"]))
+        original = criminal_normalize(CRIMINAL_DRUNK)     # 共同關鍵詞只從原文取，不從換成判決用語的文字取
+        self.assertTrue(all(t in original for c in r["similar"] for t in c["shared_terms"]))
         guide = self.client.get(f"/api/judgments/criminal/{r['similar'][0]['case_id']}/guide")
         self.assertEqual(guide.status_code, 200)
         self.assertIsNone(guide.json()["criminal"])
@@ -444,6 +450,10 @@ class TestWithModel(unittest.TestCase):
         self.assertTrue(all(c["mid"] == "侵權：交通事故" for c in r["similar"]), "選了案由就在同案由裡找")
         sims = [c["similarity"] for c in r["similar"]]
         self.assertEqual(sims, sorted(sims, reverse=True))
+        self.assertGreater(r["n_corpus"], 0)
+        self.assertTrue(all(isinstance(c["shared_terms"], list) and "_row" not in c for c in r["similar"]))
+        query = prepare_input(WIN[0] * 5)        # 查詢會先去掉空白、正規化，共同詞從這段文字取
+        self.assertTrue(all(t in query for c in r["similar"] for t in c["shared_terms"]), "共同詞只能從使用者的描述取")
         self.assertEqual(r["amount_range"]["amount_median"], 120000)   # 合成資料的獲償比例都是 0.6
         self.assertEqual((r["amount_range"]["source"], r["amount_range"]["scope"]), ("similar", "win"),
                          "沒有獲償比例模型時，金額範圍和以前一樣是相似判決的分位數")
