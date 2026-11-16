@@ -156,7 +156,7 @@ describe("描述案情（關卡 1–3）", () => {
     await user.click(slot);
     expect(slot).toHaveAttribute("aria-pressed", "true");
     await user.click(screen.getByRole("button", { name: "下一章：確認內容" }));
-    expect(await screen.findByText(/有沒有請律師：有/)).toBeInTheDocument();
+    expect(await screen.findByText(/被告有沒有請辯護律師：有/)).toBeInTheDocument();
     expect(screen.getByText(/手上的證據：驗傷單、診斷證明/)).toBeInTheDocument();
   });
 
@@ -740,12 +740,27 @@ describe("民事結果", () => {
   });
 
   describe("整體結果", () => {
-    it("主畫面是判決件數，機率放在模型細節，而且說明不是你會贏的機率", async () => {
+    it("最上面是模型判定：機率、模型與測試成績，並說明不是你會贏的機率；相似判決在後面當對照", async () => {
       await show();
-      expect(screen.getByRole("img", { name: "全部勝訴 8 件、一部勝訴 13 件、敗訴 9 件" })).toBeInTheDocument();
-      const detail = screen.getByText("62%").closest("details")!;
-      expect(detail).toHaveTextContent("不是你會贏的機率");
-      expect(detail).toHaveTextContent("口語描述算出來的機率常常偏低");
+      const verdict = screen.getByRole("region", { name: "模型判定" });
+      expect(within(verdict).getByText("62%")).toBeInTheDocument();
+      expect(verdict).toHaveTextContent("不是你會贏的機率");
+      expect(verdict).toHaveTextContent("口語描述算出來的機率常常偏低");
+      expect(verdict).toHaveTextContent("勝敗模型");
+      expect(verdict).toHaveTextContent("測試成績");
+      expect(screen.getByText("62%").closest("details")).toBeNull();
+      const outcome = screen.getByRole("img", { name: "全部勝訴 8 件、一部勝訴 13 件、敗訴 9 件" });
+      expect(verdict.compareDocumentPosition(outcome) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    });
+
+    it("金額模型有用時，模型判定寫出範圍", async () => {
+      await show({ amount_range: { ...CIVIL_REPORT.amount_range!, source: "model", scope: "partial_win" } });
+      expect(screen.getByRole("region", { name: "模型判定" })).toHaveTextContent("如果判決是一部勝訴，可能判准 180,000 ～ 420,000 元（中位數 300,000 元）");
+    });
+
+    it("沒用金額模型時，模型判定說明為什麼改用相似判決", async () => {
+      await show();
+      expect(screen.getByRole("region", { name: "模型判定" })).toHaveTextContent("要選一個糾紛類型，並填法院或請求金額才會使用");
     });
 
     it.each([

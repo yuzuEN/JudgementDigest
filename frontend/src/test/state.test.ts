@@ -14,7 +14,7 @@ describe("fullText", () => {
   });
   it("刑事把律師和勾選的證據加在最後，民事不加（民事 API 有自己的欄位）", () => {
     const base = { ...EMPTY_INTAKE, text: "被打", lawyer: "no" as const, criminalEvidence: ["驗傷單、診斷證明", "證人"] };
-    expect(fullText({ ...base, caseType: "criminal" })).toBe("被打\n有沒有請律師：沒有\n手上的證據：驗傷單、診斷證明、證人");
+    expect(fullText({ ...base, caseType: "criminal" })).toBe("被打\n被告有沒有請辯護律師：沒有\n手上的證據：驗傷單、診斷證明、證人");
     expect(fullText({ ...base, caseType: "civil" })).toBe("被打");
     expect(fullText({ ...base, caseType: "criminal", lawyer: "" })).toBe("被打\n手上的證據：驗傷單、診斷證明、證人");
   });
