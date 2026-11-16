@@ -22,7 +22,7 @@ import { ErrorBox } from "../components/Common";
 import { Layout, PAGE } from "../components/Layout";
 import { parseAmount } from "../format";
 import { DISPUTE_GROUPS } from "../knowledge";
-import { useIntake, type Intake as IntakeState } from "../state";
+import { lawyerQuestion, useIntake, type Intake as IntakeState } from "../state";
 
 export const MIN_STORY = 30;
 export const MAX_STORY = 3000;
@@ -186,7 +186,7 @@ export default function Intake() {
                     </FieldBlock>
                   </>
                 )}
-                <FieldBlock label={<span id="lawyer-label">有沒有請律師</span>}>
+                <FieldBlock label={<span id="lawyer-label">{lawyerQuestion(intake.caseType).label}</span>} hint={lawyerQuestion(intake.caseType).hint}>
                   <Segmented labelledBy="lawyer-label" value={intake.lawyer} className="max-w-[320px]"
                     items={[{ value: "yes", label: "有" }, { value: "no", label: "沒有" }]}
                     onChange={(v) => update({ lawyer: v as IntakeState["lawyer"] })} />
@@ -455,7 +455,7 @@ function Summary({ intake }: { intake: IntakeState }) {
       ["請求金額", amount !== null ? `${amount.toLocaleString("en-US")} 元` : amountState(intake.claimedAmount) === "bad" ? "格式錯誤" : "未填"],
       ["對方", DEFENDANT_TYPES.find((d) => d.value === intake.defendantType)?.label ?? "未選"],
     ] as [string, string][] : []),
-    ["律師", intake.lawyer === "yes" ? "有" : intake.lawyer === "no" ? "沒有" : "未選"],
+    [lawyerQuestion(intake.caseType).short, intake.lawyer === "yes" ? "有" : intake.lawyer === "no" ? "沒有" : "未選"],
     ["證物", `${evidenceCount} 項`],
   ];
   return (

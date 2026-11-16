@@ -23,7 +23,7 @@ import { civilInput, useIntake } from "../state";
 export { Bar };
 
 const TABS = [
-  { key: "overview", label: "整體結果", line: "我是解說員。這裡整理了相似判決的結果，你可以切換分頁查看金額、證據與判決內容。" },
+  { key: "overview", label: "整體結果", line: "我是解說員。最上面是模型的判定，下面是相似判決的結果，可以對照著看。" },
   { key: "amount", label: "可能的金額", line: "這是相似判決的判准金額。範圍通常很寬，請當作粗略參考。" },
   { key: "evidence", label: "證據對照", line: "你填寫過的證據已標上「你有提到」，可以和相似的勝訴判決對照。" },
   { key: "defense", label: "對方的說法", line: "展開各項說法，可以查看被告提出這些理由的意思。" },
@@ -103,6 +103,10 @@ const SIGNAL: Record<CivilReport["prediction"]["signal"], { label: string; text:
   insufficient: { label: "資訊不足", text: "描述太短，或看不出是哪一種糾紛，模型的參考訊號不可靠。建議回上一步補充細節，或直接看相似判決。" },
 };
 
+/**
+ * 整體結果：最上面是模型判定（勝訴機率、金額模型、模型與測試成績），下面才是相似判決的勝敗當對照。
+ * 模型是這個專案的技術重點，所以放在第一眼看到的位置；機率旁邊一定附「不是你會贏的機率」的說明。
+ */
 function Overview({ report }: { report: CivilReport }) {
   const { total, win, partial, lose } = report.outcomes;
   const { signal } = report.prediction;
@@ -111,7 +115,8 @@ function Overview({ report }: { report: CivilReport }) {
   const mixed = enough && ((signal === "strong" && share < 0.4) || (signal === "weak" && share >= 0.7));
   return (
     <>
-      <PanelTitle mock={report.mock}>相似判決的結果</PanelTitle>
+      <ModelVerdict report={report} />
+      <h3 className="mt-2 text-lg font-bold">對照：相似判決的結果</h3>
       {enough ? (
         <>
           <p className="text-muted-foreground">{total} 件雙方都有攻防的相似判決，結果是：</p>
@@ -122,29 +127,66 @@ function Overview({ report }: { report: CivilReport }) {
           數量太少，統計不可靠，所以這次不顯示比例。可以到「相似判決」分頁逐件看。
         </EmptyState>
       )}
-      <Note title={`參考訊號：${SIGNAL[signal].label}`}>{SIGNAL[signal].text}</Note>
-      {mixed && <p className="text-[15px] text-muted-foreground">相似判決的結果和模型的參考訊號不完全一致，請先看判決內容。</p>}
-      {report.prediction.warnings.map((w) => <p key={w} className="text-[15px] font-bold">{w}</p>)}
+      {mixed && <p className="text-[15px] text-muted-foreground">相似判決的結果和模型的判定不完全一致，請先看判決內容。</p>}
       {report.default_cases > 0 && (
         <p className="flex items-start gap-1.5 text-[15px] text-muted-foreground">
           <InfoIcon className="mt-1 size-4 flex-none" aria-hidden="true" />
           <span>另外，最相似的 30 件判決裡有 {report.default_cases} 件被告沒有到庭（一造辯論）。法院只聽到原告一方的說法，原告幾乎都贏，所以不算進上面的比例。</span>
         </p>
       )}
-      <ModelDetail report={report} />
     </>
   );
 }
 
-function ModelDetail({ report }: { report: CivilReport }) {
-  const { win_probability: p, model } = report.prediction;
+function ModelVerdict({ report }: { report: CivilReport }) {
+  const { win_probability: p, signal, model, warnings } = report.prediction;
+  const range = report.amount_range;
   return (
-    <Disclosure summary="模型細節">
-      <p className="flex flex-wrap items-center gap-1">模型參考：勝訴機率 <b className="tabular-nums">{percent(p)}</b>（勝訴或一部勝訴）<InfoLink to="勝訴機率" label="勝訴機率說明" /></p>
-      <p className="text-[15px] text-muted-foreground">這是模型根據文字估出來的數字，不是你會贏的機率，只在判斷方向時當輔助。模型是用判決書的文字訓練的，一般口語描述算出來的機率常常偏低，也比較分不出輸贏。</p>
-      <p className="text-sm text-muted-foreground">模型：{model.description}。你的描述越完整，結果越可靠。</p>
-      <ModelScore model={model} />
-    </Disclosure>
+    <section aria-labelledby="model-verdict-title" className="flex flex-col gap-3 rounded-[14px] border-2 border-primary bg-card px-4 py-4 sm:px-5">
+      <PanelTitle mock={report.mock}><span id="model-verdict-title">模型判定</span></PanelTitle>
+      <div className="flex flex-wrap items-end gap-x-6 gap-y-2">
+        <p className="flex flex-col">
+          <span className="flex items-center gap-1 text-[15px] text-muted-foreground">勝訴機率（勝訴或一部勝訴）<InfoLink to="勝訴機率" label="勝訴機率說明" /></span>
+          <b className="text-[40px] leading-[1.2] font-extrabold tabular-nums">{percent(p)}</b>
+        </p>
+        <p className="pb-1.5 text-lg font-bold">參考訊號：{SIGNAL[signal].label}</p>
+      </div>
+      <div className="flex flex-col gap-1">
+        <Bar value={p} className="h-3.5" label={`勝訴機率 ${percent(p)}`} />
+        <div className="relative flex justify-between text-sm text-muted-foreground tabular-nums">
+          <span>0%</span>
+          <span className="absolute left-1/2 -translate-x-1/2">50%（判勝訴的界線）</span>
+          <span>100%</span>
+        </div>
+      </div>
+      <p className="text-[15px]">{SIGNAL[signal].text}</p>
+      <p className="text-[15px] text-muted-foreground">這是模型根據文字估出來的數字，不是你會贏的機率。模型是用判決書的文字訓練的，一般口語描述算出來的機率常常偏低，也比較分不出輸贏。</p>
+      <AmountVerdict range={range} />
+      {warnings.map((w) => <p key={w} className="text-[15px] font-bold">{w}</p>)}
+      <div className="flex flex-col gap-1 border-t pt-3">
+        <p className="text-[15px]"><b>勝敗模型</b>（{model.name}）：{model.description}。</p>
+        <ModelScore model={model} />
+      </div>
+    </section>
+  );
+}
+
+/** 模型判定裡的金額一行：有用金額模型時寫範圍；沒用時說明為什麼改用相似判決。 */
+function AmountVerdict({ range }: { range: AmountRange | null }) {
+  if (range?.source === "model") {
+    return (
+      <p className="text-[15px]">
+        <b>金額模型</b>：如果判決是一部勝訴，{range.claimed
+          ? <>可能判准 <b className="tabular-nums">{yuan(range.amount_low)} ～ {yuan(range.amount_high)} 元</b>（中位數 {yuan(range.amount_median)} 元）</>
+          : <>可能判准請求金額的 <b className="tabular-nums">{percent(range.ratio_low)}～{percent(range.ratio_high)}</b></>}
+        ；用過去的判決測試，10 件約有 {Math.round(range.coverage * 10)} 件落在範圍內。細節見「可能的金額」。
+      </p>
+    );
+  }
+  return (
+    <p className="text-[15px] text-muted-foreground">
+      <b>金額模型</b>：要選一個糾紛類型，並填法院或請求金額才會使用；這次「可能的金額」改用相似判決的判准比例。
+    </p>
   );
 }
 
@@ -153,7 +195,7 @@ function ModelScore({ model }: { model: CivilReport["prediction"]["model"] }) {
   if (wp == null || wr == null || lp == null || lr == null) return null;
   return (
     <p className="text-sm text-muted-foreground">
-      用判決文字測試時，模型判勝訴的案件有 {percent(wp)} 真的勝訴，實際勝訴的案件有 {percent(wr)} 被判出來；
+      測試成績（用沒參與訓練的判決文字）：判勝訴的案件有 {percent(wp)} 真的勝訴，實際勝訴的案件有 {percent(wr)} 被判出來；
       判敗訴的案件有 {percent(lp)} 真的敗訴，實際敗訴的案件有 {percent(lr)} 被判出來。
       <InfoLink to="Precision、Recall" label="Precision、Recall 說明" />
     </p>

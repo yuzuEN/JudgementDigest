@@ -7,7 +7,6 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { api } from "../api/client";
 import type { Charge, CriminalModelInfo, CriminalReport } from "../api/types";
 import { Bar } from "../components/casey/Bars";
-import { Disclosure } from "../components/casey/Disclosure";
 import { EmptyState } from "../components/casey/EmptyState";
 import { InfoNote, LoadingPanel, PanelTitle, ResultTabs, useResultTab } from "../components/casey/ResultTabs";
 import { ErrorBox, InfoLink, LAF_URL, SIMILARITY_NOTE } from "../components/Common";
@@ -88,8 +87,10 @@ function ChargesPanel({ report, selected, onSelect, rewritten }: {
 }) {
   return (
     <>
+      <p className="-mb-2 text-[15px] font-bold text-primary">模型判定</p>
       <PanelTitle mock={report.mock}>可能的罪名</PanelTitle>
-      <p className="no-print text-muted-foreground">點一個罪名，「刑期範圍」分頁會跟著切換。</p>
+      {/* 只有一個罪名時沒有東西可以切換，不顯示這句，避免使用者以為還有別的罪名 */}
+      {report.charges.length > 1 && <p className="no-print text-muted-foreground">點一個罪名，「刑期範圍」分頁會跟著切換。</p>}
       <RadioGroup aria-label="可能的罪名" value={String(selected)} onValueChange={(v) => onSelect(Number(v))} className="grid max-w-[820px] gap-2.5">
         {report.charges.map((c, i) => {
           const on = i === selected;
@@ -130,7 +131,8 @@ function ModelDetail({ model }: { model: CriminalModelInfo }) {
   const { n_test: n, charge_top1: top1, bucket_accuracy: acc, bucket_within_one: near } = model;
   if (n == null || top1 == null || acc == null || near == null) return null;
   return (
-    <Disclosure summary="模型細節">
+    <section aria-labelledby="criminal-model-title" className="flex flex-col gap-2 rounded-[14px] border-2 border-primary bg-card px-4 py-4 sm:px-5">
+      <h3 id="criminal-model-title" className="text-lg font-bold">模型與測試成績</h3>
       {model.sentence_description && model.sentence_n_test != null ? <>
         <p className="text-[15px]">
           罪名模型：{model.description}，用 {n.toLocaleString()} 件沒參與訓練的判決測試時，第一個罪名猜中 {percent(top1)}。
@@ -146,7 +148,7 @@ function ModelDetail({ model }: { model: CriminalModelInfo }) {
         </p>
       )}
       <p className="text-[15px] text-muted-foreground">測試用的是判決書的文字，一般口語描述的準確度可能較低。</p>
-    </Disclosure>
+    </section>
   );
 }
 
