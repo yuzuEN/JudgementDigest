@@ -152,9 +152,13 @@ class CivilService:
             out.append(mid_note)
         return out
 
-    def _similarity(self, req) -> np.ndarray:
+    @staticmethod
+    def _search_text(req) -> str:
         """使用者確認過的改寫只用來搜尋；勝訴機率仍用原本的描述（口語測試中改寫沒有提高判斷力）。"""
-        return self.index.scores(prepare_input(without_questions(req.search_text or req.text)))
+        return prepare_input(without_questions(req.search_text or req.text))
+
+    def _similarity(self, req) -> np.ndarray:
+        return self.index.scores(self._search_text(req))
 
     def predict(self, req) -> Dict:
         if self.mock:
@@ -173,14 +177,18 @@ class CivilService:
         same = None if not mid else (self.mids == mid if tier is None else (self.mids == mid) & tier)
         return same if same is not None and same.sum() >= MIN_SAME_MID else tier
 
-    def _listed(self, sim: np.ndarray, mid: Optional[str], n: int) -> List[Dict]:
+    def _listed(self, sim: np.ndarray, mid: Optional[str], n: int, query: str) -> List[Dict]:
         """候選是全部案件和對審案件各取前幾名：金融類的制式一造辯論很多，只取全部的話對審會被擠出去。"""
         allowed = self._allowed(mid)
         contested = ~self.default if allowed is None else allowed & ~self.default
         k = max(N_CANDIDATES, n * 6)
         rows = np.union1d(self.index.top(sim, k, allowed)[0], self.index.top(sim, k, contested)[0])
         rows = rows[np.argsort(-sim[rows], kind="stable")]
-        return self._shortlist(rows, sim[rows], n)
+        picked = self._shortlist(rows, sim[rows], n)
+        terms = self.index.shared_terms(query, [c.pop("_row") for c in picked])
+        for case, t in zip(picked, terms):
+            case["shared_terms"] = t
+        return picked
 
     def _shortlist(self, rows, sims, n: int) -> List[Dict]:
         """
@@ -209,7 +217,7 @@ class CivilService:
         marks = ",".join("?" * len(rows))
         found = {r["row"]: r for r in self._query(f"SELECT * FROM cases WHERE row IN ({marks})",
                                                   [int(x) for x in rows])}
-        return [self._case(found[int(row)], float(sim)) for row, sim in zip(rows, sims)]
+        return [{**self._case(found[int(row)], float(sim)), "_row": int(row)} for row, sim in zip(rows, sims)]
 
     @staticmethod
     def _case(r, similarity: float) -> Dict:
@@ -223,7 +231,8 @@ class CivilService:
     def search(self, text: str, mid: Optional[str], k: int) -> List[Dict]:
         if self.mock:
             return mock.civil_cases(mid)[:k]
-        return self._listed(self.index.scores(prepare_input(text)), mid, k)
+        query = prepare_input(text)
+        return self._listed(self.index.scores(query), mid, k, query)
 
     # ── 完整的參考結果 ──
     def report(self, req) -> Dict:
@@ -244,7 +253,8 @@ class CivilService:
         return {
             "prediction": prediction,
             "amount_range": {**amount, **full_wins} if amount else None,
-            "similar": self._listed(sim, mid, N_SHOWN),
+            "similar": self._listed(sim, mid, N_SHOWN, self._search_text(req)),
+            "n_corpus": len(self.index),
             "evidence": evidence_table([self.case_evidence[r] for r in winners], user_evidence(req.text, req.evidence)),
             "defenses": defense_table([self.case_defenses[r] for r in rows]),
             "outcomes": outcome_counts([self.outcomes[r] for r in rows]),

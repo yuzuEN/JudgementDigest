@@ -82,6 +82,7 @@ class CriminalService:
     def report(self, text: str) -> Dict:
         if self.mock:
             return mock.criminal_report()
+        display = model_service.normalize(text)     # 共同關鍵詞只從使用者的原文取（沒換成判決用語的）
         text = self.query(text)
         charges = self.model.predict(text)
         if self.term.available:
@@ -91,7 +92,9 @@ class CriminalService:
         sim = self.index.scores(text) if self.index is not None else None
         for c in charges:
             c.update(self.sentence_stats(sim, c["name"]))
-        return {"charges": charges, "similar": self.similar(text, charges[0]["name"] if charges else None, sim=sim),
+        return {"charges": charges, "similar": self.similar(text, charges[0]["name"] if charges else None, sim=sim,
+                                                            display=display),
+                "n_corpus": len(self.index) if self.index is not None else None,
                 "model": self.model_info(), "mock": False}
 
     def sentence_stats(self, sim: Optional[np.ndarray], charge: str) -> Dict:
@@ -109,10 +112,12 @@ class CriminalService:
     def search(self, text: str, k: int) -> List[Dict]:
         if self.mock:
             return mock.criminal_report()["similar"][:k]
-        text = self.query(text)
-        return self.similar(text, self.model.predict(text)[0]["name"], k)
+        display, text = model_service.normalize(text), self.query(text)
+        return self.similar(text, self.model.predict(text)[0]["name"], k, display=display)
 
-    def similar(self, text: str, charge: Optional[str], n: int = N_SHOWN, sim: Optional[np.ndarray] = None) -> List[Dict]:
+    def similar(self, text: str, charge: Optional[str], n: int = N_SHOWN, sim: Optional[np.ndarray] = None,
+                display: Optional[str] = None) -> List[Dict]:
+        """text：換成判決用語的查詢；display：使用者的原文，共同關鍵詞從這裡取（沒給就用 text）。"""
         if self.index is None:
             return []
         sim = self.index.scores(text) if sim is None else sim
@@ -130,9 +135,11 @@ class CriminalService:
             if r["summary"][:DUPLICATE_PREFIX] in seen:
                 continue
             seen.add(r["summary"][:DUPLICATE_PREFIX])
-            out.append(self._case(r, float(s)))
+            out.append({**self._case(r, float(s)), "_row": int(row)})
             if len(out) == n:
                 break
+        for case, terms in zip(out, self.index.shared_terms(text, [c.pop("_row") for c in out], display=display)):
+            case["shared_terms"] = terms
         return out
 
 

@@ -107,6 +107,8 @@ export interface SimilarCase {
   sentence?: string | null;
   default_judgment?: boolean;
   url?: string | null;
+  /** 和使用者描述共有、對相似度貢獻最大的詞；示例資料與舊版後端沒有 */
+  shared_terms?: string[];
 }
 
 export interface EvidenceRow {
@@ -146,6 +148,8 @@ export interface CivilReport {
   evidence: EvidenceRow[];
   defenses: DefenseRow[];
   n_compared: number;
+  /** 檢索語料的總件數 */
+  n_corpus?: number | null;
   mock: boolean;
 }
 
@@ -176,6 +180,8 @@ export interface CriminalReport {
   charges: Charge[];
   similar: SimilarCase[];
   model?: CriminalModelInfo | null;
+  /** 刑事檢索語料的總件數 */
+  n_corpus?: number | null;
   mock: boolean;
 }
 
