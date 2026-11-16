@@ -1070,6 +1070,16 @@ describe("刑事結果", () => {
     expect(screen.getAllByText("示例資料").length).toBeGreaterThanOrEqual(3);
   });
 
+  it("有兩個以上的罪名才提示可以點罪名切換刑期", async () => {
+    await show({ mock: false });
+    expect(screen.getByText("點一個罪名，「刑期範圍」分頁會跟著切換。")).toBeInTheDocument();
+  });
+
+  it("只有一個罪名時不顯示切換提示", async () => {
+    await show({ mock: false, charges: [CRIMINAL_REPORT.charges[0]] });
+    expect(screen.queryByText(/點一個罪名/)).not.toBeInTheDocument();
+  });
+
   it("真的模型不標示例", async () => {
     await show({ mock: false });
     expect(screen.queryByText(/示例資料/)).not.toBeInTheDocument();

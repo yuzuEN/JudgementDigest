@@ -89,7 +89,8 @@ function ChargesPanel({ report, selected, onSelect, rewritten }: {
     <>
       <p className="-mb-2 text-[15px] font-bold text-primary">模型判定</p>
       <PanelTitle mock={report.mock}>可能的罪名</PanelTitle>
-      <p className="no-print text-muted-foreground">點一個罪名，「刑期範圍」分頁會跟著切換。</p>
+      {/* 只有一個罪名時沒有東西可以切換，不顯示這句，避免使用者以為還有別的罪名 */}
+      {report.charges.length > 1 && <p className="no-print text-muted-foreground">點一個罪名，「刑期範圍」分頁會跟著切換。</p>}
       <RadioGroup aria-label="可能的罪名" value={String(selected)} onValueChange={(v) => onSelect(Number(v))} className="grid max-w-[820px] gap-2.5">
         {report.charges.map((c, i) => {
           const on = i === selected;
