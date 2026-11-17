@@ -234,6 +234,7 @@ _GLUED_LAST = set("固業代公斯君等伊嗣")
 
 
 _TOP_SURNAMES = set("陳林黃張李王吳劉蔡楊")
+REF_CASES = 158_330   # 下面兩個門檻是依這麼多件判決（retrieval_civil_v4 的語料）訂的；語料變大時等比例放大（scaled_df）
 RARE_MAX_DF = 10      # 兩個字的名字：在全部判決裡出現的件數不超過這個才算人名
 COMMON_MIN_DF = 1000  # 名字裡有「伊」時，前兩個字出現在這麼多件判決以上就是一般詞（「金錢」「程序」「陳稱」）
 
@@ -282,7 +283,7 @@ def _two_char_candidate(n: str) -> bool:
             and not (n[0] in _KINSHIP_FIRST and n[1] in _SURNAMES))
 
 
-def rare_two_char_names(candidates: Iterable[str], texts: Iterable[str], max_df: int = RARE_MAX_DF) -> set:
+def rare_two_char_names(candidates: Iterable[str], texts: Iterable[str], max_df: Optional[int] = None) -> set:
     """
     兩個字的候選名字裡，在 texts（全部判決）出現不超過 max_df 件的。
     一般詞會出現在很多判決（15.8 萬件裡「陳情」1,016 件、「馬達」687 件、「周全」204 件），
@@ -306,12 +307,22 @@ def _trim_glued(n: str) -> str:
     return n
 
 
-def name_word_frequencies(candidates: Iterable[str], texts: Iterable[str], max_df: int = RARE_MAX_DF,
-                          common_df: int = COMMON_MIN_DF) -> "tuple[set, set]":
+def scaled_df(base: int, n_texts: int) -> int:
+    """
+    RARE_MAX_DF、COMMON_MIN_DF 是依 REF_CASES 件判決訂的；語料變大，同一個詞出現的件數也跟著變多，
+    門檻要等比例放大，否則舊判決裡原本遮掉的名字會因為出現件數超過門檻而不遮（v4 15.8 萬件 → 18.8 萬件時，
+    兩個字的門檻固定 10 件，221 件舊判決裡有 1,091 處不再遮）。語料比 REF_CASES 小時不縮小（測試、抽查）。
+    """
+    return max(base, round(base * n_texts / REF_CASES))
+
+
+def name_word_frequencies(candidates: Iterable[str], texts: Iterable[str], max_df: Optional[int] = None,
+                          common_df: Optional[int] = None) -> "tuple[set, set]":
     """
     讀一次全部判決，回傳（rare_two_char, common_words）：
     rare_two_char：兩個字的候選名字裡出現不超過 max_df 件的（見 rare_two_char_names）
     common_words：有「伊」的候選名字（「金錢伊」「林芷伊」）的前兩個字裡，出現 common_df 件以上的一般詞
+    max_df、common_df 沒給時，用 RARE_MAX_DF、COMMON_MIN_DF 依判決件數等比例放大（scaled_df）。
     """
     candidates = {(n or "").strip() for n in candidates}
     two = {n for n in candidates if _two_char_candidate(n)}
@@ -321,10 +332,14 @@ def name_word_frequencies(candidates: Iterable[str], texts: Iterable[str], max_d
         return set(), set()
     firsts = {n[0] for n in cands}
     df = {}
+    n_texts = 0
     for t in texts:
+        n_texts += 1
         t = t or ""
         for b in {t[i:i + 2] for i in range(len(t) - 1) if t[i] in firsts} & cands:
             df[b] = df.get(b, 0) + 1
+    max_df = scaled_df(RARE_MAX_DF, n_texts) if max_df is None else max_df
+    common_df = scaled_df(COMMON_MIN_DF, n_texts) if common_df is None else common_df
     return ({n for n in two if df.get(n, 0) <= max_df},
             {p for p in prefixes if df.get(p, 0) >= common_df})
 

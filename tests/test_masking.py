@@ -13,7 +13,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from retrieval.masking import (by_appearance, find_spans, listed_with, mask, mask_parties, party_names, party_roles,  # noqa: E402
                                name_word_frequencies, rare_two_char_names, third_party_names,
-                               usable_person_names)
+                               usable_person_names, scaled_df, REF_CASES, RARE_MAX_DF, COMMON_MIN_DF)
 
 
 class TestPatterns(unittest.TestCase):
@@ -206,6 +206,17 @@ class TestPersonNames(unittest.TestCase):
         self.assertEqual(rare, {"張蕾"})
         self.assertEqual(usable_person_names(["陳情", "張蕾", "馬達"], rare), ["張蕾"])
         self.assertEqual(usable_person_names(["張蕾"]), [], "沒給頻率資料時不收兩個字的")
+
+    def test_rare_threshold_scales_with_corpus(self):
+        """門檻依 REF_CASES 件訂；語料變大時等比例放大，舊判決裡原本遮掉的名字不會因為語料變多就不遮。"""
+        self.assertEqual(scaled_df(RARE_MAX_DF, 100), RARE_MAX_DF, "小語料不縮小")
+        self.assertEqual(scaled_df(RARE_MAX_DF, REF_CASES), RARE_MAX_DF)
+        self.assertEqual(scaled_df(RARE_MAX_DF, 188_334), 12)
+        self.assertEqual(scaled_df(COMMON_MIN_DF, 188_334), 1190)
+        # 出現 11 件：在 15.8 萬件裡不算人名，在大一倍的語料裡算
+        texts = ["證人張蕾到庭"] * 11
+        self.assertEqual(rare_two_char_names(["張蕾"], texts + [""] * (REF_CASES - 11)), set())
+        self.assertEqual(rare_two_char_names(["張蕾"], texts + [""] * (2 * REF_CASES - 11)), {"張蕾"})
 
     def test_glued_characters_removed(self):
         self.assertEqual(usable_person_names(["查張德滿", "王怡文固", "陳國輝代", "林蔡貴蘭"]),
