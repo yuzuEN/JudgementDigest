@@ -115,13 +115,21 @@ class TestRetrieval(unittest.TestCase):
 
     def test_full_text_masking_case_by_list(self):
         # 「案經A、B訴由」的告訴人、委任的律師、稱謂後的列舉都要遮；機關、代號、甲女不遮
-        text = ("被 告 王小明\n二、案經林美華、竇智群及張志強訴由新北市政府警察局報告。"
+        text = ("被 告 王小明\n二、案經林美華、鄭智群及張志強訴由新北市政府警察局報告。"
                 "案經彰化農田水利署委請劉偉昌律師訴由。案經A女訴由。告訴人陳淑芬、黃志明均指稱王小明竊取。")
         out = masked_full_text(text, ["王小明"], "王小明", [""])
-        for name in ("林美華", "竇智群", "張志強", "劉偉昌", "陳淑芬", "黃志明", "王小明"):
+        for name in ("林美華", "鄭智群", "張志強", "劉偉昌", "陳淑芬", "黃志明", "王小明"):
             self.assertNotIn(name, out)
         for kept in ("新北市政府警察局", "彰化農田水利署", "案經A女訴由", "【代理人】律師"):
             self.assertIn(kept, out)
+
+    def test_full_text_masking_line_wrapped_names(self):
+        # 全文每二十幾個字換行，名字會被切成兩行
+        text = "被 告 王小明\n二、案經林美華、黃彥騰、\n洪逸訴由警察局報告。被告王小\n明竊取告訴人陳淑\n芬之手機。"
+        out = masked_full_text(text, ["王小明"], "王小明", [""])
+        flat = out.replace("\n", "")
+        for name in ("王小明", "林美華", "黃彥騰", "洪逸", "陳淑芬"):
+            self.assertNotIn(name, flat)
 
     def test_sentence_text(self):
         t = lambda kind, months=0, days=0, money=0: retrieval_criminal.sentence_text(

@@ -21,7 +21,7 @@ import json
 import re
 import sqlite3
 from pathlib import Path
-from typing import Dict, List
+from typing import Dict, Iterable, List, Optional
 
 from retrieval.criminal import _OWNER_NAME_RE, _ROLE_NAME_RE, artifact_dir
 from retrieval.masking import _NAME, mask_parties, third_party_names
@@ -38,8 +38,6 @@ _CASE_BY_ROLE = re.compile(r"^(?:告訴人|被害人|告發人|自訴人)")
 _ATTORNEY = re.compile(r"(?:委任|委由|委請)(" + _NAME + r")(?=律師|訴由|告訴|提出|、|，|$)")
 _ORG = re.compile(r"公司|局|署|銀行|政府|所$|會$|院|處$|班$|店$|社$|部$|中心|學|協會|分行|機構|集團|科$|隊$|室$|廠|行$|館")
 _FULL_NAME = re.compile(_NAME)
-# 姓不在常見姓氏表裡的三個字（「竇智群」）：只在「案經」列舉裡才當人名；甲乙丙、○、代號不是真名
-_RARE_SURNAME_NAME = re.compile(r"(?![甲乙丙丁戊己庚辛壬癸])(?:(?![附表其母父親站即經證人女男之等號])[一-鿿]){3}")
 # 「告訴人王大明、李小華、陳大同提出告訴」：列舉時只有第一個名字有稱謂
 _NAME_LIST = re.compile(r"、(" + _NAME + r")(?=[、，。）)及與和等共均]|$)")
 
@@ -59,7 +57,7 @@ def extra_names(text: str) -> "tuple[set, set]":
     for m in _CASE_BY.finditer(text):
         for item in _CASE_BY_SPLIT.split(m.group(1)):
             item = _CASE_BY_ROLE.sub("", item.strip())
-            if not _ORG.search(item) and (_FULL_NAME.fullmatch(item) or _RARE_SURNAME_NAME.fullmatch(item)):
+            if not _ORG.search(item) and _FULL_NAME.fullmatch(item):
                 others.add(item)
     agents |= set(_ATTORNEY.findall(text))
     # 「告訴人王大明、李小華」：只有第一個名字有稱謂（第一個已經遮成【關係人】時也一樣）
@@ -68,16 +66,29 @@ def extra_names(text: str) -> "tuple[set, set]":
     return others - agents, agents
 
 
-def remask(text: str, rounds: int = 4) -> str:
-    """已經遮過的全文再補遮 extra_names 找到的名字（不用重讀原始資料庫）。
+def _flex(name: str) -> str:
+    """全文每二十幾個字就換行，名字常被切成兩行（「王小」換行「明」）：字和字之間允許空白、換行。"""
+    return "(?<!【)" + r"[\s　]*".join(map(re.escape, name))
+
+
+def remask(text: str, defendants: Iterable[str] = (), rounds: int = 4) -> str:
+    """已經遮過的全文再補遮（不用重讀原始資料庫）。
+    名字要在去掉換行的文字上找，取代時允許名字中間有換行；被告用資料集的 criminals。
     遮掉一個名字後，後面「、李小華」的列舉才接得上，所以重複到找不到新名字為止。"""
+    for n in sorted({re.sub(r"[\s　]+", "", d) for d in defendants if d and d.strip()}, key=len, reverse=True):
+        if len(n) >= 2:
+            text = re.sub(_flex(n), "【被告】", text)
     for _ in range(rounds):
-        others, agents = extra_names(text)
-        if not others and not agents:
+        flat = re.sub(r"[\r\n]+", "", text)
+        others, agents = extra_names(flat)
+        others |= set(_ROLE_NAME_RE.findall(flat)) | set(third_party_names(flat)) | set(_OWNER_NAME_RE.findall(flat))
+        others -= agents
+        found = [(n, "【代理人】") for n in agents] + [(n, "【關係人】") for n in others]
+        new = [(n, tag) for n, tag in found if re.search(_flex(n), text)]
+        if not new:
             break
-        for names, tag in ((agents, "【代理人】"), (others, "【關係人】")):
-            for n in sorted(names, key=len, reverse=True):
-                text = re.sub(r"(?<!【)" + re.escape(n), tag, text)
+        for n, tag in sorted(new, key=lambda x: len(x[0]), reverse=True):
+            text = re.sub(_flex(n), tag, text)
     return text
 
 
@@ -90,16 +101,20 @@ def masked_full_text(text: str, criminals: List[str], defendant: str, agents: Li
     others = set(third_party_names(text)) | set(_ROLE_NAME_RE.findall(text)) | set(_OWNER_NAME_RE.findall(text))
     defendants = "；".join(n for n in names if not _SPACED.search(n.strip()))
     others -= {n for n in others if n in defendants}
-    return remask(mask_parties(text, None, defendants, agents, sorted(others, key=len, reverse=True)))
+    return remask(mask_parties(text, None, defendants, agents, sorted(others, key=len, reverse=True)), names)
 
 
-def remask_db(db: Path) -> int:
-    """已經建好的 full_text 表直接補遮（不用原始資料庫）。回傳改到的件數。"""
+def remask_db(db: Path, data: Optional[Path] = None) -> int:
+    """已經建好的 full_text 表直接補遮（不用原始資料庫）；給 data（CAIL .jsonl）時被告也再遮一次。回傳改到的件數。"""
+    lines = case_lines(db)
+    criminals = {lines[i]: m["criminals"] for i, m in read_meta(data, lines).items()} if data else {}
     con = sqlite3.connect(db)
     try:
-        rows = [(remask(t), r) for r, t in con.execute("SELECT row, text FROM full_text")]
-        old = dict(con.execute("SELECT row, text FROM full_text"))
-        changed = [(t, r) for t, r in rows if t != old[r]]
+        changed = []
+        for r, t in con.execute("SELECT row, text FROM full_text").fetchall():
+            new = remask(t, criminals.get(r, ()))
+            if new != t:
+                changed.append((new, r))
         con.executemany("UPDATE full_text SET text = ? WHERE row = ?", changed)
         con.commit()
         return len(changed)
@@ -168,7 +183,7 @@ def main():
     a = ap.parse_args()
     db = (a.out or artifact_dir()) / "cases.sqlite"
     if a.remask_only:
-        print(f"補遮 {remask_db(db):,} 件：{db}")
+        print(f"補遮 {remask_db(db, a.data):,} 件：{db}")
         return
     if not (a.data and a.db_dir):
         ap.error("要給 --data 與 --db-dir（或用 --remask-only）")
