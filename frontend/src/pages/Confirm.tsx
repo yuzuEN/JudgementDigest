@@ -3,7 +3,7 @@ import {
   RotateCwIcon, ShieldCheckIcon, SparklesIcon, TriangleAlertIcon, XIcon,
 } from "lucide-react";
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
-import { Navigate, useNavigate, useSearchParams } from "react-router-dom";
+import { Link, Navigate, useNavigate, useSearchParams } from "react-router-dom";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -581,6 +581,7 @@ function Checklist({ stage, vendor }: { stage: number; vendor: string | null }) 
             <li>你填的內容只暫存在這個瀏覽器分頁：重新整理還在，關掉分頁就清除；不會存在電腦上，也不會存到我們的伺服器。</li>
             {vendor && <li>只有在你按下「傳給 AI，開始提問」或「請 AI 整理敘述」時，遮名後的內容才會傳給 {vendor} 的付費 API，不會被用來訓練或改善它的模型。</li>}
             <li>病歷、醫療、健康檢查、基因、性生活、犯罪前科是法律特別保護的資料。描述裡有這些內容時，平台只用來產生這次的參考結果、不保存{vendor && "；要傳給 AI 服務前，會另外請你同意"}。不想提供的話，回上一步刪掉這些描述就好，只是參考結果可能比較不準。</li>
+            <li><Link to="/privacy">完整的隱私與資料使用說明</Link></li>
           </ul>
         </details>
       </Card>

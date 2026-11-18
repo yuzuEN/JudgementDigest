@@ -692,6 +692,27 @@ describe("第 5 關：補充細節", () => {
     await openAi(user);
     expect(screen.getAllByText(/遮名後的內容會傳給 OpenAI/).length).toBeGreaterThan(0);
     expect(screen.getByText(/才會傳給 OpenAI 的付費 API/)).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "完整的隱私與資料使用說明" })).toHaveAttribute("href", "/privacy");
+  });
+});
+
+describe("隱私與資料使用", () => {
+  it("每個頁面的頁尾都能到隱私說明", () => {
+    renderApp("/");
+    expect(within(screen.getByRole("contentinfo")).getByRole("link", { name: "隱私與資料使用" })).toHaveAttribute("href", "/privacy");
+  });
+
+  it("寫出不保存輸入、AI 廠商與資料來源", () => {
+    renderApp("/privacy");
+    expect(screen.getByRole("heading", { level: 1, name: "隱私與資料使用" })).toBeInTheDocument();
+    expect(screen.getByText(/不保存你的描述/)).toBeInTheDocument();
+    expect(screen.getAllByText(/Google Gemini/).length).toBeGreaterThan(0);
+    expect(screen.getByRole("heading", { name: "伺服器紀錄" })).toBeInTheDocument();
+    expect(screen.getByText(/紀錄不包含你輸入的描述/)).toBeInTheDocument();
+    // 頁尾也有司法院的連結，只看內文
+    const sources = within(screen.getByRole("region", { name: "結果的資料來源" }));
+    expect(sources.getByRole("link", { name: /司法院裁判書查詢系統/ })).toHaveAttribute("href", "https://judgment.judicial.gov.tw/FJUD/default.aspx");
+    expect(sources.getByRole("link", { name: /司法院資料開放平臺/ })).toHaveAttribute("href", "https://opendata.judicial.gov.tw/");
   });
 });
 

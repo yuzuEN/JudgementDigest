@@ -1,0 +1,72 @@
+# 主機上的平台。deploy.sh 會把這個檔案和 ts-serve*.json 複製到主機的 ~/casey/，和 .env、ts.env、artifacts/ 放在同一層。
+# 手動操作：cd ~/casey && docker compose ps / logs / restart
+#
+# 網路：主機本身不加入 tailnet。ts-casey 這個容器以 tag:casey 的身分加入 tailnet（名稱 casey），
+# casey 共用它的網路；tailnet（或開了 Funnel 時的網際網路）進來的 HTTPS 443 由 ts-casey 轉給 127.0.0.1:7860。
+# 所以 tailnet 上只看得到 casey 這兩個容器，主機的 SSH 等服務都不在 tailnet 上。說明見 docs/部署.md。
+services:
+  ts-casey:
+    image: tailscale/tailscale:v1.104.7   # 固定版本；升級時改這裡
+    hostname: casey                        # tailnet 上的名稱，網址是 https://casey.<tailnet>.ts.net
+    restart: unless-stopped
+    # 用主機帳號的 UID 執行（deploy.sh 會設 CASEY_UID/CASEY_GID）：ts-state/ 是那個帳號的資料夾，不用特殊權限就能寫。
+    # 用 root 加 cap_drop: ALL 的話，root 改不了別人的資料夾，節點身分只存在記憶體，每次重啟都變成新節點（2026-11-18 實測）。
+    user: "${CASEY_UID:-1000}:${CASEY_GID:-1000}"
+    env_file:
+      - path: ts.env                       # 只放 TS_AUTHKEY（第一次登入用，登入後可以清空）；和 .env 分開，平台程式讀不到
+        required: false
+    environment:
+      HOME: /tmp                           # tailscaled 的 cache 寫到 tmpfs（根目錄是唯讀的）
+      TS_STATE_DIR: /var/lib/tailscale     # 節點身分存在這裡，重建容器也不會變成新節點
+      TS_USERSPACE: "true"                 # 不用 /dev/net/tun、不用 NET_ADMIN
+      TS_EXTRA_ARGS: --advertise-tags=tag:casey
+      TS_SERVE_CONFIG: /config/ts-serve.json
+      TS_AUTH_ONCE: "true"                 # 已經登入過就不再用 auth key
+    volumes:
+      - ./ts-state:/var/lib/tailscale
+      # 只給 tailnet：ts-serve.json（預設）；公開到網際網路：在 ~/casey/.env 加 CASEY_SERVE_CONFIG=ts-serve-funnel.json
+      - ./${CASEY_SERVE_CONFIG:-ts-serve.json}:/config/ts-serve.json:ro
+      - type: tmpfs                        # tailscaled 的 socket 和 cache
+        target: /tmp
+        tmpfs:
+          mode: 01777
+    ports:
+      - "127.0.0.1:7860:7860"              # 給主機本機用（deploy.sh 的健康檢查、curl）；區網、tailnet 都連不到
+    cap_drop: [ALL]
+    security_opt:
+      - no-new-privileges:true
+    read_only: true
+    mem_limit: 256m
+    pids_limit: 64
+    logging:
+      driver: journald
+      options:
+        tag: casey-ts
+
+  casey:
+    image: casey:current             # deploy.sh 建好新版後把 casey:current 指過去
+    restart: unless-stopped          # 開機、崩潰後自動重啟
+    env_file: .env                   # HF_TOKEN、JD_HF_REVISION、Gemini 設定（只放主機上，不進 repo）
+    network_mode: service:ts-casey   # 共用 ts-casey 的網路；7860 由 ts-casey 那邊綁，這裡不能再有 ports:
+    depends_on:
+      - ts-casey
+    volumes:
+      - ./artifacts:/home/user/artifacts   # 模型存在主機上，重啟不用重新下載
+    # 資源上限：被狂打時不會拖垮整台機器
+    mem_limit: 5g
+    cpus: 6
+    pids_limit: 256
+    # 權限收緊：就算平台有漏洞被利用，容器裡能做的事也很少
+    cap_drop: [ALL]                  # 拿掉所有 Linux 特殊權限（nginx 聽 7860，不需要）
+    security_opt:
+      - no-new-privileges:true       # 程式不能再提升權限
+    read_only: true                  # 系統檔案唯讀；只有下面的 tmpfs 和模型資料夾能寫
+    tmpfs:
+      - /tmp
+      - /home/user/.cache
+    # 紀錄（IP、路徑、狀態碼，不含輸入內容）交給主機的 journald 保存，重新部署、容器重建也不會不見。
+    # 保留期限（30 天、最多 1 GB）設在主機上，見 harden-host.sh。查詢：journalctl -t casey，或 docker compose logs
+    logging:
+      driver: journald
+      options:
+        tag: casey
