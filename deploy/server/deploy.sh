@@ -2,7 +2,8 @@
 # 在主機上部署這份程式碼：建映像 → 換掉容器 → 等 /api/health 四項都是真的模型 → 失敗就換回上一版。
 # 手動：在主機的 repo 根目錄執行 bash deploy/server/deploy.sh
 #
-# 主機上的位置（CASEY_HOME，預設 ~/casey）：.env、artifacts/ 放這裡；docker-compose.yml 每次從 repo 複製過去。
+# 主機上的位置（CASEY_HOME，預設 ~/casey）：.env、ts.env、artifacts/、ts-state/ 放這裡；
+# docker-compose.yml 和 ts-serve*.json 每次從 repo 複製過去。
 set -euo pipefail
 
 CASEY_HOME="${CASEY_HOME:-$HOME/casey}"
@@ -13,9 +14,16 @@ KEEP_IMAGES=3                              # 除了 current、previous，再留�
 repo="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/../.." && pwd)"
 tag="$(git -C "$repo" rev-parse --short=12 HEAD 2>/dev/null || date +%Y%m%d%H%M%S)"
 compose=(docker compose -f "$CASEY_HOME/docker-compose.yml")
+# ts-casey 用這個帳號的 UID 執行，才寫得進 ts-state/（見 docker-compose.yml）
+export CASEY_UID="$(id -u)" CASEY_GID="$(id -g)"
 
 [ -f "$CASEY_HOME/.env" ] || { echo "找不到 $CASEY_HOME/.env，先照 docs/部署.md 建立（範本 deploy/server/.env.example）" >&2; exit 1; }
 mkdir -p "$CASEY_HOME/artifacts"
+mkdir -p -m 700 "$CASEY_HOME/ts-state"
+if [ ! -s "$CASEY_HOME/ts-state/tailscaled.state" ] && ! grep -qs '^TS_AUTHKEY=tskey-' "$CASEY_HOME/ts.env"; then
+  echo "注意：ts-casey 還沒登入過 tailnet，$CASEY_HOME/ts.env 也沒有 TS_AUTHKEY。" >&2
+  echo "      平台照樣會部署、本機 127.0.0.1:7860 可以用，但 tailnet 上連不到。見 docs/部署.md「從頭架一台」第 5 步。" >&2
+fi
 
 # /api/health 回應、而且民事、金額、刑事、刑度都是真的模型才算成功
 healthy() {
@@ -50,7 +58,19 @@ docker build -f "$repo/deploy/server/Dockerfile" -t "casey:$tag" "$repo"
 if docker image inspect casey:current > /dev/null 2>&1; then
   docker tag casey:current casey:previous
 fi
+
+# 從舊版（casey 自己綁 127.0.0.1:7860）換成 ts-casey 版時要先停掉舊的，不然 ts-casey 綁不到 7860。
+# 已經是 ts-casey 版（casey 的網路是 container:...）就不用停，up -d 只換有變的容器。
+if [ -f "$CASEY_HOME/docker-compose.yml" ]; then
+  old_casey="$("${compose[@]}" ps -q casey 2>/dev/null || true)"
+  if [ -n "$old_casey" ] && [[ "$(docker inspect -f '{{.HostConfig.NetworkMode}}' "$old_casey")" != container:* ]]; then
+    echo "== 舊版的網路設定，先停掉再換"
+    "${compose[@]}" down
+  fi
+fi
+
 cp "$repo/deploy/server/docker-compose.yml" "$CASEY_HOME/docker-compose.yml"
+cp "$repo/deploy/server/ts-serve.json" "$repo/deploy/server/ts-serve-funnel.json" "$CASEY_HOME/"
 docker tag "casey:$tag" casey:current
 
 echo "== 換成新版"

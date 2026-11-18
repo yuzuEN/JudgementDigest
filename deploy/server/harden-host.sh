@@ -27,8 +27,10 @@ sshd -T | grep -iE '^(passwordauthentication|kbdinteractiveauthentication)'
 
 echo "== 2/3 容器連不到區網與 tailnet"
 # 規則放在 raw 表的 PREROUTING：封包從容器網卡出來、還沒決定路由前就擋掉。
-# 不放 DOCKER-USER（FORWARD）：Tailscale 的 ts-forward 排在它前面，往 tailscale0 的流量會先被放行。
-# 只看從容器網卡（docker0、br-*）進來的封包，主機自己的連線（SSH、Tailscale、Funnel）不受影響。
+# （以前主機裝了 Tailscale 時，放在 DOCKER-USER（FORWARD）會被排在前面的 ts-forward 先放行；放 raw 表不受這種順序影響。）
+# 只看從容器網卡（docker0、br-*）進來的封包，主機自己的連線（SSH）不受影響。
+# ts-casey 也在容器網卡上：它的 tailnet 連線走外部網路（直連或 DERP 中繼），不需要連區網，所以照樣擋。
+# 副作用：同一個區網裡的裝置連 casey 不能直連，會走 DERP 中繼（多約 200 ms），外面的使用者不受影響。
 cat > /usr/local/sbin/casey-egress.sh <<'EOF'
 #!/bin/sh
 set -e
@@ -53,7 +55,7 @@ fi
 cat > /etc/systemd/system/casey-egress.service <<'EOF'
 [Unit]
 Description=Block Docker containers from LAN and tailnet
-After=docker.service tailscaled.service network-online.target
+After=docker.service network-online.target
 Requires=docker.service
 PartOf=docker.service
 

@@ -1,0 +1,25 @@
+// Tailscale 存取政策：貼到 https://login.tailscale.com/admin/acls 的 JSON editor（不是自動套用的；改了要手動貼）。
+// 預設全部拒絕，只開放下面列出的連線。
+{
+  "tagOwners": {
+    // 只有 tailnet 管理員可以把節點標成 tag:casey
+    "tag:casey": ["autogroup:admin"]
+  },
+
+  "grants": [
+    // tailnet 成員只能連 CasEY 的 HTTPS（443）。不開 22，也不開其他 port。
+    { "src": ["autogroup:member"], "dst": ["tag:casey"], "ip": ["tcp:443"] },
+
+    // 你自己的裝置之間照常互通（筆電、手機）。tag:casey 不屬於任何人，所以不包含在內。
+    { "src": ["autogroup:member"], "dst": ["autogroup:self"], "ip": ["*"] }
+
+    // 注意：沒有任何一條以 tag:casey 為 src。
+    // 所以 CasEY 就算被入侵，也不能主動連到 tailnet 上的任何裝置。
+  ],
+
+  // 不使用 Tailscale SSH
+  "ssh": []
+
+  // 之後如果要用 Tailscale Funnel 公開到網際網路，再加上：
+  // "nodeAttrs": [{ "target": ["tag:casey"], "attr": ["funnel"] }]
+}
