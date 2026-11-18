@@ -81,7 +81,7 @@ flowchart LR
 ```bash
 pip install -r annotation/requirements.txt
 
-# 1. 抽樣（預設讀 artifacts/retrieval_civil_v4/cases.sqlite）
+# 1. 抽樣（預設讀 artifacts/retrieval_civil_v5/cases.sqlite）
 python -m annotation.sample --n-random 200 --n-enriched 30
 
 # 2. 標註：先 dry run、再試 1 段，確認沒問題再跑三次
