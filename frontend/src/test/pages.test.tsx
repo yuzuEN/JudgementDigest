@@ -156,7 +156,7 @@ describe("描述案情（關卡 1–3）", () => {
     await user.click(slot);
     expect(slot).toHaveAttribute("aria-pressed", "true");
     await user.click(screen.getByRole("button", { name: "下一章：確認內容" }));
-    expect(await screen.findByText(/有沒有請律師：有/)).toBeInTheDocument();
+    expect(await screen.findByText(/被告有沒有請辯護律師：有/)).toBeInTheDocument();
     expect(screen.getByText(/手上的證據：驗傷單、診斷證明/)).toBeInTheDocument();
   });
 
@@ -396,15 +396,15 @@ describe("結果頁的民事、刑事切換", () => {
   });
 });
 
-describe("相似度說明", () => {
+describe("相似判決怎麼找的說明", () => {
   it("說明頁有對應的位置", () => {
     renderApp("/guide");
-    expect(document.getElementById("相似度")).not.toBeNull();
+    expect(document.getElementById("相似判決怎麼找")).not.toBeNull();
   });
 
   it("從 i 跳過去時標題會標黃，點別的地方就消失", () => {
-    renderApp(`/guide#${encodeURIComponent("相似度")}`);
-    const title = screen.getByText("相似度", { selector: "dt" });
+    renderApp(`/guide#${encodeURIComponent("相似判決怎麼找")}`);
+    const title = screen.getByText("相似判決怎麼找", { selector: "dt" });
     expect(title).toHaveClass("jump-target");
     fireEvent.click(document.body);
     expect(title).not.toHaveClass("jump-target");
@@ -761,12 +761,27 @@ describe("民事結果", () => {
   });
 
   describe("整體結果", () => {
-    it("主畫面是判決件數，機率放在模型細節，而且說明不是你會贏的機率", async () => {
+    it("最上面是模型判定：機率、模型與測試成績，並說明不是你會贏的機率；相似判決在後面當對照", async () => {
       await show();
-      expect(screen.getByRole("img", { name: "全部勝訴 8 件、一部勝訴 13 件、敗訴 9 件" })).toBeInTheDocument();
-      const detail = screen.getByText("62%").closest("details")!;
-      expect(detail).toHaveTextContent("不是你會贏的機率");
-      expect(detail).toHaveTextContent("口語描述算出來的機率常常偏低");
+      const verdict = screen.getByRole("region", { name: "模型判定" });
+      expect(within(verdict).getByText("62%")).toBeInTheDocument();
+      expect(verdict).toHaveTextContent("不是你會贏的機率");
+      expect(verdict).toHaveTextContent("口語描述算出來的機率常常偏低");
+      expect(verdict).toHaveTextContent("勝敗模型");
+      expect(verdict).toHaveTextContent("測試成績");
+      expect(screen.getByText("62%").closest("details")).toBeNull();
+      const outcome = screen.getByRole("img", { name: "全部勝訴 8 件、一部勝訴 13 件、敗訴 9 件" });
+      expect(verdict.compareDocumentPosition(outcome) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    });
+
+    it("金額模型有用時，模型判定寫出範圍", async () => {
+      await show({ amount_range: { ...CIVIL_REPORT.amount_range!, source: "model", scope: "partial_win" } });
+      expect(screen.getByRole("region", { name: "模型判定" })).toHaveTextContent("如果判決是一部勝訴，可能判准 180,000 ～ 420,000 元（中位數 300,000 元）");
+    });
+
+    it("沒用金額模型時，模型判定說明為什麼改用相似判決", async () => {
+      await show();
+      expect(screen.getByRole("region", { name: "模型判定" })).toHaveTextContent("要選一個糾紛類型，並填法院或請求金額才會使用");
     });
 
     it.each([
@@ -923,15 +938,38 @@ describe("民事結果", () => {
   });
 
   describe("相似判決", () => {
-    it("表格、相似度說明與判決導讀", async () => {
+    it("表格、說明連結與判決導讀；不顯示相似度數字", async () => {
       await show();
       const panel = await openTab("相似判決");
       const table = within(panel).getByRole("table");
       expect(within(table).getByText("臺灣臺北地方法院 113 年度訴字第 1 號")).toBeInTheDocument();
       expect(within(table).getByText("310,000")).toBeInTheDocument();
       expect(within(table).getAllByRole("link", { name: "判決導讀" })[0]).toHaveAttribute("href", "/judgment/civil/11");
-      expect(within(panel).getByRole("link", { name: /相似度說明/ }).getAttribute("href")).toBe(`/guide#${encodeURIComponent("相似度")}`);
-      expect(within(panel).getByText(/只用來排列結果，不是百分比/)).toBeInTheDocument();
+      expect(within(panel).getByRole("link", { name: /相似判決怎麼找的說明/ }).getAttribute("href")).toBe(`/guide#${encodeURIComponent("相似判決怎麼找")}`);
+      expect(within(table).queryByRole("columnheader", { name: /相似度/ })).not.toBeInTheDocument();
+      expect(table).not.toHaveTextContent(String(CIVIL_REPORT.similar[0].similarity));
+    });
+
+    it("說明是從多少件判決裡找出來的、怎麼排序", async () => {
+      await show({ n_corpus: 158330 });
+      const panel = await openTab("相似判決");
+      expect(panel).toHaveTextContent("從 158,330 件判決中，找出和你的描述用字最接近的 2 件");
+      expect(panel).toHaveTextContent("越上面越接近");
+      expect(panel).not.toHaveTextContent("0.1 到 0.2");
+    });
+
+    it("每件判決下面列出共同關鍵詞；沒有就不顯示", async () => {
+      const [first, second] = CIVIL_REPORT.similar;
+      await show({ similar: [{ ...first, shared_terms: ["機車修理費", "直行車"] }, { ...second, shared_terms: [] }] });
+      const table = within(await openTab("相似判決")).getByRole("table");
+      const rows = within(table).getAllByRole("row").slice(1);
+      expect(rows[0]).toHaveTextContent("共同關鍵詞機車修理費直行車");
+      expect(rows[1]).not.toHaveTextContent("共同關鍵詞");
+    });
+
+    it("示例資料不說語料件數", async () => {
+      await show({ mock: true, n_corpus: 158330 });
+      expect(await openTab("相似判決")).not.toHaveTextContent("158,330");
     });
 
     it("有司法院網址時，判決導讀旁邊附原文連結；沒有就不顯示", async () => {
@@ -1076,6 +1114,16 @@ describe("刑事結果", () => {
     expect(screen.getAllByText("示例資料").length).toBeGreaterThanOrEqual(3);
   });
 
+  it("有兩個以上的罪名才提示可以點罪名切換刑期", async () => {
+    await show({ mock: false });
+    expect(screen.getByText("點一個罪名，「刑期範圍」分頁會跟著切換。")).toBeInTheDocument();
+  });
+
+  it("只有一個罪名時不顯示切換提示", async () => {
+    await show({ mock: false, charges: [CRIMINAL_REPORT.charges[0]] });
+    expect(screen.queryByText(/點一個罪名/)).not.toBeInTheDocument();
+  });
+
   it("真的模型不標示例", async () => {
     await show({ mock: false });
     expect(screen.queryByText(/示例資料/)).not.toBeInTheDocument();
@@ -1117,7 +1165,15 @@ describe("刑事結果", () => {
     const panel = await openTab("相似判決");
     expect(within(panel).getByRole("link", { name: "判決原文" })).toHaveAttribute("href", url);
     expect(within(panel).getByRole("link", { name: "判決導讀" })).toHaveAttribute("href", `/judgment/criminal/${CRIMINAL_REPORT.similar[0].case_id}`);
-    expect(within(panel).getByText(/只用來排列結果，不是百分比/)).toBeInTheDocument();
+    expect(within(panel).queryByRole("columnheader", { name: /相似度/ })).not.toBeInTheDocument();
+    expect(within(panel).getByRole("link", { name: /相似判決怎麼找的說明/ })).toBeInTheDocument();
+  });
+
+  it("刑事相似判決也說明語料件數，並列出共同關鍵詞", async () => {
+    await show({ mock: false, n_corpus: 88376, similar: [{ ...CRIMINAL_REPORT.similar[0], shared_terms: ["匯款", "門票"] }] });
+    const panel = await openTab("相似判決");
+    expect(panel).toHaveTextContent("從 88,376 件判決中，找出和你的描述用字最接近的 1 件");
+    expect(within(panel).getByRole("table")).toHaveTextContent("共同關鍵詞匯款門票");
   });
 
   it("頁尾的請注意是刑事的條列", async () => {
