@@ -7,6 +7,7 @@ import { api } from "../api/client";
 import type { Guide, GuideFunction } from "../api/types";
 import { Bar } from "../components/casey/Bars";
 import { OutcomeChip } from "../components/casey/OutcomeChip";
+import { MarkedText, ReasoningCard } from "../components/casey/Reasoning";
 import { InfoNote, LoadingPanel } from "../components/casey/ResultTabs";
 import { SampleTag } from "../components/casey/Sample";
 import { ErrorBox } from "../components/Common";
@@ -31,12 +32,18 @@ export default function Reading() {
   const [guide, setGuide] = useState<Guide | null>(null);
   const [error, setError] = useState("");
   const [on, setOn] = useState<Record<GuideFunction, boolean>>({ claim: true, defense: true, issue: true, evidence: true, court: true });
+  const [active, setActive] = useState<number | null>(null);   // 「法院怎麼認定」選到的項目
 
   const load = useCallback(() => {
     setError("");
     api.guide(source, Number(caseId)).then(setGuide).catch((e: Error) => setError(e.message));
   }, [source, caseId]);
   useEffect(load, [load]);
+  useEffect(() => setActive(null), [guide]);
+  const activeItem = active === null ? null : guide?.reasoning?.items[active] ?? null;
+  useEffect(() => {
+    if (activeItem) document.getElementById(`para-${activeItem.paragraph}`)?.scrollIntoView?.({ behavior: "smooth", block: "center" });
+  }, [activeItem]);
 
   const counts = (guide?.paragraphs ?? []).reduce<Record<string, number>>((acc, p) => ({ ...acc, [p.function]: (acc[p.function] ?? 0) + 1 }), {});
   const style = (fn: GuideFunction) => FUNCTIONS.find((f) => f.id === fn)!;
@@ -100,6 +107,8 @@ export default function Reading() {
                 </div>
               </Card>
 
+              <ReasoningCard reasoning={guide.reasoning} active={active} onSelect={setActive} />
+
               <Card className="gap-2 px-6.5 shadow-none" aria-labelledby="about-title">
                 <h2 id="about-title" className="text-xl font-bold">關於這些標示</h2>
                 <p className="text-[15px] text-muted-foreground">
@@ -122,11 +131,11 @@ export default function Reading() {
               {guide.paragraphs.map((p, i) => {
                 const f = style(p.function);
                 return (
-                  <section key={i} data-fn={p.function} data-on={on[p.function]}
+                  <section key={i} id={`para-${i}`} data-fn={p.function} data-on={on[p.function]}
                     className={cn("para flex flex-col gap-1.5 rounded-[12px] px-4 py-3.5 transition-colors motion-reduce:transition-none",
                       on[p.function] ? f.on : "border border-dashed border-input bg-transparent")}>
                     <span className="text-[13px] font-extrabold tracking-[.06em]">{f.label}</span>
-                    <p className="leading-loose">{p.text}</p>
+                    <p className="leading-loose"><MarkedText text={p.text} item={activeItem?.paragraph === i ? activeItem : null} /></p>
                   </section>
                 );
               })}

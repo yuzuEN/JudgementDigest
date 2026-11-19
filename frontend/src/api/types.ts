@@ -182,9 +182,28 @@ export interface CriminalReport {
 export type GuideFunction = "claim" | "defense" | "issue" | "evidence" | "court";
 export type CriminalGuideFunction = "info" | "verdict" | "facts" | "evidence" | "court" | "laws" | "table" | "other";
 
+/** 「法院怎麼認定」的一項：標註手冊的標籤與引文；paragraph 是 paragraphs 的序號，start/end 是在該段文字裡的位置 */
+export interface ReasoningItem {
+  label: string;
+  polarity?: string | null;
+  basis?: string | null;
+  quote: string;
+  paragraph: number;
+  start: number;
+  end: number;
+}
+
+export interface Reasoning {
+  labeler: string;
+  manual_version: string;
+  items: ReasoningItem[];
+}
+
 export interface Guide {
   case: SimilarCase;
   paragraphs: { function: GuideFunction; label: string; text: string }[];
+  /** 民事「法院怎麼認定」：有標註的判決才有，沒有時是 null 或不存在 */
+  reasoning?: Reasoning | null;
   /** 刑事導讀：全文依原本順序分段；沒有全文時是 null（只顯示摘要與原文連結） */
   criminal?: {
     source: "judgment" | "dataset";
