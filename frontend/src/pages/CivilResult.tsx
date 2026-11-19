@@ -13,7 +13,7 @@ import { OutcomeBar } from "../components/casey/OutcomeBar";
 import { OutcomeChip } from "../components/casey/OutcomeChip";
 import { RangeBar } from "../components/casey/RangeBar";
 import { InfoNote as Note, LoadingPanel, PanelTitle, ResultTabs, useResultTab } from "../components/casey/ResultTabs";
-import { corpusLead, ErrorBox, InfoLink, LAF_URL, SharedTerms } from "../components/Common";
+import { CommonPoints, corpusLead, ErrorBox, InfoLink, LAF_URL } from "../components/Common";
 import { LinkButton } from "../components/LinkButton";
 import { ResultFrame } from "../components/ResultFrame";
 import { outcomeLabel, outcomeTone, percent } from "../format";
@@ -366,7 +366,6 @@ function CasesPanel({ report, onlyWin, setOnlyWin, rewritten }: {
   const cases = report.similar;
   const visible = (c: SimilarCase) => !onlyWin || outcomeTone(c.outcome) !== "lose";
   const shown = cases.filter(visible);
-  const nCorpus = report.mock ? null : report.n_corpus;
   return (
     <>
       <PanelTitle mock={report.mock} action={
@@ -375,7 +374,7 @@ function CasesPanel({ report, onlyWin, setOnlyWin, rewritten }: {
         </label>
       }>相似的真實判決</PanelTitle>
       <p className="text-[15px] text-muted-foreground">
-        {corpusLead(nCorpus, cases.length)}{rewritten ? "這次用你確認過的整理文字搜尋。" : "這次用你原本的描述搜尋。"}「被告未到庭」代表一造辯論，只聽了原告一方的說法。<InfoLink to="相似判決怎麼找" label="相似判決怎麼找的說明" />
+        {corpusLead({ scope: report.mock ? null : report.search_scope, shown: cases.length, civil: true })}{rewritten ? "這次用你確認過的整理文字搜尋。" : "這次用你原本的描述搜尋。"}「被告未到庭」代表一造辯論，只聽了原告一方的說法。<InfoLink to="相似判決怎麼找" label="相似判決怎麼找的說明" />
       </p>
       <Table className="min-w-[680px] text-[15px]">
         <TableHeader>
@@ -389,7 +388,7 @@ function CasesPanel({ report, onlyWin, setOnlyWin, rewritten }: {
         <TableBody>
           {cases.map((c) => (
             <TableRow key={c.case_id} className={visible(c) ? undefined : "screen-hidden"}>
-              <TableCell className="py-3.5 align-top whitespace-normal"><b>{c.case_number}</b><br /><span className="line-clamp-3 text-sm text-muted-foreground print:line-clamp-none">{c.summary}</span><SharedTerms terms={c.shared_terms} /></TableCell>
+              <TableCell className="py-3.5 align-top whitespace-normal"><b>{c.case_number}</b><br /><span className="line-clamp-3 text-sm text-muted-foreground print:line-clamp-none">{c.summary}</span><CommonPoints points={c.common} /></TableCell>
               <TableCell className="py-3.5 align-top">
                 <span className="flex flex-col gap-1">
                   <OutcomeChip tone={outcomeTone(c.outcome)}>{outcomeLabel(c.outcome)}</OutcomeChip>
@@ -397,7 +396,8 @@ function CasesPanel({ report, onlyWin, setOnlyWin, rewritten }: {
                 </span>
               </TableCell>
               <TableCell className="py-3.5 text-right align-top tabular-nums">
-                {c.claimed_amount ? <><b>{yuan(c.awarded_amount ?? 0)}</b> ／ {yuan(c.claimed_amount)}</> : "—"}
+                {c.claimed_amount ? <><b>{yuan(c.awarded_amount ?? 0)}</b> ／ {yuan(c.claimed_amount)}</>
+                  : c.awarded_amount ? <><b>{yuan(c.awarded_amount)}</b> ／ —</> : "—"}
               </TableCell>
               <TableCell className="no-print py-3.5 align-top">
                 <span className="flex flex-col items-start gap-1">
