@@ -11,7 +11,7 @@
     3. python -m annotation.guide_batch export                              # → guide.sqlite，後端讀這個
 之後要加判決：再跑一次 build（已有的判決和標註會保留），再跑 annotate（只會標新的單位）和 export。
 
-判決文字讀 retrieval_civil_v4（和後端導讀頁同一份），引文位置才對得上畫面上的文字。
+判決文字讀 retrieval_civil_v6（和後端導讀頁同一份；換版時要一起改），引文位置才對得上畫面上的文字。
 
 export 的規則：
   - 每個單位取多數決的標籤（只跑一輪時就是那一輪的標籤），NONE 不匯出
@@ -154,7 +154,7 @@ def main():
     b = sub.add_parser("build", help="把指定判決的所有論點單位放進標註資料庫")
     b.add_argument("--case-ids", default="", help="逗號或空白分隔，例如 101,205,318")
     b.add_argument("--ids-file", type=Path, help="一行一個判決 id")
-    b.add_argument("--cases", type=Path, default=config.ARTIFACTS_DIR / "retrieval_civil_v4" / "cases.sqlite")
+    b.add_argument("--cases", type=Path, default=config.ARTIFACTS_DIR / "retrieval_civil_v6" / "cases.sqlite")
     b.add_argument("--db", type=Path, default=base / "annotation.sqlite")
     e = sub.add_parser("export", help="匯出 guide.sqlite 給後端")
     e.add_argument("--db", type=Path, default=base / "annotation.sqlite")
