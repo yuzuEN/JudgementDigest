@@ -46,6 +46,14 @@ class TestExpandedRow(unittest.TestCase):
         self.assertEqual(section["defendant_defense_text"], DEFENSE)
         self.assertEqual(section["plaintiff"], "王小明")
 
+    def test_unreliable_claimed_amount_hidden(self):
+        """找不到聲明、從全文開頭讀到的請求金額不放進檢索資料（網站只顯示判准金額）。"""
+        hidden = expanded_row(source(), derived(claimed_amount=999, claimed_source="直接抽取（無聲明錨點）"))[0]
+        self.assertIsNone(hidden["claimed_amount"])
+        self.assertEqual(hidden["awarded_amount"], 100)
+        kept = expanded_row(source(), derived(claimed_source="直接抽取（請求共計）"))[0]
+        self.assertEqual(kept["claimed_amount"], 100)
+
     def test_lost_case_has_y_zero(self):
         self.assertEqual(expanded_row(source(), derived(outcome="敗訴"))[0]["y"], 0)
 

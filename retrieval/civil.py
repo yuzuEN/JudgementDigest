@@ -22,6 +22,7 @@ from civil.dataset.text import ABSENT_RE, DEFAULT_RE, n_case_numbers, normalize_
 CORPUS_COLUMNS = ["id", "case_number", "court", "year", "case_type_category", "case_type_mid",
                   "outcome", "y", "plaintiff_claim_text"]
 AMOUNT_COLUMNS = ["grant_ratio", "claimed_amount", "awarded_amount"]
+UNRELIABLE_CLAIM_SOURCE = "直接抽取（無聲明錨點）"
 PARTIAL = "一部勝訴一部敗訴"
 OUTCOMES = ("勝訴", PARTIAL, "敗訴", "確認勝訴")
 EXCLUDED_CATEGORIES = ("身分／家事", "非訟／除權")
@@ -76,7 +77,10 @@ def expanded_row(row: Dict, derived: Dict) -> Optional[Tuple[Dict, Dict]]:
             "year": (row.get("judgment_date") or "")[:4], "case_type_category": derived["case_type_category"],
             "case_type_mid": derived["case_type_mid"], "outcome": derived["outcome"],
             "y": int(derived["outcome"] != "敗訴"), "plaintiff_claim_text": claim,
-            "claimed_amount": derived["claimed_amount"], "awarded_amount": derived["awarded_amount"],
+            # 找不到聲明、從全文開頭讀到的請求金額不可靠（獲償比例也不用它），不給人看（2.5.4）
+            "claimed_amount": (None if derived.get("claimed_source") == UNRELIABLE_CLAIM_SOURCE
+                               else derived["claimed_amount"]),
+            "awarded_amount": derived["awarded_amount"],
             "grant_ratio": derived["grant_ratio"], "default_judgment": int(default), "url": row.get("source_url") or "",
             "in_stats": int(not default and len(defense) >= MIN_DEFENSE and not absent)}
     section = {"id": row["id"], "plaintiff_claim_text": claim_raw, "defendant_defense_text": defense_raw,
