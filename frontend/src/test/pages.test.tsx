@@ -156,7 +156,7 @@ describe("描述案情（關卡 1–3）", () => {
     await user.click(slot);
     expect(slot).toHaveAttribute("aria-pressed", "true");
     await user.click(screen.getByRole("button", { name: "下一章：確認內容" }));
-    expect(await screen.findByText(/有沒有請律師：有/)).toBeInTheDocument();
+    expect(await screen.findByText(/被告有沒有請辯護律師：有/)).toBeInTheDocument();
     expect(screen.getByText(/手上的證據：驗傷單、診斷證明/)).toBeInTheDocument();
   });
 
@@ -396,15 +396,15 @@ describe("結果頁的民事、刑事切換", () => {
   });
 });
 
-describe("相似度說明", () => {
+describe("相似判決怎麼找的說明", () => {
   it("說明頁有對應的位置", () => {
     renderApp("/guide");
-    expect(document.getElementById("相似度")).not.toBeNull();
+    expect(document.getElementById("相似判決怎麼找")).not.toBeNull();
   });
 
   it("從 i 跳過去時標題會標黃，點別的地方就消失", () => {
-    renderApp(`/guide#${encodeURIComponent("相似度")}`);
-    const title = screen.getByText("相似度", { selector: "dt" });
+    renderApp(`/guide#${encodeURIComponent("相似判決怎麼找")}`);
+    const title = screen.getByText("相似判決怎麼找", { selector: "dt" });
     expect(title).toHaveClass("jump-target");
     fireEvent.click(document.body);
     expect(title).not.toHaveClass("jump-target");
@@ -740,12 +740,27 @@ describe("民事結果", () => {
   });
 
   describe("整體結果", () => {
-    it("主畫面是判決件數，機率放在模型細節，而且說明不是你會贏的機率", async () => {
+    it("最上面是模型判定：機率、模型與測試成績，並說明不是你會贏的機率；相似判決在後面當對照", async () => {
       await show();
-      expect(screen.getByRole("img", { name: "全部勝訴 8 件、一部勝訴 13 件、敗訴 9 件" })).toBeInTheDocument();
-      const detail = screen.getByText("62%").closest("details")!;
-      expect(detail).toHaveTextContent("不是你會贏的機率");
-      expect(detail).toHaveTextContent("口語描述算出來的機率常常偏低");
+      const verdict = screen.getByRole("region", { name: "模型判定" });
+      expect(within(verdict).getByText("62%")).toBeInTheDocument();
+      expect(verdict).toHaveTextContent("不是你會贏的機率");
+      expect(verdict).toHaveTextContent("口語描述算出來的機率常常偏低");
+      expect(verdict).toHaveTextContent("勝敗模型");
+      expect(verdict).toHaveTextContent("測試成績");
+      expect(screen.getByText("62%").closest("details")).toBeNull();
+      const outcome = screen.getByRole("img", { name: "全部勝訴 8 件、一部勝訴 13 件、敗訴 9 件" });
+      expect(verdict.compareDocumentPosition(outcome) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    });
+
+    it("金額模型有用時，模型判定寫出範圍", async () => {
+      await show({ amount_range: { ...CIVIL_REPORT.amount_range!, source: "model", scope: "partial_win" } });
+      expect(screen.getByRole("region", { name: "模型判定" })).toHaveTextContent("如果判決是一部勝訴，可能判准 180,000 ～ 420,000 元（中位數 300,000 元）");
+    });
+
+    it("沒用金額模型時，模型判定說明為什麼改用相似判決", async () => {
+      await show();
+      expect(screen.getByRole("region", { name: "模型判定" })).toHaveTextContent("要選一個糾紛類型，並填法院或請求金額才會使用");
     });
 
     it.each([
@@ -902,15 +917,67 @@ describe("民事結果", () => {
   });
 
   describe("相似判決", () => {
-    it("表格、相似度說明與判決導讀", async () => {
+    it("表格、說明連結與判決導讀；不顯示相似度數字", async () => {
       await show();
       const panel = await openTab("相似判決");
       const table = within(panel).getByRole("table");
       expect(within(table).getByText("臺灣臺北地方法院 113 年度訴字第 1 號")).toBeInTheDocument();
       expect(within(table).getByText("310,000")).toBeInTheDocument();
       expect(within(table).getAllByRole("link", { name: "判決導讀" })[0]).toHaveAttribute("href", "/judgment/civil/11");
-      expect(within(panel).getByRole("link", { name: /相似度說明/ }).getAttribute("href")).toBe(`/guide#${encodeURIComponent("相似度")}`);
-      expect(within(panel).getByText(/只用來排列結果，不是百分比/)).toBeInTheDocument();
+      expect(within(panel).getByRole("link", { name: /相似判決怎麼找的說明/ }).getAttribute("href")).toBe(`/guide#${encodeURIComponent("相似判決怎麼找")}`);
+      expect(within(table).queryByRole("columnheader", { name: /相似度/ })).not.toBeInTheDocument();
+      expect(table).not.toHaveTextContent(String(CIVIL_REPORT.similar[0].similarity));
+    });
+
+    it("沒有限定類型時，說明是從全部判決裡找的，並提醒選糾紛類型", async () => {
+      await show({ n_corpus: 188334, search_scope: { n: 188334, mid: null } });
+      const panel = await openTab("相似判決");
+      expect(panel).toHaveTextContent("從 188,334 件判決中，找出和你的描述用字最接近的 2 件");
+      expect(panel).toHaveTextContent("越上面越接近");
+      expect(panel).toHaveTextContent("選了糾紛類型，找到的判決會更貼近");
+      expect(panel).not.toHaveTextContent("%");
+    });
+
+    it("限定類型時，說明是從同類判決裡找的；系統判斷的類型要講清楚", async () => {
+      await show({ search_scope: { n: 9156, mid: "侵權：交通事故", mid_inferred: true } });
+      const panel = await openTab("相似判決");
+      expect(panel).toHaveTextContent("從 9,156 件「侵權：交通事故」判決中，找出");
+      expect(panel).toHaveTextContent("「侵權：交通事故」是系統依你的描述判斷的類型");
+      expect(panel).not.toHaveTextContent("選了糾紛類型");
+    });
+
+    it("每件判決下面列出相同點；沒有就不顯示", async () => {
+      const [first, second] = CIVIL_REPORT.similar;
+      await show({ similar: [{ ...first, common: ["請求金額相近（你 30 萬／這件 28 萬）", "同一法院"] }, { ...second, common: [] }] });
+      const table = within(await openTab("相似判決")).getByRole("table");
+      const rows = within(table).getAllByRole("row").slice(1);
+      expect(rows[0]).toHaveTextContent("相同點請求金額相近（你 30 萬／這件 28 萬）同一法院");
+      expect(rows[1]).not.toHaveTextContent("相同點");
+    });
+
+    it("相似判決沒有請求金額時，判准金額照樣顯示", async () => {
+      const [first, second] = CIVIL_REPORT.similar;
+      await show({ similar: [{ ...first, claimed_amount: null, awarded_amount: 14540 }, { ...second, claimed_amount: null, awarded_amount: null }] });
+      const rows = within(within(await openTab("相似判決")).getByRole("table")).getAllByRole("row").slice(1);
+      expect(rows[0]).toHaveTextContent("14,540 ／ —");
+      expect(rows[1]).not.toHaveTextContent("／");
+    });
+
+    it("示例資料不說語料件數", async () => {
+      await show({ mock: true, n_corpus: 158330, search_scope: { n: 158330, mid: null } });
+      expect(await openTab("相似判決")).not.toHaveTextContent("158,330");
+    });
+
+    it("有司法院網址時，判決導讀旁邊附原文連結；沒有就不顯示", async () => {
+      const url = "https://judgment.judicial.gov.tw/FJUD/data.aspx?ty=JD&id=TPDV";
+      const [first, ...rest] = CIVIL_REPORT.similar;
+      await show({ similar: [{ ...first, url }, ...rest.map((c) => ({ ...c, url: null }))] });
+      const table = within(await openTab("相似判決")).getByRole("table");
+      const links = within(table).getAllByRole("link", { name: /判決原文/ });
+      expect(links).toHaveLength(1);
+      expect(links[0]).toHaveAttribute("href", url);
+      expect(links[0]).toHaveAttribute("target", "_blank");
+      expect(within(table).getAllByRole("link", { name: "判決導讀" })).toHaveLength(CIVIL_REPORT.similar.length);
     });
 
     it("只看原告勝訴的：畫面上收起來，但列印時還印得出來", async () => {
@@ -1043,6 +1110,47 @@ describe("刑事結果", () => {
     expect(screen.getAllByText("示例資料").length).toBeGreaterThanOrEqual(3);
   });
 
+  it("有兩個以上的罪名才提示可以點罪名切換刑期", async () => {
+    await show({ mock: false });
+    expect(screen.getByText("點一個罪名，「刑期範圍」和「相似判決」分頁會跟著切換。")).toBeInTheDocument();
+  });
+
+  it("每個罪名各一組相似判決：罪名分頁選的罪名帶到相似判決，也可以在相似判決分頁切換", async () => {
+    const [hurt, flee] = CRIMINAL_REPORT.charges;
+    const base = CRIMINAL_REPORT.similar[0];
+    const charges = [
+      { ...hurt, similar: [{ ...base, case_id: 1, case_number: "過失傷害的判決" }], search_scope: { n: 3200, charge: hurt.name } },
+      { ...flee, similar: [{ ...base, case_id: 2, case_number: "肇事逃逸的判決" }], search_scope: { n: 410, charge: flee.name } },
+    ];
+    await show({ mock: false, charges, similar: charges[0].similar, search_scope: charges[0].search_scope });
+    const user = userEvent.setup();
+    await user.click(screen.getByRole("radio", { name: /肇事逃逸罪/ }));
+    const panel = await openTab("相似判決");
+    const fleeSection = within(panel).getByRole("region", { name: "肇事逃逸罪的相似判決" });
+    const hurtSection = within(panel).getByRole("region", { name: "過失傷害罪的相似判決" });
+    expect(fleeSection).not.toHaveClass("screen-hidden");
+    expect(hurtSection).toHaveClass("screen-hidden");
+    expect(fleeSection).toHaveTextContent("從 410 件「肇事逃逸罪」判決中");
+    expect(fleeSection).toHaveTextContent("肇事逃逸的判決");
+    expect(within(panel).getByRole("button", { name: "肇事逃逸罪" })).toHaveAttribute("aria-pressed", "true");
+    await user.click(within(panel).getByRole("button", { name: "過失傷害罪" }));
+    expect(hurtSection).not.toHaveClass("screen-hidden");
+    expect(fleeSection).toHaveClass("screen-hidden");
+    expect(hurtSection).toHaveTextContent("從 3,200 件「過失傷害罪」判決中");
+  });
+
+  it("後端沒有分罪名的相似判決時，不顯示切換，用頂層的那組", async () => {
+    await show({ mock: false });
+    const panel = await openTab("相似判決");
+    expect(within(panel).queryByRole("group", { name: "看哪個罪名的相似判決" })).not.toBeInTheDocument();
+    expect(within(panel).getByRole("table")).toHaveTextContent(CRIMINAL_REPORT.similar[0].case_number);
+  });
+
+  it("只有一個罪名時不顯示切換提示", async () => {
+    await show({ mock: false, charges: [CRIMINAL_REPORT.charges[0]] });
+    expect(screen.queryByText(/點一個罪名/)).not.toBeInTheDocument();
+  });
+
   it("真的模型不標示例", async () => {
     await show({ mock: false });
     expect(screen.queryByText(/示例資料/)).not.toBeInTheDocument();
@@ -1078,13 +1186,22 @@ describe("刑事結果", () => {
     expect(within(panel).queryByRole("table")).not.toBeInTheDocument();
   });
 
-  it("真的刑事判決連到司法院原文，不連判決導讀", async () => {
+  it("真的刑事判決同時提供導讀與司法院原文", async () => {
     const url = "https://judgment.judicial.gov.tw/FJUD/data.aspx?ty=JD&id=TPDM";
     await show({ mock: false, similar: [{ ...CRIMINAL_REPORT.similar[0], url }] });
     const panel = await openTab("相似判決");
     expect(within(panel).getByRole("link", { name: "判決原文" })).toHaveAttribute("href", url);
-    expect(within(panel).queryByRole("link", { name: "判決導讀" })).not.toBeInTheDocument();
-    expect(within(panel).getByText(/只用來排列結果，不是百分比/)).toBeInTheDocument();
+    expect(within(panel).getByRole("link", { name: "判決導讀" })).toHaveAttribute("href", `/judgment/criminal/${CRIMINAL_REPORT.similar[0].case_id}`);
+    expect(within(panel).queryByRole("columnheader", { name: /相似度/ })).not.toBeInTheDocument();
+    expect(within(panel).getByRole("link", { name: /相似判決怎麼找的說明/ })).toBeInTheDocument();
+  });
+
+  it("刑事相似判決說明是從含哪個罪名的判決裡找的", async () => {
+    await show({ mock: false, n_corpus: 88376, search_scope: { n: 12034, charge: "詐欺罪" }, similar: [CRIMINAL_REPORT.similar[0]] });
+    const panel = await openTab("相似判決");
+    expect(panel).toHaveTextContent("從 12,034 件「詐欺罪」判決中，找出和你的描述用字最接近的 1 件");
+    expect(panel).not.toHaveTextContent("相同點");
+    expect(panel).not.toHaveTextContent("選了糾紛類型");
   });
 
   it("頁尾的請注意是刑事的條列", async () => {
@@ -1138,9 +1255,92 @@ describe("判決導讀", () => {
     expect(screen.getByRole("region", { name: "CasEY 角色說明" })).toHaveTextContent("解說員");
   });
 
+  it("請求金額沒抽到時，判准金額照樣顯示，並說明算不出比例", async () => {
+    mockApi({ "GET /judgments/civil/11/guide": () => ({ ...GUIDE, case: { ...GUIDE.case, claimed_amount: null, awarded_amount: 14540 } }) });
+    renderAt("/judgment/:source/:caseId", <Reading />, "/judgment/civil/11");
+    await screen.findByRole("heading", { name: "判決資料" });
+    expect(screen.getByText("判准")).toBeInTheDocument();
+    expect(screen.getByText("14,540")).toBeInTheDocument();
+    expect(screen.getByText(/請求金額沒有抽取到/)).toBeInTheDocument();
+    expect(screen.queryByRole("img", { name: /判准金額約占請求金額/ })).not.toBeInTheDocument();
+  });
+
+  it("有原文網址時連到這件判決，沒有時連到司法院查詢系統", async () => {
+    const url = "https://judgment.judicial.gov.tw/FJUD/data.aspx?ty=JD&id=TPDV";
+    mockApi({ "GET /judgments/civil/11/guide": () => ({ ...GUIDE, case: { ...GUIDE.case, url } }) });
+    renderAt("/judgment/:source/:caseId", <Reading />, "/judgment/civil/11");
+    expect(await screen.findByRole("link", { name: /在司法院網站看這件判決的原文/ })).toHaveAttribute("href", url);
+    expect(screen.getByRole("link", { name: "司法院網站上的原文" })).toHaveAttribute("href", url);
+  });
+
   it("找不到判決", async () => {
     mockApi({});
     renderAt("/judgment/:source/:caseId", <Reading />, "/judgment/civil/999");
     expect(await screen.findByRole("alert")).toBeInTheDocument();
+  });
+});
+
+
+describe("刑事判決導讀", () => {
+  const url = "https://judgment.judicial.gov.tw/FJUD/data.aspx?id=TPDM";
+  const para = (fn: string, label: string, text: string, extra = {}) => ({ function: fn, label, text, pre: false, part: null, ...extra });
+  const guide = { case: { ...CRIMINAL_REPORT.similar[0], url }, paragraphs: [], mock: false, labeler: "criminal-rule-v1",
+    criminal: { source: "judgment", judgment_date: "2024-05-01", paragraphs: [
+      para("info", "案件資訊", "臺灣臺北地方法院刑事簡易判決\n上列被告因過失傷害案件", { pre: true }),
+      para("verdict", "主文", "被告犯過失傷害罪，處拘役參拾日。"),
+      para("facts", "犯罪事實", "一、本件犯罪事實及證據，均引用檢察官起訴書（如附件）之記載。"),
+      para("court", "論罪科刑", "二、核被告所為，係犯刑法第284條前段之過失傷害罪。"),
+      para("other", "其他", "中華民國113年5月1日\n刑事第二十庭法官○○○", { pre: true }),
+      para("laws", "法條", "附錄本案論罪科刑法條全文：\n中華民國刑法第284條", { pre: true }),
+      para("facts", "犯罪事實", "一、被告駕車未注意車前狀況，致被害人受傷。", { part: "附件：起訴書" }),
+      para("evidence", "證據", "一、證據清單及待證事實：被告之自白。", { part: "附件：起訴書" }),
+    ] } };
+  it("依原文順序顯示全文分段，標出段落功能，附件另起標題", async () => {
+    mockApi({ "GET /judgments/criminal/11/guide": () => guide });
+    renderAt("/judgment/:source/:caseId", <Reading />, "/judgment/criminal/11");
+    expect(await screen.findByRole("heading", { name: "判決全文" })).toBeInTheDocument();
+    const texts = [...document.querySelectorAll(".para p")].map((n) => n.textContent);
+    expect(texts).toEqual(guide.criminal.paragraphs.map((p) => p.text));
+    expect(document.querySelector('.para[data-fn="verdict"]')).toHaveTextContent("主文被告犯過失傷害罪");
+    expect(screen.getByRole("heading", { name: "附件：起訴書" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /犯罪事實\s*2 段/ })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /附表/ })).not.toBeInTheDocument();   // 沒有附表就不列
+    expect(screen.queryByRole("button", { name: /原告主張/ })).not.toBeInTheDocument();
+    expect(screen.getByText("2024-05-01")).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "司法院判決原文" })).toHaveAttribute("href", url);
+    expect(screen.getByRole("link", { name: "回結果" })).toHaveAttribute("href", "/result/criminal?tab=cases");
+  });
+  it("取消上色後保留文字標籤", async () => {
+    mockApi({ "GET /judgments/criminal/11/guide": () => guide });
+    renderAt("/judgment/:source/:caseId", <Reading />, "/judgment/criminal/11");
+    const button = await screen.findByRole("button", { name: /論罪科刑/ });
+    await userEvent.click(button);
+    expect(button).toHaveAttribute("aria-pressed", "false");
+    const section = document.querySelector('.para[data-fn="court"]')!;
+    expect(section).toHaveAttribute("data-on", "false");
+    expect(section).toHaveTextContent("論罪科刑");
+  });
+  it("沒有全文時說明只有資料集的犯罪事實", async () => {
+    mockApi({ "GET /judgments/criminal/11/guide": () => ({ ...guide, criminal: { source: "dataset", judgment_date: "",
+      paragraphs: [para("facts", "犯罪事實", "被告基於××之犯意取走商品。", { part: "資料集節錄" })] } }) });
+    renderAt("/judgment/:source/:caseId", <Reading />, "/judgment/criminal/11");
+    expect(await screen.findByRole("heading", { name: "犯罪事實" })).toBeInTheDocument();
+    expect(screen.getByText(/這件判決沒有收錄全文，以下只有資料集裡的犯罪事實/)).toBeInTheDocument();
+    expect(screen.getByText("被告基於××之犯意取走商品。")).toBeInTheDocument();
+    expect(screen.queryByRole("heading", { name: "資料集節錄" })).not.toBeInTheDocument();
+  });
+  it("連資料集都沒有時只顯示摘要", async () => {
+    mockApi({ "GET /judgments/criminal/11/guide": () => ({ ...guide, criminal: null, labeler: "summary-only" }) });
+    renderAt("/judgment/:source/:caseId", <Reading />, "/judgment/criminal/11");
+    expect(await screen.findByText("這件判決沒有收錄全文")).toBeInTheDocument();
+    expect(screen.getByText(`摘要：${guide.case.summary}`)).toBeInTheDocument();
+    expect(document.querySelectorAll(".para")).toHaveLength(0);
+  });
+  it("無法載入時可重試，並可返回刑事結果", async () => {
+    mockApi({});
+    renderAt("/judgment/:source/:caseId", <Reading />, "/judgment/criminal/999");
+    expect(await screen.findByRole("alert")).toHaveTextContent("重新載入判決");
+    expect(screen.getByRole("button", { name: "再試一次" })).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "回結果" })).toHaveAttribute("href", "/result/criminal?tab=cases");
   });
 });

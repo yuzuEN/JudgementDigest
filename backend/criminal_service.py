@@ -5,7 +5,7 @@
 沒有模型時整個刑事回傳示例資料（mock = true）；有模型、沒有檢索資料時 similar 是空清單，前端顯示「開發中」。
 相似判決只在「含預測的第一個罪名」的判決裡找，這類判決太少時才放寬到全部。
 每個罪名另外統計相似判決中含這個罪名的案件的宣告刑分布（similar_sentence），和模型推估並列。
-刑事判決沒有判決導讀，列表附司法院的原文網址。
+刑事判決導讀：檢索庫的 guides 表存全文的分段與段落標示（主文、犯罪事實、證據…）；沒有全文時只有摘要與司法院原文網址。
 
 刑度（charges[].sentence，6 區間，含拘役、罰金）：有 artifacts/criminal_term（法律 ELECTRA）時用 ELECTRA，
 沒有或沒裝 torch 時用罪名模型（SVM）自己的刑度。整個案件一份分布，每個罪名附同一份。
@@ -16,6 +16,7 @@ import logging
 import re
 import sqlite3
 from contextlib import closing
+from datetime import datetime
 from pathlib import Path
 from typing import Dict, List, Optional
 
@@ -23,7 +24,7 @@ import numpy as np
 
 from backend import mock
 from criminal.models import lay_terms, service as model_service
-from retrieval import criminal as retrieval_criminal
+from retrieval import criminal as retrieval_criminal, criminal_guides
 from retrieval.engine import TfidfIndex
 
 N_SHOWN = 10
@@ -90,7 +91,17 @@ class CriminalService:
         sim = self.index.scores(text) if self.index is not None else None
         for c in charges:
             c.update(self.sentence_stats(sim, c["name"]))
-        return {"charges": charges, "similar": self.similar(text, charges[0]["name"] if charges else None, sim=sim),
+            # 每個罪名各一組相似判決：使用者在罪名分頁選了別的罪名（例如模型把詐欺排在洗錢後面），
+            # 相似判決分頁跟著換。相似度只算一次，每個罪名各篩一次。
+            if self.index is not None:
+                c["similar"] = self.similar(text, c["name"], sim=sim)
+                c["search_scope"] = self.scope(c["name"])
+        top = charges[0] if charges else None
+        # 頂層的 similar、search_scope 是第一個罪名的那組（舊版前端只讀這裡）
+        return {"charges": charges,
+                "similar": top["similar"] if top and "similar" in top else self.similar(text, None, sim=sim),
+                "n_corpus": len(self.index) if self.index is not None else None,
+                "search_scope": (top or {}).get("search_scope") or (self.scope(None) if self.index is not None else None),
                 "model": self.model_info(), "mock": False}
 
     def sentence_stats(self, sim: Optional[np.ndarray], charge: str) -> Dict:
@@ -111,13 +122,22 @@ class CriminalService:
         text = self.query(text)
         return self.similar(text, self.model.predict(text)[0]["name"], k)
 
+    def _allowed(self, charge: Optional[str]) -> Optional[np.ndarray]:
+        """含這個罪名的案件；太少時不限罪名。"""
+        allowed = np.array([charge in c for c in self.charges]) if charge else None
+        return None if allowed is None or allowed.sum() < MIN_SAME_CHARGE else allowed
+
+    def scope(self, charge: Optional[str]) -> Dict:
+        """相似判決是在哪個範圍裡找的：含最可能罪名的案件（夠多時）或全部案件。"""
+        allowed = self._allowed(charge)
+        return {"charge": None, "n": len(self.index)} if allowed is None else {"charge": charge, "n": int(allowed.sum())}
+
     def similar(self, text: str, charge: Optional[str], n: int = N_SHOWN, sim: Optional[np.ndarray] = None) -> List[Dict]:
+        """text：換成判決用語的查詢。"""
         if self.index is None:
             return []
         sim = self.index.scores(text) if sim is None else sim
-        allowed = np.array([charge in c for c in self.charges]) if charge else None
-        if allowed is not None and allowed.sum() < MIN_SAME_CHARGE:
-            allowed = None
+        allowed = self._allowed(charge)
         rows, sims = self.index.top(sim, N_CANDIDATES, allowed)
         if len(rows) == 0:
             return []
@@ -129,13 +149,62 @@ class CriminalService:
             if r["summary"][:DUPLICATE_PREFIX] in seen:
                 continue
             seen.add(r["summary"][:DUPLICATE_PREFIX])
-            out.append({"source": "criminal", "case_id": r["id"], "case_number": r["case_number"], "court": r["court"],
-                        "year": r["year"], "mid": "、".join(json.loads(r["charges"])), "outcome": "有罪",
-                        "similarity": round(float(s), 3), "summary": r["summary"], "sentence": r["sentence"],
-                        "url": r["url"] or None})
+            out.append(self._case(r, float(s)))
             if len(out) == n:
                 break
         return out
+
+
+    def _case(self, r, similarity=0.0):
+        # 列表預覽使用主文；不回退到可能漏名的舊犯罪事實摘要。
+        full_text = ""
+        if self._query("SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'full_text'"):
+            found = self._query("SELECT text FROM full_text WHERE row = ?", (r["row"],))
+            if found:
+                full_text = found[0]["text"] or ""
+        verdict = "\n".join(p["text"] for p in criminal_guides.segment(full_text)
+                            if p["function"] == "verdict" and not p["part"])
+        summary = "主文：" + verdict if verdict else "未收錄主文，請查看判決原文。"
+        return {"source": "criminal", "case_id": r["id"], "case_number": r["case_number"], "court": r["court"],
+                "year": r["year"], "mid": "、".join(json.loads(r["charges"])), "outcome": "有罪",
+                "similarity": round(similarity, 3), "summary": summary, "sentence": r["sentence"],
+                "url": r["url"] or None}
+
+    def guide(self, case_id: int) -> Optional[Dict]:
+        """判決導讀：優先讀取遮名原文包的 full_text 表，依原順序分段；相容舊 guides 表。
+        沒有全文的案件 criminal 是 null，前端只顯示摘要與司法院原文連結。"""
+        if self.mock:
+            cases = {c["case_id"]: c for c in mock.criminal_report()["similar"]}
+            return mock.criminal_guide(cases[case_id]) if case_id in cases else None
+        if self.db_path is None:
+            return None
+        rows = self._query("SELECT * FROM cases WHERE id = ?", (case_id,))
+        if not rows:
+            return None
+        tables = {row["name"] for row in self._query("SELECT name FROM sqlite_master WHERE type = 'table'")}
+        criminal = None
+        if "full_text" in tables:
+            # 原文包以索引 row 對應，API 的 case_id 則是 cases.id，兩者不能混用。
+            text = self._query("SELECT text FROM full_text WHERE row = ?", (rows[0]["row"],))
+            if text and (text[0]["text"] or "").strip():
+                paragraphs = criminal_guides.segment(text[0]["text"])
+                if paragraphs:
+                    date = ""
+                    jid = criminal_guides.judgment_id(rows[0]["url"])
+                    parts = jid.split(",") if jid else []
+                    if len(parts) == 6:
+                        try:
+                            date = datetime.strptime(parts[4], "%Y%m%d").date().isoformat()
+                        except ValueError:
+                            pass
+                    criminal = {"source": "judgment", "judgment_date": date, "paragraphs": paragraphs}
+        if criminal is None and "guides" in tables:
+            found = next(iter(self._query("SELECT * FROM guides WHERE case_id = ?", (case_id,))), None)
+            if found is not None and "paragraphs" in found.keys():
+                criminal = {"source": found["source"], "judgment_date": found["judgment_date"],
+                            "paragraphs": json.loads(found["paragraphs"])}
+        return {"case": self._case(rows[0]), "paragraphs": [], "criminal": criminal,
+                "labeler": criminal_guides.LABELER if criminal else "summary-only", "mock": False}
 
 
 
@@ -159,11 +228,13 @@ N_TERM_BUCKETS = 6
 # 訓練資料裡地址、門牌是 ○ 與 0；網站遮名用【姓名】這類標記，模型沒看過。
 # 送進模型前換成訓練資料裡的寫法。只影響模型輸入，顯示給使用者的文字不變。
 _TO_TRAINING_STYLE = [
-    (re.compile(r"【姓名】|【關係人】|【原告】|【被告】"), "甲○○"),
+    (re.compile(r"【(?:姓名|關係人|原告|被告)[0-9]*】"), "甲○○"),     # 判決多人時編號：【被告2】
     (re.compile(r"【地址】"), "○○市○○區○○路000號"),
     (re.compile(r"【電話】"), "0000000000"),
     (re.compile(r"【身分證字號】"), "Z000000000"),
     (re.compile(r"【電子郵件】"), "○○○"),
+    (re.compile(r"【車牌】"), "000-0000"),     # 判決公開時車牌也是遮成這樣
+    (re.compile(r"【出生日期】"), "00年0月00日生"),
 ]
 
 

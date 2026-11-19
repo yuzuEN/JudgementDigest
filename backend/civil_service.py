@@ -1,7 +1,7 @@
 """
 民事：勝訴機率、相似判決、金額範圍、證據對照、常見抗辯、判決導讀。
 
-模型（artifacts/civil_winloss_v1）與檢索資料（artifacts/retrieval_civil_v3）在啟動時讀進記憶體；
+模型（artifacts/civil_winloss_v1）與檢索資料（artifacts/retrieval_civil_v5）在啟動時讀進記憶體；
 任一個不存在時整個民事改回傳示例資料（mock = true），伺服器照樣能啟動，前端照樣能走完流程。
 
 獲償比例模型（artifacts/civil_amount_v1）是選用的：有的話金額範圍用模型推估（若為一部勝訴），
@@ -37,6 +37,45 @@ DUPLICATE_PREFIX = 40     # 摘要開頭這麼多字相同，視為同一種制�
 MID_VOTE = 0.4            # 沒選糾紛類型時，相似判決的案由投票超過這個比例才採用：口語測試 23 件對 21 件，全部都用只對 47%
 MIN_SAME_MID = 10         # 同案由的判決少於這個數時，改在全部案件中找
 MIN_AMOUNT_MODEL_CASES = 30   # 獲償比例模型在這個案由的訓練件數少於這個數就不用（16 類、共 113 件；例如債務人異議 11 件）
+AMOUNT_CLOSE = (2 / 3, 1.5)   # 判決的請求金額是使用者的這個倍數之間，算「請求金額相近」（30 萬對 60 萬不算）
+MAX_COMMON_EVIDENCE = 3       # 「都有」最多列幾種證據
+EVIDENCE_LABELS = {key: label for key, label, _ in EVIDENCE}
+
+
+def wan(n: int) -> str:
+    """金額寫成「30 萬」「2.8 萬」「8,000 元」。"""
+    if n < 10_000:
+        return f"{n:,} 元"
+    v = n / 10_000
+    return f"{v:,.0f} 萬" if v >= 10 else f"{v:.1f}".rstrip("0").rstrip(".") + " 萬"
+
+
+def same_court(short: str, court: str) -> bool:
+    """問卷的法院是簡稱（「臺北」）；判決記的是全名（「臺灣臺北地方法院」）或同名的簡易庭（「臺北簡易庭」）。"""
+    return court in (f"臺灣{short}地方法院", f"福建{short}地方法院", f"{short}簡易庭")
+
+
+def common_points(case: Dict, case_evidence: List[str], user_ev: set, mid: Optional[str],
+                  claimed: Optional[int], court: Optional[str]) -> List[str]:
+    """
+    這件判決和使用者的情況有哪些相同點，全部用結構化欄位比對（不從文字切詞）：
+    - 同類糾紛：只在沒有限定案由時列（限定時每件都同類，表格上方已經說明）
+    - 請求金額相近：兩邊都有金額，判決是使用者的 2/3–1.5 倍
+    - 都有的證據類型（使用者勾選或描述提到的，和判決裡提到的）
+    - 同一法院：使用者選了法院（簡稱，見 same_court）
+    """
+    out = []
+    if mid and case["mid"] == mid:
+        out.append(f"同類糾紛：{mid}")
+    amount = case.get("claimed_amount")
+    if claimed and amount and AMOUNT_CLOSE[0] <= amount / claimed <= AMOUNT_CLOSE[1]:
+        out.append(f"請求金額相近（你 {wan(claimed)}／這件 {wan(amount)}）")
+    shared = [EVIDENCE_LABELS[k] for k in EVIDENCE_LABELS if k in user_ev and k in case_evidence]
+    if shared:
+        out.append("都有：" + "／".join(shared[:MAX_COMMON_EVIDENCE]))   # 一種證據的名稱裡就有頓號（「診斷證明、病歷」）
+    if court and same_court(court, case["court"]):
+        out.append("同一法院")
+    return out
 
 
 class CivilService:
@@ -152,9 +191,13 @@ class CivilService:
             out.append(mid_note)
         return out
 
-    def _similarity(self, req) -> np.ndarray:
+    @staticmethod
+    def _search_text(req) -> str:
         """使用者確認過的改寫只用來搜尋；勝訴機率仍用原本的描述（口語測試中改寫沒有提高判斷力）。"""
-        return self.index.scores(prepare_input(without_questions(req.search_text or req.text)))
+        return prepare_input(without_questions(req.search_text or req.text))
+
+    def _similarity(self, req) -> np.ndarray:
+        return self.index.scores(self._search_text(req))
 
     def predict(self, req) -> Dict:
         if self.mock:
@@ -173,14 +216,28 @@ class CivilService:
         same = None if not mid else (self.mids == mid if tier is None else (self.mids == mid) & tier)
         return same if same is not None and same.sum() >= MIN_SAME_MID else tier
 
-    def _listed(self, sim: np.ndarray, mid: Optional[str], n: int) -> List[Dict]:
+    def _scope(self, mid: Optional[str]) -> Dict:
+        """相似判決是在哪個範圍裡找的：同案由（夠多時）或全部案件。"""
+        allowed = self._allowed(mid)
+        if allowed is None:
+            return {"mid": None, "n": len(self.index)}
+        return {"mid": mid, "n": int(allowed.sum())}
+
+    def _listed(self, sim: np.ndarray, mid: Optional[str], n: int, req=None) -> List[Dict]:
         """候選是全部案件和對審案件各取前幾名：金融類的制式一造辯論很多，只取全部的話對審會被擠出去。"""
         allowed = self._allowed(mid)
         contested = ~self.default if allowed is None else allowed & ~self.default
         k = max(N_CANDIDATES, n * 6)
         rows = np.union1d(self.index.top(sim, k, allowed)[0], self.index.top(sim, k, contested)[0])
         rows = rows[np.argsort(-sim[rows], kind="stable")]
-        return self._shortlist(rows, sim[rows], n)
+        picked = self._shortlist(rows, sim[rows], n)
+        mine = set(user_evidence(req.text, req.evidence)) if req is not None else set()
+        for case in picked:
+            row = case.pop("_row")
+            case["common"] = common_points(case, self.case_evidence[row], mine,
+                                           mid if allowed is None else None,
+                                           getattr(req, "claimed_amount", None), getattr(req, "court", None))
+        return picked
 
     def _shortlist(self, rows, sims, n: int) -> List[Dict]:
         """
@@ -209,14 +266,16 @@ class CivilService:
         marks = ",".join("?" * len(rows))
         found = {r["row"]: r for r in self._query(f"SELECT * FROM cases WHERE row IN ({marks})",
                                                   [int(x) for x in rows])}
-        return [self._case(found[int(row)], float(sim)) for row, sim in zip(rows, sims)]
+        return [{**self._case(found[int(row)], float(sim)), "_row": int(row)} for row, sim in zip(rows, sims)]
 
     @staticmethod
     def _case(r, similarity: float) -> Dict:
         return {"source": "civil", "case_id": r["id"], "case_number": r["case_number"], "court": r["court"],
                 "year": r["year"], "mid": r["mid"] or "", "outcome": r["outcome"], "similarity": round(similarity, 3),
                 "summary": r["summary"], "claimed_amount": r["claimed_amount"], "awarded_amount": r["awarded_amount"],
-                "default_judgment": bool(r["default_judgment"])}
+                "default_judgment": bool(r["default_judgment"]),
+                # 11/13 以前建的檢索資料沒有 url 欄，照樣能用，只是不顯示原文連結
+                "url": (r["url"] or None) if "url" in r.keys() else None}
 
     def search(self, text: str, mid: Optional[str], k: int) -> List[Dict]:
         if self.mock:
@@ -242,7 +301,9 @@ class CivilService:
         return {
             "prediction": prediction,
             "amount_range": {**amount, **full_wins} if amount else None,
-            "similar": self._listed(sim, mid, N_SHOWN),
+            "similar": self._listed(sim, mid, N_SHOWN, req),
+            "n_corpus": len(self.index),
+            "search_scope": {**self._scope(mid), "mid_inferred": bool(mid) and not req.mid},
             "evidence": evidence_table([self.case_evidence[r] for r in winners], user_evidence(req.text, req.evidence)),
             "defenses": defense_table([self.case_defenses[r] for r in rows]),
             "outcomes": outcome_counts([self.outcomes[r] for r in rows]),

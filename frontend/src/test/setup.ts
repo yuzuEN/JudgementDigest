@@ -1,9 +1,11 @@
 import "@testing-library/jest-dom/vitest";
 import { cleanup } from "@testing-library/react";
 import { afterEach, vi } from "vitest";
+import { clearReportCache } from "../api/client";
 
 afterEach(() => {
   cleanup();
+  clearReportCache();
   vi.restoreAllMocks();
   window.sessionStorage.clear();   // 填寫內容會存在 sessionStorage，測試之間不要互相影響
 });

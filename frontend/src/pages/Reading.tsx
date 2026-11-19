@@ -12,6 +12,7 @@ import { SampleTag } from "../components/casey/Sample";
 import { ErrorBox } from "../components/Common";
 import { JUDICIAL_URL, Layout, PAGE } from "../components/Layout";
 import { LinkButton } from "../components/LinkButton";
+import CriminalReading from "./CriminalReading";
 import { outcomeLabel, outcomeTone, percent } from "../format";
 
 /** 五類段落：各有底色，但每段開頭一定有文字標籤，不只靠顏色。法院判斷用白底加粗框。 */
@@ -41,6 +42,8 @@ export default function Reading() {
   const style = (fn: GuideFunction) => FUNCTIONS.find((f) => f.id === fn)!;
   const resultPath = `/result/${source === "criminal" ? "criminal" : "civil"}?tab=cases`;
 
+  if (source === "criminal") return <CriminalReading guide={guide} error={error} onRetry={load} />;
+
   return (
     <Layout stage={7} scene={{ who: "explainer", line: "全文已標出主張、抗辯、爭點、證據與法院判斷。你可以選擇要上色的類別，方便找出相關段落。" }}>
       <main className={cn(PAGE, "flex flex-col gap-7 pt-7 pb-14")}>
@@ -64,6 +67,11 @@ export default function Reading() {
                   {guide.case.claimed_amount ? (
                     <div><dt className="text-muted-foreground">判准／請求</dt>
                       <dd className="m-0 tabular-nums"><b>{yuan(guide.case.awarded_amount ?? 0)}</b> ／ {yuan(guide.case.claimed_amount)} 元</dd></div>
+                  ) : guide.case.awarded_amount ? (
+                    // 請求金額沒抽到時（例如小額判決只寫「共計…等語」，沒有聲明），判准金額照樣顯示
+                    <div><dt className="text-muted-foreground">判准</dt>
+                      <dd className="m-0 tabular-nums"><b>{yuan(guide.case.awarded_amount)}</b> 元</dd>
+                      <dd className="m-0 text-sm text-muted-foreground">這件判決的請求金額沒有抽取到，無法算出判准的比例。</dd></div>
                   ) : null}
                 </dl>
                 {guide.case.claimed_amount ? (() => {
@@ -103,9 +111,9 @@ export default function Reading() {
                   段落標示由系統判斷，可能有誤，請以判決原文為準。
                   {guide.labeler === "rule-v0" ? "目前依文字規則標示。" : "段落功能依標註手冊，由 LLM 輔助標註、法律系學生抽查驗證。"}
                 </p>
-                <p className="text-sm text-muted-foreground">判決中的當事人姓名已換成【原告】【被告】，證人、訴外人等換成【關係人】；這是自動處理，可能有遺漏。</p>
-                <a href={JUDICIAL_URL} target="_blank" rel="noreferrer" className="inline-flex w-fit items-center gap-1 text-[15px] font-semibold">
-                  司法院裁判書查詢系統<ExternalLinkIcon className="size-4" aria-hidden="true" />
+                <p className="text-sm text-muted-foreground">判決中的當事人姓名已換成【原告】【被告】，證人、訴外人與其他人名換成【關係人】，車牌、地址等也已遮蔽；同一角色有多人時加上編號（【被告1】【被告2】），同一件判決裡同一個編號是同一個人。這是自動處理，可能有遺漏。</p>
+                <a href={guide.case.url || JUDICIAL_URL} target="_blank" rel="noreferrer" className="inline-flex w-fit items-center gap-1 text-[15px] font-semibold">
+                  {guide.case.url ? "在司法院網站看這件判決的原文" : "司法院裁判書查詢系統"}<ExternalLinkIcon className="size-4" aria-hidden="true" />
                 </a>
               </Card>
             </aside>
@@ -127,7 +135,12 @@ export default function Reading() {
                   </section>
                 );
               })}
-              <InfoNote>想看完整、正式的判決，請到<a href={JUDICIAL_URL} target="_blank" rel="noreferrer">司法院裁判書查詢系統</a>用字號查詢。本頁不是法律意見。</InfoNote>
+              <InfoNote>
+                {guide.case.url
+                  ? <>想看完整、正式的判決，請看<a href={guide.case.url} target="_blank" rel="noreferrer">司法院網站上的原文</a>。</>
+                  : <>想看完整、正式的判決，請到<a href={JUDICIAL_URL} target="_blank" rel="noreferrer">司法院裁判書查詢系統</a>用字號查詢。</>}
+                本頁不是法律意見。
+              </InfoNote>
             </Card>
           </div>
         )}

@@ -12,10 +12,10 @@ from criminal.models.lay_terms import to_legal  # noqa: E402
 
 class TestLayTerms(unittest.TestCase):
     def test_common_lay_words(self):
-        self.assertEqual(to_legal("我在超商偷了兩瓶飲料"), "被告在超商竊取兩瓶飲料")
-        self.assertEqual(to_legal("我打了他一拳"), "被告毆打了他一拳")
+        self.assertEqual(to_legal("我在超商偷了兩瓶飲料"), "我在超商竊取兩瓶飲料")
+        self.assertEqual(to_legal("我打了他一拳"), "我毆打了他一拳")
         self.assertEqual(to_legal("撞到人之後沒有停下來就直接開走"), "撞擊人之後逃逸")
-        self.assertEqual(to_legal("我把帳戶借給網友"), "被告把帳戶交付網友")
+        self.assertEqual(to_legal("我把帳戶借給網友"), "我把帳戶交付網友")
 
     def test_does_not_double_replace(self):
         self.assertEqual(to_legal("被詐騙集團騙了"), "被詐騙集團詐騙")
@@ -29,8 +29,15 @@ class TestLayTerms(unittest.TestCase):
         self.assertEqual(to_legal("偷走機車"), "竊取機車")
 
     def test_my_relatives_are_not_the_defendant(self):
-        self.assertEqual(to_legal("我拿刀砍我哥哥"), "被告持刀砍殺我哥哥")
+        self.assertEqual(to_legal("我拿刀砍我哥哥"), "我持刀砍殺我哥哥")
         self.assertEqual(to_legal("我的手機"), "我的手機")
+
+    def test_victim_and_witness_are_not_relabelled_before_prediction(self):
+        from backend.criminal_service import CriminalService
+
+        self.assertEqual(CriminalService.query("他打了我兩拳，我去報警"), "他毆打了我兩拳，我去報警處理")
+        self.assertEqual(CriminalService.query("我們看到對方打人"), "我們看到對方毆打人")
+        self.assertEqual(CriminalService.query("被告毆打被害人"), "被告毆打被害人")
 
 
 if __name__ == "__main__":

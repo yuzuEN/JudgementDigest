@@ -1,6 +1,7 @@
 import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
 import type { CaseType, CivilInput, DefendantType } from "./api/types";
 import { parseAmount } from "./format";
+import { clearReportCache } from "./api/client";
 
 // 使用者填的內容放在這個分頁的 sessionStorage：重新整理還在，關掉分頁就清掉；
 // 不用 localStorage（會一直留在電腦上），也不送去保存。
@@ -57,6 +58,16 @@ export function primaryMid(intake: Intake): string | null {
 }
 
 /**
+ * 「有沒有請律師」問的是誰：民事問使用者自己（原告，民事模型的「原告有律師」）；
+ * 刑事問被告有沒有辯護人（使用者可能是被告，也可能是被害人）。「不確定」兩邊都查，用民事的問法。
+ */
+export function lawyerQuestion(caseType: Intake["caseType"]): { label: string; hint: string; short: string } {
+  return caseType === "criminal"
+    ? { label: "被告有沒有請辯護律師", hint: "被告的律師叫辯護人。你是被害人的話，填對方的情況；不知道可以不選。", short: "被告的辯護律師" }
+    : { label: "你（原告）有沒有請律師", hint: "問的是你這一方，不是對方。", short: "你（原告）的律師" };
+}
+
+/**
  * 描述加上追問的回答，作為遮名與送出的全文。
  * 刑事 API 只收文字，所以刑事的律師、手上的證據也接在最後。
  */
@@ -65,7 +76,7 @@ export function fullText(intake: Intake): string {
     .filter((a) => a.answer.trim())
     .map((a) => `追問：${a.question}\n回答：${a.answer.trim()}`);   // 後端靠這兩個開頭分辨問題和回答
   const criminal = intake.caseType === "criminal";
-  const lawyer = criminal && intake.lawyer ? [`有沒有請律師：${intake.lawyer === "yes" ? "有" : "沒有"}`] : [];
+  const lawyer = criminal && intake.lawyer ? [`${lawyerQuestion("criminal").label}：${intake.lawyer === "yes" ? "有" : "沒有"}`] : [];
   const evidence = criminal && intake.criminalEvidence.length
     ? [`手上的證據：${intake.criminalEvidence.join("、")}`] : [];
   return [intake.text.trim(), ...extra, ...lawyer, ...evidence].filter(Boolean).join("\n");
@@ -121,7 +132,7 @@ export function IntakeProvider({ children, initial }: { children: ReactNode; ini
     () => ({
       intake,
       update: (patch: Partial<Intake>) => setIntake((prev) => ({ ...prev, ...patch })),
-      reset: () => setIntake(EMPTY_INTAKE),
+      reset: () => { clearReportCache(); setIntake(EMPTY_INTAKE); },
     }),
     [intake],
   );

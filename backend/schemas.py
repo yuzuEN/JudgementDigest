@@ -161,7 +161,8 @@ class SimilarCase(BaseModel):
     awarded_amount: Optional[int] = None
     sentence: Optional[str] = None
     default_judgment: bool = False      # 一造辯論：被告沒有到庭
-    url: Optional[str] = None           # 刑事：司法院裁判書系統的原文網址（刑事判決沒有導讀）
+    url: Optional[str] = None           # 司法院裁判書系統的原文網址（民事舊版檢索資料沒有時為 None）
+    common: List[str] = []              # 民事：和使用者的情況相同的地方（同類糾紛、請求金額相近、都有的證據、同一法院），用結構化欄位比對
 
 
 class EvidenceRow(BaseModel):
@@ -185,6 +186,14 @@ class OutcomeCounts(BaseModel):
     lose: int
 
 
+class SearchScope(BaseModel):
+    """相似判決是在哪個範圍裡找的。"""
+    n: int                              # 範圍內的判決件數
+    mid: Optional[str] = None           # 民事：限定的案由（沒有限定時為 None）
+    mid_inferred: bool = False          # 民事：案由是系統從描述判斷的（使用者沒選）
+    charge: Optional[str] = None        # 刑事：限定的罪名（模型最可能的罪名；沒有限定時為 None）
+
+
 class CivilReport(BaseModel):
     prediction: CivilPrediction
     outcomes: OutcomeCounts
@@ -194,6 +203,8 @@ class CivilReport(BaseModel):
     evidence: List[EvidenceRow]
     defenses: List[DefenseRow]
     n_compared: int
+    n_corpus: Optional[int] = None      # 檢索語料的總件數
+    search_scope: Optional[SearchScope] = None
     mock: bool
 
 
@@ -227,6 +238,8 @@ class Charge(BaseModel):
     sentence: List[SentenceBucket]                        # 罪名模型推估的刑度分布（6 區間，含拘役、罰金）
     similar_sentence: Optional[List[SentenceBucket]] = None   # 相似判決中同罪名案件的宣告刑分布
     n_similar: Optional[int] = None                       # similar_sentence 用了幾件判決
+    similar: List[SimilarCase] = []                       # 含這個罪名的相似判決（示例資料與沒有檢索資料時為空）
+    search_scope: Optional[SearchScope] = None            # 這組相似判決是在哪個範圍裡找的
 
 
 class CriminalModelInfo(BaseModel):
@@ -245,6 +258,8 @@ class CriminalReport(BaseModel):
     charges: List[Charge]
     similar: List[SimilarCase]
     model: Optional[CriminalModelInfo] = None
+    n_corpus: Optional[int] = None      # 刑事檢索語料的總件數
+    search_scope: Optional[SearchScope] = None
     mock: bool = Field(description="罪名、刑度與相似判決是否為示例資料")
 
 
@@ -254,8 +269,23 @@ class GuideParagraph(BaseModel):
     text: str
 
 
+class CriminalGuideParagraph(BaseModel):
+    function: Literal["info", "verdict", "facts", "evidence", "court", "laws", "table", "other"]
+    label: str
+    text: str
+    pre: bool = False                    # 保留原本的換行（法條全文、附表、當事人列表）
+    part: Optional[str] = None           # 段落屬於附件時，例如「附件：起訴書」；資料集節錄是「資料集節錄」
+
+
+class CriminalGuide(BaseModel):
+    source: Literal["judgment", "dataset"]   # judgment：判決全文；dataset：只有資料集的犯罪事實
+    judgment_date: str = ""
+    paragraphs: List[CriminalGuideParagraph]
+
+
 class Guide(BaseModel):
     case: SimilarCase
     paragraphs: List[GuideParagraph]
+    criminal: Optional[CriminalGuide] = None   # 刑事導讀（全文分段）；民事用 paragraphs
     labeler: str
     mock: bool

@@ -17,7 +17,7 @@ from unittest import mock
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from backend.civil_service import MAX_DEFAULT_SHOWN, CivilService  # noqa: E402
+from backend.civil_service import MAX_DEFAULT_SHOWN, CivilService, common_points, wan  # noqa: E402
 from backend.main import create_app  # noqa: E402
 from backend.schemas import CivilInput  # noqa: E402
 from backend.settings import Settings  # noqa: E402
@@ -155,12 +155,18 @@ class TestCriminalWithModel(unittest.TestCase):
         self.assertFalse(r["mock"])
         self.assertEqual(r["charges"][0]["name"], "酒駕罪")
         self.assertEqual(len(r["charges"][0]["sentence"]), 6)
-        # 相似判決只在含「酒駕罪」的判決裡找，附宣告刑與原文網址；真的判決沒有導讀
+        # 相似判決只在含「酒駕罪」的判決裡找，附宣告刑、原文網址與導讀
         self.assertTrue(r["similar"] and all(c["mid"] == "酒駕罪" for c in r["similar"]))
         self.assertTrue(r["similar"][0]["url"].startswith("https://judgment.judicial.gov.tw/"))
         self.assertIn(r["similar"][0]["sentence"], ("有期徒刑 4 月", "拘役 20 日"))
+        self.assertGreater(r["n_corpus"], 0)
+        self.assertTrue(all("_row" not in c and "shared_terms" not in c for c in r["similar"]))
+        self.assertEqual(r["search_scope"]["charge"], "酒駕罪", "相似判決在含最可能罪名的判決裡找")
+        self.assertLessEqual(r["search_scope"]["n"], r["n_corpus"])
         guide = self.client.get(f"/api/judgments/criminal/{r['similar'][0]['case_id']}/guide")
-        self.assertEqual(guide.status_code, 404)
+        self.assertEqual(guide.status_code, 200)
+        self.assertIsNone(guide.json()["criminal"])
+        self.assertEqual(guide.json()["labeler"], "summary-only")
         # 每個罪名另外附相似判決的宣告刑分布（合成資料：酒駕 30 件，有期徒刑 4 月與拘役各半）
         drunk = r["charges"][0]
         self.assertEqual(drunk["n_similar"], 30)
@@ -168,6 +174,16 @@ class TestCriminalWithModel(unittest.TestCase):
         self.assertAlmostEqual(shares["拘役、罰金"] + shares["1～6 個月"], 1.0)
         self.assertEqual(r["model"]["name"], "criminal_v1")
         self.assertNotIn("sentence", r)
+
+    def test_similar_cases_per_charge(self):
+        """每個罪名各一組相似判決，罪名分頁選了別的罪名時，相似判決跟著換；頂層是第一個罪名的那組。"""
+        r = self.client.post("/api/criminal/predict", json={"text": CRIMINAL_DRUNK}).json()
+        self.assertEqual(r["similar"], r["charges"][0]["similar"])
+        self.assertEqual(r["search_scope"], r["charges"][0]["search_scope"])
+        for charge in r["charges"]:
+            self.assertEqual(charge["search_scope"]["charge"], charge["name"])
+            self.assertTrue(charge["similar"])
+            self.assertTrue(all(charge["name"] in c["mid"] for c in charge["similar"]), charge["name"])
 
     def test_search(self):
         r = self.client.post("/api/retrieval/search", json={"type": "criminal", "text": CRIMINAL_DRUNK, "k": 3}).json()
@@ -181,6 +197,7 @@ class TestCriminalWithModel(unittest.TestCase):
         client = TestClient(create_app(Settings(artifacts_dir=Path(tmp.name))))
         r = client.post("/api/criminal/predict", json={"text": CRIMINAL_DRUNK}).json()
         self.assertEqual((r["mock"], r["similar"]), (False, []))
+        self.assertTrue(all(c["similar"] == [] and c["search_scope"] is None for c in r["charges"]))
 
     def test_forced_mock_mode(self):
         client = TestClient(create_app(Settings(artifacts_dir=Path(self.tmp.name), mode="mock")))
@@ -442,6 +459,14 @@ class TestWithModel(unittest.TestCase):
         self.assertTrue(all(c["mid"] == "侵權：交通事故" for c in r["similar"]), "選了案由就在同案由裡找")
         sims = [c["similarity"] for c in r["similar"]]
         self.assertEqual(sims, sorted(sims, reverse=True))
+        self.assertGreater(r["n_corpus"], 0)
+        self.assertTrue(all("_row" not in c and "shared_terms" not in c for c in r["similar"]))
+        self.assertEqual(r["search_scope"]["mid"], "侵權：交通事故")
+        self.assertFalse(r["search_scope"]["mid_inferred"], "使用者自己選的案由")
+        self.assertLessEqual(r["search_scope"]["n"], r["n_corpus"])
+        # 限定案由時每件都同類，「同類糾紛」不重複列；其他相同點只會是金額、證據、法院
+        self.assertTrue(all(isinstance(c["common"], list) for c in r["similar"]))
+        self.assertFalse(any(p.startswith("同類糾紛") for c in r["similar"] for p in c["common"]))
         self.assertEqual(r["amount_range"]["amount_median"], 120000)   # 合成資料的獲償比例都是 0.6
         self.assertEqual((r["amount_range"]["source"], r["amount_range"]["scope"]), ("similar", "win"),
                          "沒有獲償比例模型時，金額範圍和以前一樣是相似判決的分位數")
@@ -627,6 +652,44 @@ class TestBrokenAmountModel(unittest.TestCase):
             build_artifacts(base)
             amount_service.train(amount_frame(100), "test", amount_service.artifact_dir(base), {}, "2.5.1")
             self.assertIsNone(CivilService(base, force_mock=True).amount_model)
+
+
+
+class TestCommonPoints(unittest.TestCase):
+    """相似判決的「相同點」：全部用結構化欄位比對，不從文字切詞。"""
+    CASE = {"mid": "侵權：交通事故", "claimed_amount": 280_000, "court": "臺灣基隆地方法院"}
+
+    def test_all_points(self):
+        got = common_points(self.CASE, ["medical", "receipt", "video"], {"medical", "video", "chat"},
+                            "侵權：交通事故", 300_000, "基隆")
+        self.assertEqual(got, ["同類糾紛：侵權：交通事故", "請求金額相近（你 30 萬／這件 28 萬）",
+                               "都有：診斷證明、病歷／照片、監視器、行車紀錄器", "同一法院"])
+
+    def test_nothing_in_common(self):
+        self.assertEqual(common_points(self.CASE, ["medical"], set(), None, None, None), [])
+
+    def test_same_mid_only_when_not_scoped(self):
+        """限定案由時（mid 傳 None）每件都同類，不重複列。"""
+        self.assertEqual(common_points(self.CASE, [], set(), None, None, None), [])
+        self.assertEqual(common_points(self.CASE, [], set(), "民間借貸", None, None), [])
+
+    def test_amount_close_range(self):
+        for claimed, close in ((190_000, True), (420_000, True), (185_000, False), (425_000, False)):
+            got = common_points(self.CASE, [], set(), None, claimed, None)
+            self.assertEqual(bool(got), close, claimed)
+        self.assertEqual(common_points({**self.CASE, "claimed_amount": None}, [], set(), None, 300_000, None), [])
+
+    def test_court_short_name(self):
+        """問卷的法院是簡稱；同名的簡易庭也算，別的法院、行政法院不算。"""
+        for case_court, same in (("臺灣臺北地方法院", True), ("臺北簡易庭", True), ("臺北高等行政法院", False),
+                                 ("臺灣新北地方法院", False)):
+            got = common_points({**self.CASE, "court": case_court}, [], set(), None, None, "臺北")
+            self.assertEqual(got == ["同一法院"], same, case_court)
+        self.assertEqual(common_points({**self.CASE, "court": "福建金門地方法院"}, [], set(), None, None, "金門"), ["同一法院"])
+
+    def test_wan(self):
+        self.assertEqual([wan(n) for n in (8_000, 28_000, 30_000, 300_000, 1_234_567)],
+                         ["8,000 元", "2.8 萬", "3 萬", "30 萬", "123 萬"])
 
 
 if __name__ == "__main__":

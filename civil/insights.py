@@ -167,7 +167,7 @@ def _merge_short_heads(parts: List[str], short: int = 8) -> List[str]:
     """只有編號的短段（「六、經查：」）併到下一段；段尾孤立的編號（下一段的標題被切到這裡）刪掉。"""
     merged, carry = [], ""
     for p in parts:
-        if len(p.strip()) <= short:
+        if len(_effective(p.strip())[0]) <= short:      # 遮名標籤以 3 個字計（見 _effective）
             carry += p
         else:
             merged.append(carry + p)
@@ -175,15 +175,35 @@ def _merge_short_heads(parts: List[str], short: int = 8) -> List[str]:
     return merged
 
 
+# 遮名標籤（retrieval/masking.py）。算長度時當成 3 個字（一般人名的長度），切段和「爭點」的位置才會和原文一樣：
+# 【關係人12】有 7 個字，不這樣算的話，遮得越多切點越往後移，「爭點」會被推出段落開頭的 80 個字而標錯
+_MASK_TAG = re.compile(r"【(?:(?:原告|被告|代理人|關係人|姓名)[0-9]*|地址|車牌|電話|身分證字號|電子郵件|出生日期)】")
+_TAG_LEN = 3
+
+
+def _effective(text: str) -> "tuple[str, List[int]]":
+    """把遮名標籤換成 3 個字長的佔位，回傳（換過的文字, 每個字在原字串的位置）。"""
+    out, index, pos = [], [], 0
+    for m in _MASK_TAG.finditer(text):
+        out.append(text[pos:m.start()]); index.extend(range(pos, m.start()))
+        out.append("○" * _TAG_LEN); index.extend([m.start()] * _TAG_LEN)
+        pos = m.end()
+    out.append(text[pos:]); index.extend(range(pos, len(text)))
+    return "".join(out), index
+
+
 def _paragraphs(text: str, max_len: int = 400) -> List[str]:
-    """依段落編號切開；沒有編號的長段落，在句號處切成不超過 max_len 字的段。"""
+    """依段落編號切開；沒有編號的長段落，在句號處切成不超過 max_len 字的段（遮名標籤以 3 個字計）。"""
     parts = _merge_short_heads([p for p in _HEAD_SPLIT.split(text or "") if p.strip()])
     out = []
     for p in parts:
-        while len(p) > max_len:
-            cut = p.rfind("。", 0, max_len)
+        eff, index = _effective(p)
+        while len(eff) > max_len:
+            cut = eff.rfind("。", 0, max_len)
             cut = cut + 1 if cut > max_len // 3 else max_len
-            out.append(p[:cut]); p = p[cut:]
+            real = index[cut] if cut < len(index) else len(p)    # 換回原字串的位置；不會切在標籤中間
+            out.append(p[:real]); p = p[real:]
+            eff, index = _effective(p)
         if p.strip():
             out.append(p)
     return out
@@ -196,6 +216,7 @@ def guide_paragraphs(claim: str, defense: str, court: str) -> List[Dict]:
         for p in _paragraphs(text):
             out.append({"function": fn, "label": FUNCTIONS[fn], "text": p})
     for p in _paragraphs(court):
-        fn = "issue" if _ISSUE_RE.search(p[:80]) else ("evidence" if _EVIDENCE_PARA_RE.search(p) else "court")
+        eff = _effective(p)[0]
+        fn = "issue" if _ISSUE_RE.search(eff[:80]) else ("evidence" if _EVIDENCE_PARA_RE.search(eff) else "court")
         out.append({"function": fn, "label": FUNCTIONS[fn], "text": p})
     return out

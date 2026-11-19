@@ -19,7 +19,7 @@ import { Layout, PAGE } from "../components/Layout";
 import { LinkButton } from "../components/LinkButton";
 import { parseAmount, sensitiveKinds } from "../format";
 import { maskText } from "../mask";
-import { fullText, primaryMid, useIntake, type Intake } from "../state";
+import { fullText, lawyerQuestion, primaryMid, useIntake, type Intake } from "../state";
 
 const MAX_QUESTIONS = 4;
 
@@ -211,7 +211,7 @@ function MaskStage({ heading, intake, update, kinds, llm }: {
       <div className="flex flex-col gap-2">
         <p className="font-bold">會送出的內容（已遮名）</p>
         <p className="flex flex-wrap items-center gap-2 text-[15px]">
-          <mark className="masked">橘色</mark><span className="text-muted-foreground">標示已遮蔽的身分證字號、電話、email、地址，以及你加入的名字</span>
+          <mark className="masked">橘色</mark><span className="text-muted-foreground">標示已遮蔽的身分證字號、電話、email、地址、車牌、出生日期，以及你加入的名字</span>
         </p>
         <MaskedText text={intake.maskedText} live />
       </div>
@@ -423,7 +423,7 @@ function FinalSummary({ intake }: { intake: Intake }) {
       ["請求金額", amount !== null ? `${amount.toLocaleString("en-US")} 元` : "未填"],
       ["對方", intake.defendantType ? DEFENDANT_LABEL[intake.defendantType] : "未選"],
     ] as [string, string][] : []),
-    ["律師", intake.lawyer === "yes" ? "有" : intake.lawyer === "no" ? "沒有" : "未選"],
+    [lawyerQuestion(intake.caseType).short, intake.lawyer === "yes" ? "有" : intake.lawyer === "no" ? "沒有" : "未選"],
     ["證物", `${civil ? intake.evidence.length : intake.criminalEvidence.length} 項`],
   ];
   return (
@@ -526,6 +526,7 @@ function RewriteStage({ heading, llm, vendor, intake, update, state, onStart, co
           <div className="flex flex-col gap-2">
             <label htmlFor="rewrite-draft" className="font-bold">整理後的寫法（可以直接修改）</label>
             <p id="rewrite-hint" className="text-[15px] text-muted-foreground">
+              {criminal && "請先確認被告、被害人與「敘述者」是否對應正確；稱謂是本次分析的角色，不代表已起訴或有罪。"}
               請檢查有沒有多出你沒說過的事，例如{criminal ? "日期、傷勢、前科、和解" : "日期、金額、簽約或書面文件"}。這段只用來{usedFor}，不是法律文件。
             </p>
             <Textarea id="rewrite-draft" value={draft} aria-describedby="rewrite-hint" className="min-h-[200px] resize-y"
