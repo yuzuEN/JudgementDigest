@@ -19,7 +19,7 @@ import { Layout, PAGE } from "../components/Layout";
 import { LinkButton } from "../components/LinkButton";
 import { parseAmount, sensitiveKinds } from "../format";
 import { maskText } from "../mask";
-import { fullText, primaryMid, useIntake, type Intake } from "../state";
+import { fullText, lawyerQuestion, primaryMid, useIntake, type Intake } from "../state";
 
 const MAX_QUESTIONS = 4;
 
@@ -423,7 +423,7 @@ function FinalSummary({ intake }: { intake: Intake }) {
       ["請求金額", amount !== null ? `${amount.toLocaleString("en-US")} 元` : "未填"],
       ["對方", intake.defendantType ? DEFENDANT_LABEL[intake.defendantType] : "未選"],
     ] as [string, string][] : []),
-    ["律師", intake.lawyer === "yes" ? "有" : intake.lawyer === "no" ? "沒有" : "未選"],
+    [lawyerQuestion(intake.caseType).short, intake.lawyer === "yes" ? "有" : intake.lawyer === "no" ? "沒有" : "未選"],
     ["證物", `${civil ? intake.evidence.length : intake.criminalEvidence.length} 項`],
   ];
   return (

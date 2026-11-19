@@ -162,6 +162,7 @@ class SimilarCase(BaseModel):
     sentence: Optional[str] = None
     default_judgment: bool = False      # 一造辯論：被告沒有到庭
     url: Optional[str] = None           # 司法院裁判書系統的原文網址（民事舊版檢索資料沒有時為 None）
+    common: List[str] = []              # 民事：和使用者的情況相同的地方（同類糾紛、請求金額相近、都有的證據、同一法院），用結構化欄位比對
 
 
 class EvidenceRow(BaseModel):
@@ -185,6 +186,14 @@ class OutcomeCounts(BaseModel):
     lose: int
 
 
+class SearchScope(BaseModel):
+    """相似判決是在哪個範圍裡找的。"""
+    n: int                              # 範圍內的判決件數
+    mid: Optional[str] = None           # 民事：限定的案由（沒有限定時為 None）
+    mid_inferred: bool = False          # 民事：案由是系統從描述判斷的（使用者沒選）
+    charge: Optional[str] = None        # 刑事：限定的罪名（模型最可能的罪名；沒有限定時為 None）
+
+
 class CivilReport(BaseModel):
     prediction: CivilPrediction
     outcomes: OutcomeCounts
@@ -194,6 +203,8 @@ class CivilReport(BaseModel):
     evidence: List[EvidenceRow]
     defenses: List[DefenseRow]
     n_compared: int
+    n_corpus: Optional[int] = None      # 檢索語料的總件數
+    search_scope: Optional[SearchScope] = None
     mock: bool
 
 
@@ -227,6 +238,8 @@ class Charge(BaseModel):
     sentence: List[SentenceBucket]                        # 罪名模型推估的刑度分布（6 區間，含拘役、罰金）
     similar_sentence: Optional[List[SentenceBucket]] = None   # 相似判決中同罪名案件的宣告刑分布
     n_similar: Optional[int] = None                       # similar_sentence 用了幾件判決
+    similar: List[SimilarCase] = []                       # 含這個罪名的相似判決（示例資料與沒有檢索資料時為空）
+    search_scope: Optional[SearchScope] = None            # 這組相似判決是在哪個範圍裡找的
 
 
 class CriminalModelInfo(BaseModel):
@@ -245,6 +258,8 @@ class CriminalReport(BaseModel):
     charges: List[Charge]
     similar: List[SimilarCase]
     model: Optional[CriminalModelInfo] = None
+    n_corpus: Optional[int] = None      # 刑事檢索語料的總件數
+    search_scope: Optional[SearchScope] = None
     mock: bool = Field(description="罪名、刑度與相似判決是否為示例資料")
 
 

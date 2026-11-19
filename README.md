@@ -12,7 +12,7 @@
 
 | | 輸入 | 輸出 | 第一版（目前） |
 |---|---|---|---|
-| **民事結果參考** | 原告主張＋使用者填得出來的案件特徵 | 相似判決的勝敗件數、模型參考（機率放在模型細節） | 🟢 相似判決統計；只用原告主張的 TF-IDF＋案件特徵 |
+| **民事結果參考** | 原告主張＋使用者填得出來的案件特徵 | 模型判定（勝訴機率、金額範圍與測試成績），下方以相似判決的勝敗件數對照 | 🟢 相似判決統計；只用原告主張的 TF-IDF＋案件特徵 |
 | **民事金額範圍** | 請求金額＋原告主張＋案件特徵 | 「若為一部勝訴」的獲償比例 80% 範圍，附相似勝訴判決的分布對照 | 🟢 獲償比例模型（`civil_amount_v1`）；沒有模型檔或資訊不夠時用相似判決的獲償比例 |
 | **相似判決檢索**（刑事、民事共用） | 案情描述 | 最相似的真實判決（字號、結果、刑期／判准金額） | 🟢 民事；🟢 刑事（每個罪名最多 1,500 件） |
 | **證據對照、常見抗辯** | 相似判決＋使用者有的證據 | 相似判決提到哪些證據（提到 ≠ 採信）、被告常見的抗辯 | 🟢 關鍵字規則 |
@@ -60,7 +60,7 @@ flowchart LR
 ## 資料
 
 - 來源：[司法院裁判書查詢系統](https://judgment.judicial.gov.tw/FJUD/default.aspx)，全國地方法院判決（含簡易庭）
-- 規模：民事資料庫 236,009 筆判決（2022 年 1 月至 2026 年 4 月）；其中檢索語料 158,330 件、模型訓練 46,683 件。刑事：全國地院第一審判決 2016–2025（有罪、單一被告），CAIL 格式資料集 v2 共 1,132,585 筆；研究用均衡抽樣 10 萬筆（罪名 80 類、法條 102 類），平台模型用隨機 30 萬筆，刑事檢索語料 88,376 件
+- 規模：民事資料庫 280,775 筆判決（2022 年 1 月至 2026 年 10 月）；檢索語料 188,334 件（取自 2026-11-16 版的 280,775 筆）、模型訓練 46,683 件。刑事：全國地院第一審判決 2016–2025（有罪、單一被告），CAIL 格式資料集 v2 共 1,132,585 筆；研究用均衡抽樣 10 萬筆（罪名 80 類、法條 102 類），平台模型用隨機 30 萬筆，刑事檢索語料 88,376 件
 - 處理：以規則切分段落，擷取事實、判決結果、金額、刑期、法官等欄位，欄位定義見 [docs/欄位說明.md](docs/欄位說明.md)
 - 刑事另從[司法院資料開放平臺](https://opendata.judicial.gov.tw/)取得全國地院刑事判決（`data_pipeline/opendata_*.py`）
 - 資料庫、HTML 原檔與模型權重不放在 repo 裡（檔案太大，且含當事人資訊）
@@ -142,7 +142,7 @@ docker compose up --build
 | `criminal_v1/` | 刑事罪名、法條 SVM（約 220 MB） | `scripts/sync_criminal_models.sh` |
 | `civil_winloss_v1/` | 民事勝敗模型（約 9 MB） | `scripts/sync_civil_models.sh` |
 | `civil_amount_v1/` | 民事獲償比例模型（約 8 MB） | 同上（民事三個資料夾一起下載） |
-| `retrieval_civil_v4/` | 民事相似判決檢索（約 2.6 GB） | 同上，或 `bash scripts/sync_retrieval.sh civil` |
+| `retrieval_civil_v6/` | 民事相似判決檢索（約 3.1 GB） | 同上，或 `bash scripts/sync_retrieval.sh civil` |
 | `retrieval_criminal_v1/` | 刑事相似判決檢索（約 481 MB） | `scripts/sync_criminal_models.sh`（和刑事 SVM 一起下載），或 `bash scripts/sync_retrieval.sh criminal` |
 
 刑事檢索也已上傳。可用 `bash scripts/sync_retrieval.sh civil`、`criminal` 或 `all` 單獨同步檢索資料；加 `--dry-run` 先看清單。本機有自訂導讀時先備份。分析用原始資料庫尚未納入同步。分享決策與上傳方式見 [`docs/模型檔上傳.md`](docs/模型檔上傳.md)。
@@ -193,7 +193,7 @@ cd frontend && npm install && npm run dev     # 前端（另開一個終端機�
 python -m civil.models.service evaluate       # 5 折評估
 python -m civil.models.service train          # → artifacts/civil_winloss_v1/
 python -m civil.models.amount_service train   # → artifacts/civil_amount_v1/（選用：金額範圍改用模型推估）
-python -m retrieval.build                     # → artifacts/retrieval_civil_v4/（要有 judgments.db，約 35 分鐘）
+python -m retrieval.build                     # → artifacts/retrieval_civil_v6/（要有 judgments.db，約 35 分鐘）
 ```
 
 爬取與資料處理：

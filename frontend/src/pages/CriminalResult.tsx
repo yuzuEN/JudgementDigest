@@ -5,12 +5,11 @@ import { cn } from "@/lib/utils";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { api } from "../api/client";
-import type { Charge, CriminalModelInfo, CriminalReport } from "../api/types";
+import type { Charge, CriminalModelInfo, CriminalReport, SimilarCase } from "../api/types";
 import { Bar } from "../components/casey/Bars";
-import { Disclosure } from "../components/casey/Disclosure";
 import { EmptyState } from "../components/casey/EmptyState";
 import { InfoNote, LoadingPanel, PanelTitle, ResultTabs, useResultTab } from "../components/casey/ResultTabs";
-import { ErrorBox, InfoLink, LAF_URL, SIMILARITY_NOTE } from "../components/Common";
+import { corpusLead, ErrorBox, InfoLink, LAF_URL } from "../components/Common";
 import { LinkButton } from "../components/LinkButton";
 import { ResultFrame } from "../components/ResultFrame";
 import { percent } from "../format";
@@ -73,7 +72,7 @@ export default function CriminalResult() {
           content: {
             charges: <ChargesPanel report={report} selected={selected} onSelect={(i) => setSelected(i)} rewritten={Boolean(intake.searchText)} />,
             sentence: <SentencePanel report={report} selected={selected} />,
-            cases: <CasesPanel report={report} />,
+            cases: <CasesPanel report={report} selected={selected} onSelect={(i) => setSelected(i)} />,
           }[t.key],
         }))} />
       )}
@@ -88,8 +87,10 @@ function ChargesPanel({ report, selected, onSelect, rewritten }: {
 }) {
   return (
     <>
+      <p className="-mb-2 text-[15px] font-bold text-primary">模型判定</p>
       <PanelTitle mock={report.mock}>可能的罪名</PanelTitle>
-      <p className="no-print text-muted-foreground">點一個罪名，「刑期範圍」分頁會跟著切換。</p>
+      {/* 只有一個罪名時沒有東西可以切換，不顯示這句，避免使用者以為還有別的罪名 */}
+      {report.charges.length > 1 && <p className="no-print text-muted-foreground">點一個罪名，「刑期範圍」和「相似判決」分頁會跟著切換。</p>}
       <RadioGroup aria-label="可能的罪名" value={String(selected)} onValueChange={(v) => onSelect(Number(v))} className="grid max-w-[820px] gap-2.5">
         {report.charges.map((c, i) => {
           const on = i === selected;
@@ -130,7 +131,8 @@ function ModelDetail({ model }: { model: CriminalModelInfo }) {
   const { n_test: n, charge_top1: top1, bucket_accuracy: acc, bucket_within_one: near } = model;
   if (n == null || top1 == null || acc == null || near == null) return null;
   return (
-    <Disclosure summary="模型細節">
+    <section aria-labelledby="criminal-model-title" className="flex flex-col gap-2 rounded-[14px] border-2 border-primary bg-card px-4 py-4 sm:px-5">
+      <h3 id="criminal-model-title" className="text-lg font-bold">模型與測試成績</h3>
       {model.sentence_description && model.sentence_n_test != null ? <>
         <p className="text-[15px]">
           罪名模型：{model.description}，用 {n.toLocaleString()} 件沒參與訓練的判決測試時，第一個罪名猜中 {percent(top1)}。
@@ -146,7 +148,7 @@ function ModelDetail({ model }: { model: CriminalModelInfo }) {
         </p>
       )}
       <p className="text-[15px] text-muted-foreground">測試用的是判決書的文字，一般口語描述的準確度可能較低。</p>
-    </Disclosure>
+    </section>
   );
 }
 
@@ -220,48 +222,83 @@ function SentencePanel({ report, selected }: { report: CriminalReport; selected:
 
 /* ── 相似判決 ── */
 
-function CasesPanel({ report }: { report: CriminalReport }) {
+/** 這個罪名的相似判決；舊版後端或示例資料沒有分罪名時，用頂層的那組（第一個罪名）。 */
+function chargeCases(report: CriminalReport, i: number) {
+  const c = report.charges[i];
+  return c?.similar?.length ? { cases: c.similar, scope: c.search_scope } : { cases: report.similar, scope: report.search_scope };
+}
+
+function CasesPanel({ report, selected, onSelect }: {
+  report: CriminalReport; selected: number; onSelect: (i: number) => void;
+}) {
+  // 後端每個罪名各給一組時，才有東西可以切換
+  const perCharge = report.charges.length > 1 && report.charges.every((c) => c.similar?.length);
+  const sections = perCharge ? report.charges.map((_, i) => i) : [0];
   return (
     <>
       <PanelTitle mock={report.mock}>相似的真實判決</PanelTitle>
-      <p className="text-[15px] text-muted-foreground">依相似度排序。相似度不是百分比，是 0 到 1 之間的小數。</p>
-      {report.similar.length === 0 ? (
-        <EmptyState title="刑事相似判決檢索尚未開放">目前可查看罪名與刑期範圍。</EmptyState>
-      ) : (
-        <>
-          <Table className="min-w-[680px] text-[15px]">
-            <TableHeader>
-              <TableRow>
-                <TableHead scope="col">字號</TableHead>
-                <TableHead scope="col">罪名</TableHead>
-                <TableHead scope="col">宣告刑</TableHead>
-                <TableHead scope="col" className="text-right"><span className="inline-flex items-center gap-1">相似度<InfoLink to="相似度" label="相似度說明" /></span></TableHead>
-                <TableHead scope="col" className="no-print">判決原文</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {report.similar.map((c) => (
-                <TableRow key={c.case_id}>
-                  <TableCell className="py-3.5 align-top whitespace-normal">
-                    <b>{c.case_number}</b><br />
-                    <span className="line-clamp-3 text-sm text-muted-foreground print:line-clamp-none">{c.summary}</span>
-                  </TableCell>
-                  <TableCell className="py-3.5 align-top whitespace-nowrap">{c.mid}</TableCell>
-                  <TableCell className="py-3.5 align-top whitespace-nowrap">{c.sentence ?? "—"}</TableCell>
-                  <TableCell className="py-3.5 text-right align-top font-bold tabular-nums">{c.similarity.toFixed(2)}</TableCell>
-                  <TableCell className="no-print py-3.5 align-top">
-                    <div className="flex flex-wrap items-center gap-2">
-                      <LinkButton variant="outline" size="sm" to={`/judgment/criminal/${c.case_id}`}>判決導讀</LinkButton>
-                      {c.url && <a href={c.url} target="_blank" rel="noreferrer" aria-label="判決原文" className="inline-flex min-h-11 items-center gap-1 font-semibold">原文<ExternalLinkIcon className="size-4" aria-hidden="true" /></a>}
-                    </div>
-                  </TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-          <p className="text-[15px] text-muted-foreground">{SIMILARITY_NOTE}</p>
-        </>
+      {perCharge && (
+        <div className="no-print flex flex-wrap items-center gap-2" role="group" aria-label="看哪個罪名的相似判決">
+          <span className="text-[15px] text-muted-foreground">罪名</span>
+          {report.charges.map((c, i) => (
+            <button key={c.name} type="button" aria-pressed={i === selected} onClick={() => onSelect(i)}
+              className={cn("min-h-11 rounded-full border-2 px-4 text-[15px] font-semibold",
+                i === selected ? "border-foreground bg-secondary" : "border-input bg-card hover:border-primary")}>
+              {c.name}
+            </button>
+          ))}
+        </div>
       )}
+      {sections.map((i) => {
+        const { cases, scope } = chargeCases(report, i);
+        return (
+          // 印出來時每個罪名都印（和刑期範圍一樣），畫面上只顯示選的那個
+          <section key={i} aria-label={perCharge ? `${report.charges[i].name}的相似判決` : undefined}
+            className={cn("flex flex-col gap-4", perCharge && i !== selected && "screen-hidden")}>
+            {perCharge && <h3 className="print-only text-lg font-bold">「{report.charges[i].name}」的相似判決</h3>}
+            {cases.length > 0 && <p className="text-[15px] text-muted-foreground">{corpusLead({ scope: report.mock ? null : scope, shown: cases.length, civil: false })}<InfoLink to="相似判決怎麼找" label="相似判決怎麼找的說明" /></p>}
+            {cases.length === 0 ? (
+              <EmptyState title="刑事相似判決檢索尚未開放">目前可查看罪名與刑期範圍。</EmptyState>
+            ) : (
+              <CriminalCasesTable cases={cases} />
+            )}
+          </section>
+        );
+      })}
     </>
+  );
+}
+
+function CriminalCasesTable({ cases }: { cases: SimilarCase[] }) {
+  return (
+    <Table className="min-w-[680px] text-[15px]">
+      <TableHeader>
+        <TableRow>
+          <TableHead scope="col">字號</TableHead>
+          <TableHead scope="col">罪名</TableHead>
+          <TableHead scope="col">宣告刑</TableHead>
+          <TableHead scope="col" className="no-print">判決原文</TableHead>
+        </TableRow>
+      </TableHeader>
+      <TableBody>
+        {cases.map((c) => (
+          <TableRow key={c.case_id}>
+            <TableCell className="py-3.5 align-top whitespace-normal">
+              <b>{c.case_number}</b><br />
+              <span className="line-clamp-3 text-sm text-muted-foreground print:line-clamp-none">{c.summary}</span>
+            </TableCell>
+            <TableCell className="py-3.5 align-top whitespace-nowrap">{c.mid}</TableCell>
+            <TableCell className="py-3.5 align-top whitespace-nowrap">{c.sentence ?? "—"}</TableCell>
+            <TableCell className="no-print py-3.5 align-top">
+              {/* 和民事一樣：原文連結放在判決導讀按鈕下面，欄寬變大時也不會並排 */}
+              <div className="flex flex-col items-start gap-1">
+                <LinkButton variant="outline" size="sm" to={`/judgment/criminal/${c.case_id}`}>判決導讀</LinkButton>
+                {c.url && <a href={c.url} target="_blank" rel="noreferrer" aria-label="判決原文" className="inline-flex min-h-11 items-center gap-1 text-sm font-semibold">原文<ExternalLinkIcon className="size-4" aria-hidden="true" /></a>}
+              </div>
+            </TableCell>
+          </TableRow>
+        ))}
+      </TableBody>
+    </Table>
   );
 }

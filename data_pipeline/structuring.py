@@ -877,7 +877,12 @@ _CLAIM_STOP_RE = re.compile(
     # 備位聲明是先位不成立時才審的替代請求，與先位擇一，不能相加。
     # 實測 110 年度訴字第 357 號：先位、備位各 728 萬 5 千元，加總成 1,457 萬。
     r"|備位(?:訴)?(?:之)?聲明"
-    r"|自應(?:予)?准許")
+    r"|自應(?:予)?准許"
+    # 2.5.4：「變更聲明為：『…』，核其所為乃屬應受判決事項聲明之減縮，參照前開說明，並無不合」——
+    # 少了這兩個結束點，段落會一路讀到後面再寫一次的聲明，同一筆請求算兩次（獲償比例剛好 0.5）
+    r"|核其所為|並無不合"
+    # 2.5.4：反訴的擴張、變更（「反訴原告並據以擴張其聲明為：反訴被告應給付反訴原告70,680元」）
+    r"|反訴[^。；]{0,10}?(?:擴張|變更|減縮|追加)")
 
 # 聲明變更（減縮、擴張、更正）。判決書會先寫起訴時的聲明，再寫變更後的聲明：
 #   「原告起訴時聲明…60萬元。嗣…減縮該項聲明為『…1萬3,200元』」
@@ -898,10 +903,34 @@ _CLAIM_CHANGE_RE = re.compile(
     r"|(?:變更|減縮|擴張|追加)[^。；]{0,12}?聲明[^。；]{0,8}?狀[^。；]{0,10}?聲明\s*[:：]"
     r"|(?:當庭|具狀|嗣)[^。；]{0,4}?(?:變更|減縮|擴張)為\s*[:：]"
     r"|(?:擴張|變更|減縮)(?!後)[^。；]{0,30}?聲明[^。；]{0,12}?(?:如後|如下|所示)"
-    r"|(?:將)?請求(?:之)?金額[^。；]{0,6}?(?:減縮|擴張|變更|更正)為\s*[:：]?")
+    r"|(?:將)?請求(?:之)?金額[^。；]{0,6}?(?:減縮|擴張|變更|更正)為\s*[:：]?"
+    # 2.5.4：「原為：…67萬5390元…，嗣聲明改為67萬4194元」——沒認出是變更，兩個金額加在一起
+    r"|(?:聲明|請求)[^。；]{0,6}?改(?:為|稱)\s*[:：]?")
+# 2.5.4：變更只針對聲明的某一項，或是對造反對變更
+_ONE_ITEM_RE = re.compile(r"第[一二三四五六七八九十\d]+項|該項|前項|其中|本金|不同意|反對")
+# 2.5.4：變更句後面直接接金額（「改為67萬4194元」）
+_CHANGED_TO_AMOUNT_RE = re.compile(rf"[「『\s]*(?:新臺幣|新台幣)?(?:（下同）|\(下同\))?(?P<num>{_AMOUNT_TOKEN})元")
+# 2.5.4：聲明裡的計算式、「誤載為」、卷頁說明不是請求項目：
+#   「610,000元【計算式：460,000元＋150,000元＝610,000元】」算成 3 倍；
+#   「143萬5,553元（見本院卷第249頁，原告誤載為壹佰肆拾參萬…元）」算成 2 倍
+_CLAIM_ASIDE_RE = re.compile(
+    r"【[^【】]{0,200}】"
+    r"|（[^（）]{0,150}?(?:計算式|誤載|見本院卷|見卷|見原審卷)[^（）]{0,150}?）"
+    r"|\([^()]{0,150}?(?:計算式|誤載|見本院卷|見卷|見原審卷)[^()]{0,150}?\)")
+# 2.5.4：沒有聲明的小額判決，原告主張只寫「請求被告賠償醫療費…元、…共計9萬5,890元等語」
+_CLAIM_TOTAL_RE = re.compile(
+    rf"(?:請求|求償|賠償|給付)[^。]{{0,300}}?(?:共計|合計|總計|總共|共(?=[0-9一二三四五六七八九壹貳參叁肆伍陸柒捌玖拾]))"
+    rf"(?:新臺幣|新台幣)?(?:（下同）|\(下同\))?(?P<num>{_AMOUNT_TOKEN})元"
+    # 只認小額判決的寫法「…共計9萬5,890元等語」；事實或法院判斷裡的小計（「共計480,000元之租金」）不算
+    r"(?=[^。]{0,12}?等語)")
 _AS_VERDICT_RE = re.compile(r"如主文(?:第[一二三四五六七八九十\d]+項)?所示")
 # 聲明段落中的編號符號，先剝除才能正確判斷「如主文所示」是否為整段內容
 _ENUM_PREFIX_RE = re.compile(r"^[\s\d一二三四五六七八九十㈠-㈩\(（][\s\d一二三四五六七八九十㈠-㈩\)）.、,]*")
+
+
+CLAIM_TOTAL_SOURCE = "直接抽取（請求共計）"
+# 可以拿來算獲償比例的請求金額來源（「無聲明錨點」的開頭金額加總不可靠，不算）
+CLAIM_RATIO_SOURCES = ("直接抽取", CLAIM_TOTAL_SOURCE)
 
 
 def extract_claimed_amount(
@@ -931,7 +960,8 @@ def extract_claimed_amount(
     if body:
         text = re.sub(r"\s+", "", body)
         seg = ""
-        changes = list(_CLAIM_CHANGE_RE.finditer(text))
+        # 2.5.4：「反訴原告並據以擴張其聲明為：…」是反訴的請求，不是原告的
+        changes = [c for c in _CLAIM_CHANGE_RE.finditer(text) if "反訴" not in text[max(0, c.start() - 20):c.start()]]
         anchor_matches = [list(a.finditer(text)) for a in _CLAIM_ANCHORS]
         if changes:
             # 變更句本身沒寫出聲明時（「擴張請求金額為134萬元如後聲明所示」），
@@ -940,6 +970,22 @@ def extract_claimed_amount(
             after = [[m for m in ms if m.start() > last] for ms in anchor_matches]
             anchor_matches = [[changes[-1]]] + after + anchor_matches
         for matches in anchor_matches:
+            # 2.5.4：變更句後面直接寫金額、沒有「給付」：「嗣聲明改為67萬4194元，核屬減縮…」
+            # 只改其中一項的不算（「聲明第二項請求之金額變更為12萬7,944元」「該項聲明之本金減縮為…」），
+            # 列了好幾個金額的也不算（「本金減縮為2,908,631元、184,119元」）：那只是聲明的一部分。
+            if changes and matches and matches[0] is changes[-1]:
+                ch = matches[0]
+                cand = _CLAIM_STOP_RE.split(text[ch.end(): ch.end() + 200], 1)[0]
+                bare = _CHANGED_TO_AMOUNT_RE.match(cand)
+                partial = (_ONE_ITEM_RE.search(text[max(0, ch.start() - 30): ch.end()])
+                           or (bare and cand[bare.end(): bare.end() + 1] in "、及與和"))
+                if bare and not partial and not _CLAIM_VALIDATE_RE.search(cand[:300]):
+                    v = cn_numeral_to_int(bare.group("num"))
+                    # 法院不能判超過請求：小於判准金額的話，這只是聲明的一部分
+                    if v and not (awarded_total and v < awarded_total):
+                        res.update(claimed_total=v, claimed_currency="TWD", claimed_n_items=1,
+                                   claimed_source="直接抽取")
+                        return res
             for am in matches:
                 cand = text[am.end(): am.end() + 1500]
                 # 先在對造答辯／反訴聲明處截斷，再驗證與抽金額。
@@ -963,12 +1009,25 @@ def extract_claimed_amount(
             stop = _CLAIM_STOP_RE.search(seg)
             if stop:
                 seg = seg[: stop.start()]
-        seg = _ENUM_PREFIX_RE.sub("", seg)
+        raw_seg = _ENUM_PREFIX_RE.sub("", seg)
+        seg = _ENUM_PREFIX_RE.sub("", _CLAIM_ASIDE_RE.sub("", seg))
+
+        # 2.5.4：沒有聲明錨點時，開頭 1500 字的金額加總不可靠；原告主張寫了「請求…共計 X 元」時用這個總額
+        totals = list(_CLAIM_TOTAL_RE.finditer(seg))
+        if totals and (res["claimed_fallback"] or not _iter_amounts_in_clause(seg, "TWD")):
+            v = cn_numeral_to_int(totals[-1].group("num"))
+            if v and not (awarded_total and v < awarded_total):
+                res.update(claimed_total=v, claimed_currency="TWD", claimed_n_items=1,
+                           claimed_source=CLAIM_TOTAL_SOURCE)
+                return res
 
         default_cur = (detect_currency(seg) or "TWD").split("/")[0]
         # 聲明段落與主文使用同一套金額抽取邏輯，確保兩邊的口徑一致——
         # 口徑不一致的話，「獲償比例」這個比值就沒有意義。
         items = _iter_amounts_in_clause(seg, default_cur)
+        # 拿掉括號說明後反而比判准金額少，表示括號裡有請求本身的金額，改回原文
+        if raw_seg != seg and awarded_total and items and (_lump_sum(items) or 0) < awarded_total:
+            items = _iter_amounts_in_clause(raw_seg, default_cur)
         if items:
             currencies = dict.fromkeys(i["currency"] for i in items)
             res["claimed_n_items"] = len(items)
@@ -1586,6 +1645,11 @@ _DEFAULT_JUDGMENT_RE = re.compile(r"一造辯論")
 _PROVISIONAL_RE = re.compile(r"得假執行")
 
 
+# 2.5.4：「訴訟費用（新臺幣）2,100元由…」的總額，與「負擔864元」的金額
+_COST_TOTAL_RE = re.compile(rf"訴訟費用(?:新臺幣|新台幣)?(?:（下同）|\(下同\))?(?P<num>{_AMOUNT_TOKEN})元")
+_COST_PART_RE = re.compile(rf"(?:新臺幣|新台幣)?(?P<num>{_AMOUNT_TOKEN})元")
+
+
 def _cost_share_plaintiff(verdict: str) -> Optional[float]:
     """
     從主文的訴訟費用分擔推算原告負擔比例。
@@ -1600,7 +1664,8 @@ def _cost_share_plaintiff(verdict: str) -> Optional[float]:
     text = re.sub(r"\s+", "", verdict).replace("％", "%")
     # 「訴訟費用**新臺幣壹萬肆仟柒佰貳拾壹元**由被告負擔」這種寫法在
     # 「訴訟費用」與「由」之間夾了金額，要求兩者相鄰會整批漏掉。
-    m = re.search(r"訴訟費用[^，。；]{0,30}?由", text)
+    # 2.5.4：金額後面可能先接逗號（「訴訟費用1,000元，由被告負擔152元，餘由原告負擔」，基小常見）
+    m = re.search(r"訴訟費用[^，。；]{0,30}?[，,]?由", text)
     if not m:
         return None
     # 費用分擔可能分成好幾句，要全部讀完才知道原告負擔多少：
@@ -1611,8 +1676,23 @@ def _cost_share_plaintiff(verdict: str) -> Optional[float]:
     #   「由被告負擔十分之三，餘由原告負擔」→ 原告 0.7
     # 反訴的費用分擔與本訴無關，同一句裡出現時從「反訴」處截斷
     clause = re.split(r"[，；]反訴", text[m.start():].split("。", 1)[0], 1)[0]
+    # 2.5.4：分擔寫成金額：「訴訟費用2,100元由被告負擔864元，餘由原告負擔」（基簡小額常見）。
+    # 讀不出時整句回傳 None，勝訴而原告其實負擔大部分費用的判決就逃過「疑似漏寫其餘駁回」。
+    total_m = _COST_TOTAL_RE.match(clause)
+    total = cn_numeral_to_int(total_m.group("num")) if total_m else None
+
+    def share(frac: str) -> Optional[float]:
+        r = _parse_fraction(frac)
+        if r is None and total:
+            am = _COST_PART_RE.match(frac)
+            v = cn_numeral_to_int(am.group("num")) if am else None
+            if v is not None and 0 <= v <= total:
+                r = v / total
+        return r
+
     parts = list(re.finditer(
-        r"(?P<rest>餘(?:額|款|部分)?)?由(?P<who>[^，。；]{0,40}?)(?P<each>各)?負擔(?P<frac>[^，。；]{0,24})",
+        # 2.5.4：後面的分擔可以省略「由」：「由被告甲負擔19分之6，被告乙負擔19分之13」
+        r"(?P<rest>餘(?:額|款|部分)?)?(?:由|(?<=[，、；]))(?P<who>[^，。；由]{0,40}?)(?P<each>各)?負擔(?P<frac>[^，。；]{0,24})",
         clause))
     if len(parts) > 1:
         explicit, plaintiff, rest_who, unknown = 0.0, 0.0, None, False
@@ -1621,7 +1701,7 @@ def _cost_share_plaintiff(verdict: str) -> Optional[float]:
             if p.group("rest"):
                 rest_who = who
                 continue
-            r = _parse_fraction(p.group("frac"))
+            r = share(p.group("frac"))
             if r is None:
                 unknown = True
                 continue
@@ -1647,11 +1727,11 @@ def _cost_share_plaintiff(verdict: str) -> Optional[float]:
         return None
     who, frac = m.group("who"), m.group("frac")
     if "兩造" in who and m.group("each"):
-        r = _parse_fraction(frac)
+        r = share(frac)
         return round(r, 4) if r is not None else None
     if m.group("each") and "被告" in who and "原告" not in who:
         return 0.0
-    ratio = _parse_fraction(frac)
+    ratio = share(frac)
 
     if ratio is None:
         # 沒有比例 → 全部由某一方負擔
@@ -1725,7 +1805,8 @@ _SEC_DEFENSE_RE = re.compile(
     r"|(?:被告|相對人)[^。；]{0,12}?(?:經合法通知|未於(?:最後)?言詞辯論|未到場|未提出書狀)")
 _SEC_DEFENSE_END_RE = re.compile(
     r"等語[^。]{0,12}?(?:抗辯|置辯|答辯|辯解|資為|以資)|(?:免為|請准宣告)假執行"
-    r"|未提出(?:任何)?(?:書狀|答辯)[^。]{0,20}?(?:陳述|聲明|答辯)")
+    # 2.5.3：「未提出其他書狀」「未提出準備書狀」「亦未曾提出書狀」也是缺席被告的收尾（339657、370496）
+    r"|未(?:曾)?提出(?:任何|其他|準備)?(?:書狀|答辯)[^。]{0,20}?(?:陳述|聲明|答辯)")
 _SEC_COURT_RE = re.compile(
     r"(?:本院|法院)(?:之|的)?(?:判斷|認定|審酌|得心證)|得心證之?理由"
     r"|兩造(?:不爭執|爭執|之爭點|爭點)|本件(?:之)?爭點|爭點(?:厥為|在於|如下)"
@@ -1780,7 +1861,12 @@ def _head_family(head: str) -> int:
 _SEC_DEFENSE_HEAD_RE = re.compile(
     rf"{_SEC_BIG_HEAD}(?P<d>(?:被告|相對人)[^。；]{{0,40}}?"
     r"(?:則以|辯稱|辯以|抗辯|答辯|方面|部分|置辯|陳稱|陳述|稱|略以|以|主張|聲明|同意|認諾|未到場|未提出書狀"
-    r"|經合法通知|未於(?:最後)?言詞辯論)"
+    r"|經合法通知|未於(?:最後)?言詞辯論"
+    # 2.5.3：「二、被告求為判決：原告之訴駁回。其答辯意旨略以」（簡易庭常見）、「二、被告則表示」「被告到庭表示」
+    # 「被告辯：」「被告具狀陳報」「被告於辯論期日到場」「被告就原告請求並不爭執」。
+    # 「表示」只認前面接則、均、到庭等字或後面接冒號的：「二、被告對未成年子女表示『…』」是原告的指控（411873）；
+    # 「到場」前面不能是「不」「解」：「被告…具狀表明不願提解到場」是法院的程序說明（365325）
+    r"|求為判決|(?:則|均|乃|亦|到庭|到場|程序|期日)表示|表示[：:]|辯[：:]|陳報|(?<![不解])到(?:庭|場)|不爭執)"
     r"|[^。；]{0,20}?(?:被告|相對人)[^。；]{0,12}?(?:經合法通知|未於(?:最後)?言詞辯論|未到場|未提出書狀|認諾)"
     # 只檢查「則以」之前有沒有「原告」：往後看的話，答辯內容裡的「原告」會讓「三、周九如則以：
     # …契約當事人為原告與周和勝」被排除（339960）
@@ -1791,8 +1877,10 @@ _SEC_DEFENSE_SENT_RE = re.compile(
     r"|經合法通知|未於(?:最後)?言詞辯論|未到場|未提出書狀))")
 # 「法院認定」不算：當事人會寫「縱使假設法院認定…」，法院自稱一律是「本院」
 # 「兩造不爭執」不放在這裡：原告段裡也會寫「如後述兩造不爭執事項所載」，改成只在標題後面才算
+# 2.5.3：「亦未提出書狀供本院審酌」的「本院審酌」不算（2.5.2 有 2,780 件答辯停在「供」、法院段從「本院審酌。」開始，
+# 幾乎都是臺北簡易庭的北簡判決）
 _SEC_COURT_STRONG_RE = re.compile(
-    r"本院(?:之|的)?(?:判斷|認定|審酌|得心證)|法院之(?:判斷|認定)|得心證之?理由"
+    r"(?<!供)本院(?:之|的)?(?:判斷|認定|審酌|得心證)|法院之(?:判斷|認定)|得心證之?理由"
     r"|本件(?:之)?爭點|爭點(?:厥為|在於|如下)")
 _SEC_COURT_HEAD_RE = re.compile(
     rf"{_SEC_BIG_HEAD}(?:經查|查[，:：]|按|綜上|從而|茲(?:分述|論述)如下|本件(?:原告)?(?:之)?(?:請求|主張|爭執)"
@@ -1803,6 +1891,9 @@ _SEC_COURT_HEAD_RE = re.compile(
 _SEC_HEAD_BEFORE_RE = re.compile(rf"(?:{_SEC_BIG_HEAD}|{_SEC_SMALL_HEAD})$")
 
 
+_NOT_FILED_RE = re.compile(r"雖未(?:提出|提)?(?:書狀|答辯狀)|雖未(?:於言詞辯論期日)?到(?:庭|場)")
+
+
 def _is_rebuttal(body: str, start: int, marker: str, at_head: bool) -> bool:
     """
     答辯開頭其實是原告在轉述、反駁被告：「被告雖辯稱…」「。被告抗辯…云云」。
@@ -1810,7 +1901,8 @@ def _is_rebuttal(body: str, start: int, marker: str, at_head: bool) -> bool:
     請求駁回原告之訴，並答辯略以：…云云。」），標題開頭又寫著被告，幾乎不會是原告的話。
     """
     if "雖" in marker:
-        return True
+        # 2.5.3：段落標題開頭的「被告雖未提出書狀，惟到庭陳述」「被告雖未到庭，然具狀辯稱」是答辯（305207）
+        return not (at_head and _NOT_FILED_RE.search(marker))
     if at_head:
         return False
     end = body.find("。", start)
@@ -1830,7 +1922,9 @@ def _first_defense(body: str, start: int, limit: Optional[int], family: int = -1
     return None
 
 
-_SEC_COURT_IN_DEFENSE_RE = re.compile(r"本院|經查|堪認|堪信")
+# 2.5.3：「本院卷第17頁」「本院111年度訴字」是引用卷宗、案號，不是法院的話；以前第二位被告的答辯
+# 因為引用了本院卷而被當成法院判斷（323229）
+_SEC_COURT_IN_DEFENSE_RE = re.compile(r"本院(?![^。，]{0,4}?卷|[0-9]{2,3}年)|經查|堪認|堪信")
 
 
 def _in_quote(body: str, start: int, pos: int) -> bool:
@@ -2182,7 +2276,11 @@ SOURCE_COLUMNS = [
 ]
 
 # 規則版本。規則異動時遞增，讓回填過的資料可以辨識是用哪一版規則產生的。
-STRUCTURING_VERSION = "2.5.2"
+STRUCTURING_VERSION = "2.5.4"
+
+
+# 2.5.4：勝訴、原告負擔部分訴訟費用，判准少於請求的這個比例時改判一部勝訴
+MISSING_REJECT_RATIO = 0.95
 
 
 def derive_structured_fields(row: Dict) -> Dict:
@@ -2217,6 +2315,21 @@ def derive_structured_fields(row: Dict) -> Dict:
     cl = extract_claimed_amount(
         g("facts_and_reasons"), g("facts"), aw["awarded_total"], oc["outcome"])
 
+    # 2.5.0：主文漏寫「其餘之訴駁回」時會被判成全部勝訴，但訴訟費用的分擔還看得出原告
+    # 有一部分敗訴。原告也可能因撤回、減縮，或依法分擔（通行權、分割共有物）而負擔費用，所以先只標記。
+    # 2.5.4：金錢給付、原告負擔部分費用，而且判准明顯少於直接抽到的請求金額時，改判一部勝訴。
+    # 抽查這類 20 件，19 件確實是一部勝訴（主文漏寫或誤寫成「其餘之訴餘回」「其餘之訴回」）；
+    # 剩下 1 件是多位被告分擔費用沒讀完，已修 _cost_share_plaintiff。
+    csp = _cost_share_plaintiff(verdict)
+    if oc["outcome"] == WIN and csp is not None and csp > 0:
+        flags.append("疑似漏寫其餘駁回")
+        if ("金錢給付" in relief.split("／") and aw["awarded_total"] and cl["claimed_total"]
+                and cl["claimed_source"] in CLAIM_RATIO_SOURCES
+                and aw["awarded_currency"] == cl["claimed_currency"]
+                and aw["awarded_total"] < MISSING_REJECT_RATIO * cl["claimed_total"]):
+            oc = {**oc, "outcome": PARTIAL, "main_outcome": PARTIAL}
+            flags.append("漏寫其餘駁回已改判")
+
     # ── 獲償比例：只在來源是「直接抽取」且幣別一致時才計算 ──
     grant_ratio = None
     # 幣別不同就無從比較。不標記的話，「判准 39,000 TWD / 請求 87 USD」
@@ -2226,7 +2339,7 @@ def derive_structured_fields(row: Dict) -> Dict:
         flags.append("判准與請求幣別不同")
 
     if (aw["awarded_total"] and cl["claimed_total"]
-            and cl["claimed_source"] == "直接抽取"
+            and cl["claimed_source"] in CLAIM_RATIO_SOURCES
             and aw["awarded_currency"] == cl["claimed_currency"]
             and cl["claimed_total"] > 0):
         raw_ratio = aw["awarded_total"] / cl["claimed_total"]
@@ -2344,13 +2457,6 @@ def derive_structured_fields(row: Dict) -> Dict:
     # 而落到「侵權：其他」（實測 371 件）。施工損鄰等有具體類型的仍歸侵權。
     if mid == "侵權：其他" and kind.startswith("建"):
         mid = "契約：工程與承攬"
-
-    # 2.5.0：主文漏寫「其餘之訴駁回」時會被判成全部勝訴，但訴訟費用的分擔還看得出原告
-    # 有一部分敗訴（金額核對發現，候選 335 件）。原告也可能因撤回、減縮而負擔費用，
-    # 所以只標記、不改結果；y（勝訴＋一部勝訴＝1）不受影響。
-    csp = _cost_share_plaintiff(verdict)
-    if oc["outcome"] == WIN and csp is not None and csp > 0:
-        flags.append("疑似漏寫其餘駁回")
 
     return {
         "case_kind":            kind,

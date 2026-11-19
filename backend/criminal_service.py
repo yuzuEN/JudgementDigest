@@ -91,7 +91,17 @@ class CriminalService:
         sim = self.index.scores(text) if self.index is not None else None
         for c in charges:
             c.update(self.sentence_stats(sim, c["name"]))
-        return {"charges": charges, "similar": self.similar(text, charges[0]["name"] if charges else None, sim=sim),
+            # 每個罪名各一組相似判決：使用者在罪名分頁選了別的罪名（例如模型把詐欺排在洗錢後面），
+            # 相似判決分頁跟著換。相似度只算一次，每個罪名各篩一次。
+            if self.index is not None:
+                c["similar"] = self.similar(text, c["name"], sim=sim)
+                c["search_scope"] = self.scope(c["name"])
+        top = charges[0] if charges else None
+        # 頂層的 similar、search_scope 是第一個罪名的那組（舊版前端只讀這裡）
+        return {"charges": charges,
+                "similar": top["similar"] if top and "similar" in top else self.similar(text, None, sim=sim),
+                "n_corpus": len(self.index) if self.index is not None else None,
+                "search_scope": (top or {}).get("search_scope") or (self.scope(None) if self.index is not None else None),
                 "model": self.model_info(), "mock": False}
 
     def sentence_stats(self, sim: Optional[np.ndarray], charge: str) -> Dict:
@@ -112,13 +122,22 @@ class CriminalService:
         text = self.query(text)
         return self.similar(text, self.model.predict(text)[0]["name"], k)
 
+    def _allowed(self, charge: Optional[str]) -> Optional[np.ndarray]:
+        """含這個罪名的案件；太少時不限罪名。"""
+        allowed = np.array([charge in c for c in self.charges]) if charge else None
+        return None if allowed is None or allowed.sum() < MIN_SAME_CHARGE else allowed
+
+    def scope(self, charge: Optional[str]) -> Dict:
+        """相似判決是在哪個範圍裡找的：含最可能罪名的案件（夠多時）或全部案件。"""
+        allowed = self._allowed(charge)
+        return {"charge": None, "n": len(self.index)} if allowed is None else {"charge": charge, "n": int(allowed.sum())}
+
     def similar(self, text: str, charge: Optional[str], n: int = N_SHOWN, sim: Optional[np.ndarray] = None) -> List[Dict]:
+        """text：換成判決用語的查詢。"""
         if self.index is None:
             return []
         sim = self.index.scores(text) if sim is None else sim
-        allowed = np.array([charge in c for c in self.charges]) if charge else None
-        if allowed is not None and allowed.sum() < MIN_SAME_CHARGE:
-            allowed = None
+        allowed = self._allowed(charge)
         rows, sims = self.index.top(sim, N_CANDIDATES, allowed)
         if len(rows) == 0:
             return []
