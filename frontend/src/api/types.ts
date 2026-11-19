@@ -107,8 +107,19 @@ export interface SimilarCase {
   sentence?: string | null;
   default_judgment?: boolean;
   url?: string | null;
-  /** 和使用者描述共有、對相似度貢獻最大的詞；示例資料與舊版後端沒有 */
-  shared_terms?: string[];
+  /** 民事：和使用者的情況相同的地方（同類糾紛、請求金額相近、都有的證據、同一法院）；示例資料與舊版後端沒有 */
+  common?: string[];
+}
+
+/** 相似判決是在哪個範圍裡找的 */
+export interface SearchScope {
+  n: number;
+  /** 民事：限定的案由 */
+  mid?: string | null;
+  /** 民事：案由是系統從描述判斷的（使用者沒選） */
+  mid_inferred?: boolean;
+  /** 刑事：限定的罪名 */
+  charge?: string | null;
 }
 
 export interface EvidenceRow {
@@ -150,6 +161,7 @@ export interface CivilReport {
   n_compared: number;
   /** 檢索語料的總件數 */
   n_corpus?: number | null;
+  search_scope?: SearchScope | null;
   mock: boolean;
 }
 
@@ -161,6 +173,9 @@ export interface Charge {
   sentence: { label: string; share: number }[];
   similar_sentence?: { label: string; share: number }[] | null;
   n_similar?: number | null;
+  /** 含這個罪名的相似判決；舊版後端與示例資料沒有，改用頂層的 similar */
+  similar?: SimilarCase[];
+  search_scope?: SearchScope | null;
 }
 
 export interface CriminalModelInfo {
@@ -182,6 +197,7 @@ export interface CriminalReport {
   model?: CriminalModelInfo | null;
   /** 刑事檢索語料的總件數 */
   n_corpus?: number | null;
+  search_scope?: SearchScope | null;
   mock: boolean;
 }
 

@@ -67,6 +67,11 @@ export default function Reading() {
                   {guide.case.claimed_amount ? (
                     <div><dt className="text-muted-foreground">判准／請求</dt>
                       <dd className="m-0 tabular-nums"><b>{yuan(guide.case.awarded_amount ?? 0)}</b> ／ {yuan(guide.case.claimed_amount)} 元</dd></div>
+                  ) : guide.case.awarded_amount ? (
+                    // 請求金額沒抽到時（例如小額判決只寫「共計…等語」，沒有聲明），判准金額照樣顯示
+                    <div><dt className="text-muted-foreground">判准</dt>
+                      <dd className="m-0 tabular-nums"><b>{yuan(guide.case.awarded_amount)}</b> 元</dd>
+                      <dd className="m-0 text-sm text-muted-foreground">這件判決的請求金額沒有抽取到，無法算出判准的比例。</dd></div>
                   ) : null}
                 </dl>
                 {guide.case.claimed_amount ? (() => {

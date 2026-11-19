@@ -140,38 +140,3 @@ class TestVocabularyOrder(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
-
-
-class TestSharedTerms(unittest.TestCase):
-    """為什麼找到這件：和查詢共有、貢獻最大的詞，只從查詢取。"""
-    WIDE = (0.0, 99.0)
-
-    def test_terms_come_from_query_and_explain_match(self):
-        index = small_index()
-        query = "我騎機車在路口被右轉汽車撞傷"
-        terms = index.shared_terms(query, [1], idf_range=self.WIDE)[0]
-        self.assertTrue(terms)
-        self.assertTrue(all(t in query for t in terms), "詞組只能從使用者的描述取")
-        self.assertTrue(any("機車" in t or "路口" in t or "汽車" in t for t in terms), terms)
-
-    def test_no_overlap_gives_empty_list(self):
-        self.assertEqual(small_index().shared_terms("今天天氣很好", [4], idf_range=self.WIDE), [[]])
-
-    def test_longer_phrase_replaces_its_parts(self):
-        terms = small_index().shared_terms("在路口被右轉汽車撞傷骨折", [1], idf_range=self.WIDE)[0]
-        for t in terms:
-            self.assertFalse(any(t != u and t in u for u in terms), f"{t} 已經包含在更長的詞組裡")
-
-    def test_skips_pronouns_and_generic_words(self):
-        terms = small_index().shared_terms("我向原告借款五十萬元", [2], idf_range=self.WIDE)[0]
-        self.assertFalse(any(ch in t for t in terms for ch in "我你他"))
-        self.assertNotIn("原告", terms)
-
-    def test_display_text_limits_terms_to_what_user_wrote(self):
-        index = small_index()
-        terms = index.shared_terms("被告借款未清償", [2], idf_range=self.WIDE, display="他跟我借錢一直不還")[0]
-        self.assertTrue(all(t in "他跟我借錢一直不還" for t in terms), terms)
-
-    def test_one_list_per_row(self):
-        self.assertEqual(len(small_index().shared_terms("借款", [2, 3, 4], idf_range=self.WIDE)), 3)
-
