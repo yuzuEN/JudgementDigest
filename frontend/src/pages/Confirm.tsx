@@ -19,7 +19,7 @@ import { Layout, PAGE } from "../components/Layout";
 import { LinkButton } from "../components/LinkButton";
 import { parseAmount, sensitiveKinds } from "../format";
 import { maskText } from "../mask";
-import { fullText, lawyerQuestion, primaryMid, useIntake, type Intake } from "../state";
+import { civilRole, claimPart, DEFENSE_MARKER, fullText, lawyerQuestion, primaryMid, useIntake, type Intake } from "../state";
 
 const MAX_QUESTIONS = 4;
 
@@ -55,27 +55,31 @@ export default function Confirm() {
   const firstRender = useRef(true);
   const text = useMemo(() => fullText(intake), [intake]);
   const mid = primaryMid(intake);
+  const role = civilRole(intake);
+  // 追問要看的描述：被告時連同你的說法（問題問的是你這一方，說法裡寫過的就不用再問）
+  const story = role === "defendant" && intake.defenseText.trim()
+    ? `${intake.text}\n${DEFENSE_MARKER}\n${intake.defenseText}` : intake.text;
 
   // 打開頁面時只拿固定題庫，描述不離開瀏覽器。傳給 LLM 要等使用者加好姓名、同意之後自己按按鈕
   useEffect(() => {
     if (!intake.text.trim() || !intake.caseType) return;
     let stale = false;
-    api.followup(intake.caseType, mid, "")
+    api.followup(intake.caseType, mid, "", false, role)
       .then((r) => {
         if (stale) return;
-        setQuestions(r.questions.filter((q) => !q.skip_if || !new RegExp(q.skip_if).test(intake.text)).slice(0, MAX_QUESTIONS));
+        setQuestions(r.questions.filter((q) => !q.skip_if || !new RegExp(q.skip_if).test(story)).slice(0, MAX_QUESTIONS));
         setLlmAvailable(Boolean(r.llm_available));
         if (r.llm_vendor) setVendor(r.llm_vendor);
       })
       .catch(() => { if (!stale) setQuestions([]); });   // 追問失敗不影響後面的流程
     return () => { stale = true; };
     // 不放 names：加名字不用重問，也不能蓋掉 AI 問過的問題
-  }, [intake.caseType, mid, intake.text]);
+  }, [intake.caseType, mid, story, role]);
 
   useEffect(() => {
     const maskedText = maskText(text, intake.names);
     // 描述或姓名改了，之前的整理就對不上了
-    const stale = intake.rewriteFor && intake.rewriteFor !== maskedText;
+    const stale = intake.rewriteFor && intake.rewriteFor !== (role === "defendant" ? claimPart(maskedText) : maskedText);
     update(stale ? { maskedText, searchText: "", rewriteFor: "", rewriteDraft: "", rewriteAdded: [], useRewrite: "rewrite" } : { maskedText });
     // 不把 update 放進依賴：它會隨 intake 變動，放進去會一直重跑
   }, [text, intake.names]);
@@ -102,7 +106,7 @@ export default function Confirm() {
 
   const askAi = () => {
     setAiState("asking");
-    api.followup(caseType, mid, maskText(intake.text, intake.names), true)
+    api.followup(caseType, mid, maskText(story, intake.names), true, role)
       .then((r) => {
         if (r.source === "llm") setAiQuestions(r.questions);
         setAiState(r.source === "llm" ? "done" : r.fallback === "not_dispute" ? "unrelated" : r.fallback === "limited" ? "limited" : "failed");
@@ -111,9 +115,10 @@ export default function Confirm() {
   };
 
   const startRewrite = () => {
-    const source = intake.maskedText;
+    // 被告時只整理對方的主張：整理的結果用來搜尋判決的「原告主張」
+    const source = role === "defendant" ? claimPart(intake.maskedText) : intake.maskedText;
     setRewriteState("loading");
-    api.rewrite(caseType, mid, source)
+    api.rewrite(caseType, mid, source, role)
       .then((r) => {
         if (r.source === "llm" && r.text) {
           update({ rewriteDraft: r.text, rewriteAdded: r.added_numbers, rewriteFor: source, useRewrite: "rewrite", searchText: maskText(r.text.trim(), intake.names) });
@@ -415,15 +420,18 @@ const CASE_LABEL = { civil: "民事", criminal: "刑事", unsure: "不確定（�
 
 function FinalSummary({ intake }: { intake: Intake }) {
   const civil = intake.caseType !== "criminal";
+  const role = civilRole(intake);
+  const defendant = role === "defendant";
   const amount = parseAmount(intake.claimedAmount);
   const rows: [string, string][] = [
     ["案件類型", intake.caseType ? CASE_LABEL[intake.caseType] : "還沒選"],
+    ...(intake.caseType === "civil" ? [["你是", defendant ? "被告" : "原告"]] as [string, string][] : []),
     ...(civil ? [
       ["糾紛類型", intake.mids.length ? intake.mids.join("、") : "未選"],
-      ["請求金額", amount !== null ? `${amount.toLocaleString("en-US")} 元` : "未填"],
-      ["對方", intake.defendantType ? DEFENDANT_LABEL[intake.defendantType] : "未選"],
+      [defendant ? "對方請求的金額" : "請求金額", amount !== null ? `${amount.toLocaleString("en-US")} 元` : "未填"],
+      [defendant ? "你（被告）" : "對方", intake.defendantType ? DEFENDANT_LABEL[intake.defendantType] : "未選"],
     ] as [string, string][] : []),
-    [lawyerQuestion(intake.caseType).short, intake.lawyer === "yes" ? "有" : intake.lawyer === "no" ? "沒有" : "未選"],
+    [lawyerQuestion(intake.caseType, role).short, intake.lawyer === "yes" ? "有" : intake.lawyer === "no" ? "沒有" : "未選"],
     ["證物", `${civil ? intake.evidence.length : intake.criminalEvidence.length} 項`],
   ];
   return (

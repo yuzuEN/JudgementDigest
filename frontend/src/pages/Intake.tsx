@@ -14,7 +14,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Toggle } from "@/components/ui/toggle";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { api } from "../api/client";
-import type { CaseType, DefendantType, Options } from "../api/types";
+import type { CaseType, CivilRole, DefendantType, Options } from "../api/types";
 import { AmountInput, amountState } from "../components/casey/AmountInput";
 import { EvidenceSlot } from "../components/casey/EvidenceSlot";
 import { RadioCards } from "../components/casey/RadioCards";
@@ -22,10 +22,20 @@ import { ErrorBox } from "../components/Common";
 import { Layout, PAGE } from "../components/Layout";
 import { parseAmount } from "../format";
 import { DISPUTE_GROUPS } from "../knowledge";
-import { lawyerQuestion, useIntake, type Intake as IntakeState } from "../state";
+import { civilRole, lawyerQuestion, useIntake, type Intake as IntakeState } from "../state";
 
 export const MIN_STORY = 30;
 export const MAX_STORY = 3000;
+export const MAX_DEFENSE = 2000;
+
+const ROLES: { value: CivilRole; label: string }[] = [
+  { value: "plaintiff", label: "原告：我要告對方" },
+  { value: "defendant", label: "被告：我被告了" },
+];
+const ROLE_LABEL: Record<CivilRole, string> = { plaintiff: "原告", defendant: "被告" };
+
+/** 選了民事被告，會得到什麼（和 YOU_GET.civil 對照）。 */
+const YOU_GET_DEFENDANT = ["相似判決裡，原告（告你的人）贏的比例", "如果輸了，可能要賠的金額範圍", "被告常見的說法，以及提出這些說法時原告輸的比例"];
 
 const CASE_TYPES: { value: CaseType; title: string; hint: string }[] = [
   { value: "civil", title: "民事", hint: "要求賠償、還錢、履行契約" },
@@ -135,6 +145,8 @@ export default function Intake() {
   const go = (n: number) => setParams({ stage: String(n) });
   const why = blocker(stage, intake);
   const civil = intake.caseType !== "criminal";
+  const role = civilRole(intake);
+  const defendant = role === "defendant";
   const titleProps = { ref: heading, tabIndex: -1, className: "text-[22px] leading-[1.45] font-extrabold text-balance outline-none sm:text-[26px]" };
 
   return (
@@ -146,11 +158,17 @@ export default function Intake() {
               <StageCard>
                 <h1 {...titleProps}>第 1 關　選擇案件類型</h1>
                 <RadioCards label="案件類型" value={intake.caseType} options={CASE_TYPES} onChange={(caseType) => update({ caseType })} />
+                {intake.caseType === "civil" && (
+                  <FieldBlock label={<span id="role-label">你是原告還是被告？</span>} hint="原告是提告的人，被告是被告的人。">
+                    <Segmented labelledBy="role-label" value={intake.role} items={ROLES} className="max-w-[520px]"
+                      onChange={(v) => { if (v) update({ role: v as CivilRole }); }} />
+                  </FieldBlock>
+                )}
                 {intake.caseType && (
                   <Note>
-                    <p className="font-bold">選{TYPE_LABEL[intake.caseType]}，你會得到：</p>
+                    <p className="font-bold">選{TYPE_LABEL[intake.caseType]}{intake.caseType === "civil" ? `（${ROLE_LABEL[role]}）` : ""}，你會得到：</p>
                     <ul className="m-0 list-disc pl-5 text-[15px]">
-                      {YOU_GET[intake.caseType].map((g) => <li key={g}>{g}</li>)}
+                      {(defendant ? YOU_GET_DEFENDANT : YOU_GET[intake.caseType]).map((g) => <li key={g}>{g}</li>)}
                     </ul>
                   </Note>
                 )}
@@ -159,8 +177,9 @@ export default function Intake() {
 
             {stage === 2 && (
               <StageCard>
-                <h1 {...titleProps}>第 2 關　發生了什麼事？</h1>
-                <StoryField value={intake.text} onChange={(text) => update({ text })} />
+                <h1 {...titleProps}>{defendant ? "第 2 關　對方告你什麼？" : "第 2 關　發生了什麼事？"}</h1>
+                <StoryField value={intake.text} onChange={(text) => update({ text })} defendant={defendant} />
+                {defendant && <DefenseField value={intake.defenseText} onChange={(defenseText) => update({ defenseText })} />}
                 {intake.caseType === "criminal" ? <CriminalTips /> : (
                   <>
                     {error && <ErrorBox message={`選項載入失敗：${error}`} onRetry={load} />}
@@ -176,17 +195,18 @@ export default function Intake() {
                 {error && <ErrorBox message={`選項載入失敗：${error}`} onRetry={load} />}
                 {civil && (
                   <>
-                    <CourtField courts={options?.courts ?? []} value={intake.court} onChange={(court) => update({ court })} />
-                    <FieldBlock label={<label htmlFor="amount">想請求的金額</label>}>
+                    <CourtField courts={options?.courts ?? []} value={intake.court} onChange={(court) => update({ court })} defendant={defendant} />
+                    <FieldBlock label={<label htmlFor="amount">{defendant ? "對方請求的金額" : "想請求的金額"}</label>}
+                      hint={defendant ? "起訴狀「訴之聲明」寫的金額" : undefined}>
                       <AmountInput id="amount" value={intake.claimedAmount} onChange={(claimedAmount) => update({ claimedAmount })} />
                     </FieldBlock>
-                    <FieldBlock label={<span id="party-label">對方是</span>}>
+                    <FieldBlock label={<span id="party-label">{defendant ? "你（被告）是" : "對方是"}</span>}>
                       <Segmented labelledBy="party-label" value={intake.defendantType} items={DEFENDANT_TYPES}
                         onChange={(v) => update({ defendantType: v as DefendantType | "" })} />
                     </FieldBlock>
                   </>
                 )}
-                <FieldBlock label={<span id="lawyer-label">{lawyerQuestion(intake.caseType).label}</span>} hint={lawyerQuestion(intake.caseType).hint}>
+                <FieldBlock label={<span id="lawyer-label">{lawyerQuestion(intake.caseType, role).label}</span>} hint={lawyerQuestion(intake.caseType, role).hint}>
                   <Segmented labelledBy="lawyer-label" value={intake.lawyer} className="max-w-[320px]"
                     items={[{ value: "yes", label: "有" }, { value: "no", label: "沒有" }]}
                     onChange={(v) => update({ lawyer: v as IntakeState["lawyer"] })} />
@@ -253,17 +273,23 @@ function FieldBlock({ label, hint, children }: { label: ReactNode; hint?: string
   );
 }
 
-function StoryField({ value, onChange }: { value: string; onChange: (v: string) => void }) {
+function StoryField({ value, onChange, defendant = false }: { value: string; onChange: (v: string) => void; defendant?: boolean }) {
   const len = storyLength(value);
   const ok = len >= MIN_STORY;
   return (
     <>
       <div className="flex flex-col gap-2">
-        <label htmlFor="story" className="font-bold">事情經過</label>
-        <p id="story-hint" className="text-[15px] text-muted-foreground">也可以直接貼起訴書的「犯罪事實」或「事實及理由」。</p>
+        <label htmlFor="story" className="font-bold">{defendant ? "對方的主張" : "事情經過"}</label>
+        <p id="story-hint" className="text-[15px] text-muted-foreground">
+          {defendant
+            ? "寫對方說發生了什麼事、要你賠什麼。收到起訴狀的話，可以直接貼「事實及理由」。"
+            : "也可以直接貼起訴書的「犯罪事實」或「事實及理由」。"}
+        </p>
         <Textarea id="story" value={value} maxLength={MAX_STORY} aria-describedby="story-hint story-status"
           onChange={(e) => onChange(e.target.value)} className="min-h-[200px] resize-y"
-          placeholder="例如：去年三月我騎機車在路口被一輛右轉的汽車撞到，右手骨折住院五天，之後復健三個月沒辦法工作……" />
+          placeholder={defendant
+            ? "例如：對方說去年三月我開車右轉時撞到他的機車，害他右手骨折住院五天，要我賠醫藥費和三個月不能工作的薪水，一共 50 萬……"
+            : "例如：去年三月我騎機車在路口被一輛右轉的汽車撞到，右手骨折住院五天，之後復健三個月沒辦法工作……"} />
         <div className="flex flex-wrap items-center justify-between gap-2">
           <span id="story-status" role="status" className={cn("text-[15px]", ok && "font-bold text-secondary-foreground")}>
             {ok ? "字數夠了，可以進下一關。" : `再多寫一點：至少 ${MIN_STORY} 字，才找得到相似判決。`}
@@ -288,6 +314,22 @@ function StoryField({ value, onChange }: { value: string; onChange: (v: string) 
         </ul>
       </div>
     </>
+  );
+}
+
+/** 民事被告：你的說法（選填）。會接在對方的主張後面一起遮名、送出，模型用它估計勝負，也會對照常見的抗辯。 */
+function DefenseField({ value, onChange }: { value: string; onChange: (v: string) => void }) {
+  return (
+    <div className="flex flex-col gap-2">
+      <label htmlFor="defense" className="font-bold">你的說法<span className="text-[15px] font-medium text-muted-foreground">　選填</span></label>
+      <p id="defense-hint" className="text-[15px] text-muted-foreground">
+        你不同意哪些地方？例如事情不是這樣、金額太高、對方也有責任、已經還過錢。寫了會用來估計結果，並對照相似判決裡被告常見的說法。
+      </p>
+      <Textarea id="defense" value={value} maxLength={MAX_DEFENSE} aria-describedby="defense-hint"
+        onChange={(e) => onChange(e.target.value)} className="min-h-[140px] resize-y"
+        placeholder="例如：當時是對方闖紅燈，我是綠燈右轉；而且他請的看護費一天 3,000 元太高……" />
+      <span className="self-end text-sm text-muted-foreground tabular-nums">{value.length} / {MAX_DEFENSE} 字</span>
+    </div>
   );
 }
 
@@ -406,10 +448,13 @@ function DisputeKinds({ options, mids, onChange }: { options: Options | null; mi
   );
 }
 
-function CourtField({ courts, value, onChange }: { courts: string[]; value: string; onChange: (court: string) => void }) {
+function CourtField({ courts, value, onChange, defendant = false }: {
+  courts: string[]; value: string; onChange: (court: string) => void; defendant?: boolean;
+}) {
   const items = [{ value: null as string | null, label: "不指定" }, ...courts.map((c) => ({ value: c as string | null, label: `${c}地方法院` }))];
   return (
-    <FieldBlock label={<label htmlFor="court">打算在哪個法院？</label>} hint="可以不選">
+    <FieldBlock label={<label htmlFor="court">{defendant ? "案子在哪個法院？" : "打算在哪個法院？"}</label>}
+      hint={defendant ? "起訴狀或開庭通知上的法院，可以不選" : "可以不選"}>
       <Select items={items} value={value || null} onValueChange={(v) => onChange((v as string | null) ?? "")}>
         <SelectTrigger id="court" className="w-full max-w-[360px]"><SelectValue /></SelectTrigger>
         <SelectContent>
@@ -445,17 +490,21 @@ function Segmented({ labelledBy, value, items, onChange, className }: {
 /** 右側「你填的資料」：每一關填的內容都看得到。 */
 function Summary({ intake }: { intake: IntakeState }) {
   const civil = intake.caseType !== "criminal";
+  const role = civilRole(intake);
+  const defendant = role === "defendant";
   const amount = parseAmount(intake.claimedAmount);
   const evidenceCount = civil ? intake.evidence.length : intake.criminalEvidence.length;
   const rows: [string, string][] = [
     ["案件類型", TYPE_LABEL[intake.caseType]],
-    ["案情", intake.text.trim() ? `${intake.text.length} 字` : "還沒寫"],
+    ...(intake.caseType === "civil" ? [["你是", ROLE_LABEL[role]]] as [string, string][] : []),
+    [defendant ? "對方的主張" : "案情", intake.text.trim() ? `${intake.text.length} 字` : "還沒寫"],
+    ...(defendant ? [["你的說法", intake.defenseText.trim() ? `${intake.defenseText.length} 字` : "未填"]] as [string, string][] : []),
     ...(civil ? [
       ["糾紛類型", intake.mids.length ? intake.mids.join("、") : "未選"],
       ["請求金額", amount !== null ? `${amount.toLocaleString("en-US")} 元` : amountState(intake.claimedAmount) === "bad" ? "格式錯誤" : "未填"],
-      ["對方", DEFENDANT_TYPES.find((d) => d.value === intake.defendantType)?.label ?? "未選"],
+      [defendant ? "你（被告）" : "對方", DEFENDANT_TYPES.find((d) => d.value === intake.defendantType)?.label ?? "未選"],
     ] as [string, string][] : []),
-    [lawyerQuestion(intake.caseType).short, intake.lawyer === "yes" ? "有" : intake.lawyer === "no" ? "沒有" : "未選"],
+    [lawyerQuestion(intake.caseType, role).short, intake.lawyer === "yes" ? "有" : intake.lawyer === "no" ? "沒有" : "未選"],
     ["證物", `${evidenceCount} 項`],
   ];
   return (

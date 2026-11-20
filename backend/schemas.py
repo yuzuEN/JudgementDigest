@@ -5,6 +5,7 @@ from pydantic import BaseModel, Field
 
 CaseType = Literal["civil", "criminal", "unsure"]
 DefendantType = Literal["person", "company", "government"]
+Role = Literal["plaintiff", "defendant"]          # 民事：使用者是原告（要告人）還是被告（被告了）
 
 
 class Health(BaseModel):
@@ -14,6 +15,8 @@ class Health(BaseModel):
     criminal_sentence: Optional[Literal["electra", "svm"]] = None   # 刑度用哪個模型（刑事是示例資料時為 null）
     followup: Literal["rules", "llm"]
     model: Optional[str] = None
+    defense: Literal["model", "fallback", "mock"] = Field(
+        default="fallback", description="民事被告端：model＝有被告端模型；fallback＝沒有，被告的查詢改用原告端模型")
     amount: Literal["model", "similar", "mock"] = Field(
         default="similar", description="民事金額範圍：model＝有可用的獲償比例模型（個別案件仍可能退回相似判決）；similar＝只用相似判決")
 
@@ -59,6 +62,7 @@ class MaskResponse(BaseModel):
 
 class FollowupRequest(BaseModel):
     case_type: CaseType = "civil"
+    role: Role = "plaintiff"
     mid: Optional[str] = None
     text: str = Field(default="", max_length=20000)
     allow_llm: bool = Field(default=False, description="使用者看過說明並按下按鈕才是 true；預設不傳給外部服務")
@@ -81,6 +85,7 @@ class FollowupResponse(BaseModel):
 
 class RewriteRequest(BaseModel):
     case_type: CaseType = "civil"
+    role: Role = "plaintiff"
     mid: Optional[str] = None
     text: str = Field(min_length=1, max_length=20000, description="遮名後的案情描述")
     allow_llm: bool = Field(default=False, description="使用者看過說明並按下按鈕才是 true")
@@ -94,12 +99,15 @@ class RewriteResponse(BaseModel):
 
 
 class CivilInput(BaseModel):
-    text: str = Field(min_length=1, max_length=20000, description="遮名後的案情描述")
+    text: str = Field(min_length=1, max_length=20000,
+                      description="遮名後的案情描述；被告時是對方的主張，自己的答辯接在 DEFENSE_MARKER 那一行後面")
+    role: Role = "plaintiff"
     search_text: Optional[str] = Field(default=None, max_length=20000, description="使用者確認過的改寫，只用來搜尋相似判決")
     mid: Optional[str] = Field(default=None, description="案由中類，例：侵權：交通事故")
     court: Optional[str] = Field(default=None, description="法院簡稱，例：臺北；不知道就留空")
     plaintiff_has_lawyer: Optional[bool] = None
-    defendant_type: Optional[DefendantType] = None
+    defendant_has_lawyer: Optional[bool] = Field(default=None, description="被告有沒有請律師（使用者是被告時問自己）")
+    defendant_type: Optional[DefendantType] = Field(default=None, description="被告是個人、公司或機關（使用者是被告時就是自己）")
     claimed_amount: Optional[int] = Field(default=None, ge=0)
     evidence: List[str] = Field(default_factory=list, description="使用者有的證據（options.evidence 的 key）")
 
@@ -187,6 +195,9 @@ class DefenseRow(BaseModel):
     label: str
     description: str
     share: float
+    user_has: bool = False                  # 被告：自己的答辯裡有提到這類說法
+    lose_share: Optional[float] = None      # 提出這類說法的相似判決裡，原告敗訴的比例（件數太少時為 null）
+    n_raised: int = 0                       # 提出這類說法的相似判決件數
 
 
 class OutcomeCounts(BaseModel):
@@ -205,6 +216,7 @@ class SearchScope(BaseModel):
 
 
 class CivilReport(BaseModel):
+    role: Role = "plaintiff"
     prediction: CivilPrediction
     outcomes: OutcomeCounts
     default_cases: int = 0     # 最相似的 30 件（含一造辯論）裡，被告未到庭的件數

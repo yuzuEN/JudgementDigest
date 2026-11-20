@@ -1503,3 +1503,46 @@ describe("刑事判決導讀", () => {
     expect(screen.getByRole("link", { name: "回結果" })).toHaveAttribute("href", "/result/criminal?tab=cases");
   });
 });
+
+describe("民事被告端", () => {
+  it("第 1 關選民事後可以選原告或被告；選被告，第 2 關改問對方告你什麼，並可寫你的說法", async () => {
+    mockApi({ "GET /meta/options": () => OPTIONS });
+    const user = userEvent.setup();
+    renderApp("/start", { caseType: "" });
+    expect(screen.queryByRole("button", { name: "被告：我被告了" })).not.toBeInTheDocument();
+    await user.click(screen.getByRole("radio", { name: "民事" }));
+    expect(screen.getByRole("button", { name: "原告：我要告對方" })).toHaveAttribute("aria-pressed", "true");
+    await user.click(screen.getByRole("button", { name: "被告：我被告了" }));
+    expect(screen.getByRole("button", { name: "被告：我被告了" })).toHaveAttribute("aria-pressed", "true");
+    expect(screen.getByText("如果輸了，可能要賠的金額範圍")).toBeInTheDocument();
+    // 再點一次已選的不會取消（一定要有一個角色）
+    await user.click(screen.getByRole("button", { name: "被告：我被告了" }));
+    expect(screen.getByRole("button", { name: "被告：我被告了" })).toHaveAttribute("aria-pressed", "true");
+    await user.click(screen.getByRole("button", { name: "下一關" }));
+    expect(screen.getByRole("heading", { name: /對方告你什麼/ })).toBeInTheDocument();
+    expect(screen.getByLabelText("對方的主張")).toBeInTheDocument();
+    expect(screen.getByLabelText(/你的說法/)).toBeInTheDocument();
+  });
+
+  it("結果頁換成被告的角度：對方勝訴的機率、你不用賠的機率、你有提到的說法", async () => {
+    const report = {
+      ...CIVIL_REPORT, role: "defendant" as const,
+      defenses: [{ ...CIVIL_REPORT.defenses[0], user_has: true, lose_share: 0.4, n_raised: 12 }],
+    };
+    const { calls } = mockApi({ "POST /civil/report": () => report });
+    const user = userEvent.setup();
+    renderAt("/result/civil", <CivilResult />, "/result/civil", {
+      caseType: "civil", role: "defendant", text: TRAFFIC, maskedText: TRAFFIC, mids: ["侵權：交通事故"], lawyer: "yes",
+    });
+    await screen.findByRole("tab", { name: "整體結果" });
+    expect(calls[0].body).toMatchObject({ role: "defendant", defendant_has_lawyer: true, plaintiff_has_lawyer: null });
+    expect(screen.getAllByRole("tab").map((t) => t.textContent)).toEqual(["整體結果", "可能要賠的金額", "證據對照", "被告的說法", "相似判決"]);
+    const panel = screen.getByRole("tabpanel");
+    expect(panel).toHaveTextContent("對方（原告）勝訴的機率");
+    expect(panel).toHaveTextContent("38%");
+    await user.click(screen.getByRole("tab", { name: "被告的說法" }));
+    const defense = screen.getByRole("tabpanel");
+    expect(defense).toHaveTextContent("原告也有過失");
+    expect(defense).toHaveTextContent("你有提到");
+  });
+});

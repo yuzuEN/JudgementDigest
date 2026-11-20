@@ -2,6 +2,8 @@
 
 export type CaseType = "civil" | "criminal" | "unsure";
 export type DefendantType = "person" | "company" | "government";
+/** 民事：使用者是原告（要告對方）還是被告（被告了） */
+export type CivilRole = "plaintiff" | "defendant";
 
 export interface Health {
   status: string;
@@ -9,6 +11,8 @@ export interface Health {
   criminal: "model" | "mock";
   followup: "rules" | "llm";
   model: string | null;
+  /** 民事被告端：有被告端模型，或沒有、改用原告端模型 */
+  defense?: "model" | "fallback" | "mock";
   /** 民事金額範圍：有可用的獲償比例模型，或只用相似判決 */
   amount?: "model" | "similar" | "mock";
   /** 刑事的刑期用哪個模型；刑事是示例資料時為 null */
@@ -43,11 +47,14 @@ export interface FollowupResponse {
 }
 
 export interface CivilInput {
+  /** 被告時：對方的主張，你的答辯接在 DEFENSE_MARKER 那一行後面 */
   text: string;
+  role?: CivilRole;
   search_text?: string | null;
   mid?: string | null;
   court?: string | null;
   plaintiff_has_lawyer?: boolean | null;
+  defendant_has_lawyer?: boolean | null;
   defendant_type?: DefendantType | null;
   claimed_amount?: number | null;
   evidence: string[];
@@ -147,6 +154,12 @@ export interface DefenseRow {
   label: string;
   description: string;
   share: number;
+  /** 被告：你的答辯裡有提到這類說法 */
+  user_has?: boolean;
+  /** 提出這類說法的相似判決裡，原告敗訴的比例；件數太少時是 null */
+  lose_share?: number | null;
+  /** 提出這類說法的相似判決件數 */
+  n_raised?: number;
 }
 
 export interface OutcomeCounts {
@@ -164,6 +177,8 @@ export interface RewriteResponse {
 }
 
 export interface CivilReport {
+  /** 舊版後端沒有，視為 plaintiff */
+  role?: CivilRole;
   prediction: CivilPrediction;
   outcomes: OutcomeCounts;
   default_cases: number;

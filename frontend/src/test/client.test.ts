@@ -48,7 +48,7 @@ describe("api client", () => {
     await api.followup("civil", null, "你好");
     expect(calls).toEqual([
       { key: "GET /health", body: undefined },
-      { key: "POST /intake/followup", body: { case_type: "civil", mid: null, text: "你好", allow_llm: false } },
+      { key: "POST /intake/followup", body: { case_type: "civil", role: "plaintiff", mid: null, text: "你好", allow_llm: false } },
     ]);
   });
 

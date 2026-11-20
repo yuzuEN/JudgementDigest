@@ -38,17 +38,28 @@ CRIMINAL = [
     ("result", "造成了什麼結果，例如受傷的程度、財物的損失？", "結果的輕重會影響罪名與刑期。", r"受傷|骨折|損失|死亡"),
     ("settle", "雙方有沒有和解或談過賠償？", "和解與犯後態度是量刑的重要因素。", r"和解|賠償|道歉"),
 ]
+# 民事被告端：使用者被告了，問的是自己這一方的說法（回答會接在答辯後面，見前端 state.tsx 的 fullText）
+DEFENDANT = [
+    ("dispute", "你不同意對方說法的哪一部分？例如事情沒有發生、金額太高，或責任不在你？", "答辯的重點不同，相似判決的結果也不同。",
+     r"不同意|否認|不是我|太高|過高|沒有責任"),
+    ("paid", "你有沒有已經付過、還過一部分，或和對方談過和解？", "已經付過的部分可能要從請求裡扣掉。", r"付過|還了|還過|清償|和解|賠過"),
+    ("their_fault", "對方自己有沒有責任，例如也有過失，或沒有做到約定的事？", "相似案件中，被告常這樣抗辯。", r"對方也|他也|與有過失|沒有履行|沒做到"),
+    ("when", "對方說的事是什麼時候發生的？到現在過了多久？", "時間會影響請求權有沒有過時效。", r"\d+年|\d+月|去年|今年|前年|上個?月"),
+]
 
 
-def questions(case_type: str, mid: Optional[str], text: str, limit: int = 4) -> List[Dict]:
+def questions(case_type: str, mid: Optional[str], text: str, limit: int = 4, role: str = "plaintiff") -> List[Dict]:
     """
     text 空白時回傳整份題庫，附上 skip_if，由瀏覽器自己篩掉描述已經回答的問題：
     打開確認頁時使用者還沒加好姓名，這時描述不能傳到伺服器。
+    role = defendant（民事被告端）時，民事的部分改問被告這一方的說法。
     """
     pool = []
     if case_type in ("criminal", "unsure"):
         pool += CRIMINAL
-    if case_type in ("civil", "unsure"):
+    if case_type in ("civil", "unsure") and role == "defendant":
+        pool += DEFENDANT
+    elif case_type in ("civil", "unsure"):
         for rx, qs in BY_MID:
             if mid and re.search(rx, mid):
                 pool += qs
