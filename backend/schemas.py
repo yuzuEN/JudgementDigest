@@ -17,6 +17,7 @@ class Health(BaseModel):
     model: Optional[str] = None
     defense: Literal["model", "fallback", "mock"] = Field(
         default="fallback", description="民事被告端：model＝有被告端模型；fallback＝沒有，被告的查詢改用原告端模型")
+    defense_search: bool = Field(default=False, description="民事被告端：有答辯索引，被告寫的答辯也用來找相似判決")
     amount: Literal["model", "similar", "mock"] = Field(
         default="similar", description="民事金額範圍：model＝有可用的獲償比例模型（個別案件仍可能退回相似判決）；similar＝只用相似判決")
 
@@ -212,6 +213,7 @@ class SearchScope(BaseModel):
     n: int                              # 範圍內的判決件數
     mid: Optional[str] = None           # 民事：限定的案由（沒有限定時為 None）
     mid_inferred: bool = False          # 民事：案由是系統從描述判斷的（使用者沒選）
+    defense_used: bool = False          # 民事被告：相似判決也比對了使用者寫的答辯（有答辯索引時）
     charge: Optional[str] = None        # 刑事：限定的罪名（模型最可能的罪名；沒有限定時為 None）
 
 

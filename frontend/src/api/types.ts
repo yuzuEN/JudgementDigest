@@ -13,6 +13,8 @@ export interface Health {
   model: string | null;
   /** 民事被告端：有被告端模型，或沒有、改用原告端模型 */
   defense?: "model" | "fallback" | "mock";
+  /** 民事被告端：有答辯索引，被告寫的答辯也用來找相似判決 */
+  defense_search?: boolean;
   /** 民事金額範圍：有可用的獲償比例模型，或只用相似判決 */
   amount?: "model" | "similar" | "mock";
   /** 刑事的刑期用哪個模型；刑事是示例資料時為 null */
@@ -138,6 +140,8 @@ export interface SearchScope {
   mid?: string | null;
   /** 民事：案由是系統從描述判斷的（使用者沒選） */
   mid_inferred?: boolean;
+  /** 民事被告：相似判決也比對了你寫的答辯 */
+  defense_used?: boolean;
   /** 刑事：限定的罪名 */
   charge?: string | null;
 }
