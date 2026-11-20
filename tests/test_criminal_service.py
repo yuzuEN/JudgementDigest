@@ -13,6 +13,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from criminal.models import service  # noqa: E402
 from retrieval import criminal as retrieval_criminal  # noqa: E402
+from retrieval.criminal_fulltext import masked_full_text  # noqa: E402
 from backend.criminal_service import CriminalService, CriminalTermService, term_test_scores, to_training_style  # noqa: E402
 
 DRUNK = "被告飲用啤酒後，吐氣所含酒精濃度達每公升零點四毫克，仍騎乘機車上路，為警攔查。"
@@ -94,6 +95,42 @@ class TestLabels(unittest.TestCase):
 
 
 class TestRetrieval(unittest.TestCase):
+    def test_full_text_masking(self):
+        text = ("聲 請 人 臺灣臺中地方檢察署檢察官\n被 告 王小明\n選任辯護人 陳大文律師\n"
+                "王小明於店內竊取被害人林美華之手機，經店員張志強發現。\n本案經檢察官李正義聲請。\n法 官 劉國賓")
+        out = masked_full_text(text, ["王小明"], "王小明", ["陳大文", ""])
+        for name in ("王小明", "陳大文", "林美華", "張志強"):
+            self.assertNotIn(name, out)
+        self.assertIn("【被告】", out)
+        self.assertIn("【代理人】律師", out)
+        for kept in ("臺灣臺中地方檢察署檢察官", "劉國賓"):      # 機關、執行職務的公務員不遮
+            self.assertIn(kept, out)
+
+    def test_full_text_masking_spaced_name(self):
+        # 兩個字的名字中間有空白（「王 韡」），去掉空白的寫法也要遮
+        out = masked_full_text("被 告 王 韡\n王韡於超商竊取商品。", ["王 韡"], "王 韡", [""])
+        self.assertNotIn("王 韡", out)
+        self.assertNotIn("王韡", out)
+        self.assertEqual(out.count("【被告】"), 2)
+
+    def test_full_text_masking_case_by_list(self):
+        # 「案經A、B訴由」的告訴人、委任的律師、稱謂後的列舉都要遮；機關、代號、甲女不遮
+        text = ("被 告 王小明\n二、案經林美華、鄭智群及張志強訴由新北市政府警察局報告。"
+                "案經彰化農田水利署委請劉偉昌律師訴由。案經A女訴由。告訴人陳淑芬、黃志明均指稱王小明竊取。")
+        out = masked_full_text(text, ["王小明"], "王小明", [""])
+        for name in ("林美華", "鄭智群", "張志強", "劉偉昌", "陳淑芬", "黃志明", "王小明"):
+            self.assertNotIn(name, out)
+        for kept in ("新北市政府警察局", "彰化農田水利署", "案經A女訴由", "【代理人】律師"):
+            self.assertIn(kept, out)
+
+    def test_full_text_masking_line_wrapped_names(self):
+        # 全文每二十幾個字換行，名字會被切成兩行
+        text = "被 告 王小明\n二、案經林美華、黃彥騰、\n洪逸訴由警察局報告。被告王小\n明竊取告訴人陳淑\n芬之手機。"
+        out = masked_full_text(text, ["王小明"], "王小明", [""])
+        flat = out.replace("\n", "")
+        for name in ("王小明", "林美華", "黃彥騰", "洪逸", "陳淑芬"):
+            self.assertNotIn(name, flat)
+
     def test_sentence_text(self):
         t = lambda kind, months=0, days=0, money=0: retrieval_criminal.sentence_text(
             {"sentence_kind": kind, "detention_days": days, "punish_of_money": money,
