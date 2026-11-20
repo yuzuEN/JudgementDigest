@@ -1,6 +1,7 @@
 import type {
   CaseType,
   CivilInput,
+  CivilRole,
   CivilReport,
   RewriteResponse,
   CriminalReport,
@@ -52,10 +53,10 @@ function reportRequest<T>(path: string, body: unknown): Promise<T> {
 export const api = {
   health: () => request<Health>("/health"),
   options: () => request<Options>("/meta/options"),
-  followup: (case_type: CaseType, mid: string | null, text: string, allow_llm = false) =>
-    request<FollowupResponse>("/intake/followup", { case_type, mid, text, allow_llm }),
-  rewrite: (case_type: CaseType, mid: string | null, text: string) =>
-    request<RewriteResponse>("/intake/rewrite", { case_type, mid, text, allow_llm: true }),
+  followup: (case_type: CaseType, mid: string | null, text: string, allow_llm = false, role: CivilRole = "plaintiff") =>
+    request<FollowupResponse>("/intake/followup", { case_type, role, mid, text, allow_llm }),
+  rewrite: (case_type: CaseType, mid: string | null, text: string, role: CivilRole = "plaintiff") =>
+    request<RewriteResponse>("/intake/rewrite", { case_type, role, mid, text, allow_llm: true }),
   civilReport: (input: CivilInput) => reportRequest<CivilReport>("/civil/report", input),
   criminalReport: (text: string) => reportRequest<CriminalReport>("/criminal/predict", { text }),
   guide: (source: string, caseId: number) => request<Guide>(`/judgments/${source}/${caseId}/guide`),

@@ -26,6 +26,7 @@
 | `train_longformer.py` | Longformer 微調（勝敗或金額），也可以單獨上傳到雲端 GPU 跑 | `.venv-bert`（GPU） |
 | `train_bert_amount.py` | 金額任務的 BERT | `.venv-bert`（GPU） |
 | `service.py` | **平台用的勝敗模型**：只用原告主張的 TF-IDF＋使用者填得出來的特徵（案由、法院、律師、對方是否為法人）。`evaluate` 做 5 折評估，`train` 存到 `artifacts/civil_winloss_v1/` | `.venv` |
+| `defense_service.py` | **平台用的被告端勝敗模型**：使用者是被告時，用對方的主張＋自己的答辯（各一個 TF-IDF）＋被告填得出來的特徵（案由、法院、被告有沒有律師、被告是否為法人），預測原告勝訴的機率。訓練時 30% 的答辯換成空白（答辯是選填的）。`evaluate`、`train`（→ `artifacts/civil_defense_v1/`） | `.venv` |
 | `amount_service.py` | **平台用的獲償比例模型**（兩階段的第二階段）：「若為一部勝訴，原告大約贏幾成」，給 10%–90% 的範圍。輸入同 `service.py`，再加請求金額和損害子項目。`evaluate`、`train`（→ `artifacts/civil_amount_v1/`）；`--rules db` 改讀資料庫裡的金額欄位 | `.venv` |
 
 `features.py` 是金額的共用特徵（損害子項目的關鍵字），`amount.py` 和 `amount_service.py` 都從這裡讀；關鍵字改了要重訓金額模型，否則後端不會用舊模型。

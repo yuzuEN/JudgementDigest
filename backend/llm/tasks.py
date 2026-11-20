@@ -77,6 +77,15 @@ REWRITE_CRIMINAL_SYSTEM = """你把台灣民眾對刑事案件的口語描述，
 只輸出改寫後的文字。"""
 REWRITE_SCHEMA = {"type": "object", "properties": {"claim": {"type": "string"}}, "required": ["claim"]}
 MAX_REWRITE_GROWTH = 3    # 改寫比原文長這麼多倍，多半是加了內容
+# 民事被告端：使用者被告了，描述的是對方告自己什麼。改寫成判決書裡「原告主張」的寫法（檢索索引是原告主張建的），
+# 規則和原告端相同，只是角色對調
+REWRITE_DEFENDANT_SYSTEM = (REWRITE_SYSTEM
+                            .replace("改寫成民事判決書裡「原告主張」段落的寫法",
+                                     "改寫成民事判決書裡「原告主張」段落的寫法（使用者是被告，描述的是對方對他的主張）")
+                            .replace("- 使用者是原告，對方是被告；第三人寫訴外人",
+                                     "- 使用者是被告，對方是原告；第三人寫訴外人。只寫對方主張的事實與請求，"
+                                     "使用者自己的反駁不要寫成原告主張"))
+ROLE_LABEL = {"plaintiff": "原告（要告對方）", "defendant": "被告（被對方告）"}
 
 _DIGIT = {"零": 0, "〇": 0, "一": 1, "二": 2, "兩": 2, "三": 3, "四": 4, "五": 5, "六": 6, "七": 7, "八": 8, "九": 9}
 _UNIT = {"十": 10, "百": 100, "千": 1000}
@@ -123,14 +132,16 @@ def outgoing(text: str) -> str:
     return mask(text)[0][:MAX_INPUT]
 
 
-def rewrite_claim(client: LLMClient, mid: Optional[str], text: str, case_type: str = "civil") -> Dict:
+def rewrite_claim(client: LLMClient, mid: Optional[str], text: str, case_type: str = "civil",
+                  role: str = "plaintiff") -> Dict:
     """
     把描述改寫成判決書的寫法：民事是原告主張，刑事是犯罪事實。失敗時丟 LLMError，由呼叫端退回原本的描述。
     「還不確定」的案件結果頁兩邊都看，改寫用民事的寫法（相似判決搜尋目前只有民事）。
     """
     source = outgoing(without_questions(text))
     user = f"糾紛類型：{mid or '未選擇'}\n\n<描述>\n{source}\n</描述>"
-    system = REWRITE_CRIMINAL_SYSTEM if case_type == "criminal" else REWRITE_SYSTEM
+    system = (REWRITE_CRIMINAL_SYSTEM if case_type == "criminal"
+              else REWRITE_DEFENDANT_SYSTEM if role == "defendant" else REWRITE_SYSTEM)
     raw = client.generate_json(system, user, REWRITE_SCHEMA)
     claim = str(raw.get("claim", "")).strip() if isinstance(raw, dict) else ""
     if not claim or len(claim) > max(len(source) * MAX_REWRITE_GROWTH, 200):
@@ -139,9 +150,12 @@ def rewrite_claim(client: LLMClient, mid: Optional[str], text: str, case_type: s
     return {"text": claim, "added_numbers": added_numbers(source, claim)}
 
 
-def followup_questions(client: LLMClient, case_type: str, mid: Optional[str], text: str, limit: int = 4) -> List[Dict]:
-    """失敗或結果不能用時丟 LLMError，由呼叫端退回固定題庫。"""
-    user = f"案件類型：{CASE_LABEL.get(case_type, case_type)}\n糾紛類型：{mid or '未選擇'}\n最多 {limit} 題。\n\n<描述>\n{outgoing(text)}\n</描述>"
+def followup_questions(client: LLMClient, case_type: str, mid: Optional[str], text: str, limit: int = 4,
+                       role: str = "plaintiff") -> List[Dict]:
+    """失敗或結果不能用時丟 LLMError，由呼叫端退回固定題庫。民事被告端會告訴 LLM 使用者是被告。"""
+    who = f"使用者是：{ROLE_LABEL[role]}\n" if case_type != "criminal" and role == "defendant" else ""
+    user = (f"案件類型：{CASE_LABEL.get(case_type, case_type)}\n{who}糾紛類型：{mid or '未選擇'}\n最多 {limit} 題。"
+            f"\n\n<描述>\n{outgoing(text)}\n</描述>")
     raw = client.generate_json(FOLLOWUP_SYSTEM, user, FOLLOWUP_SCHEMA)
     items = raw.get("questions") if isinstance(raw, dict) else None
     if not isinstance(items, list):

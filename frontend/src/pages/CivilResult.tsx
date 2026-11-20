@@ -18,7 +18,7 @@ import { CommonPoints, corpusLead, ErrorBox, InfoLink, LAF_URL } from "../compon
 import { LinkButton } from "../components/LinkButton";
 import { ResultFrame } from "../components/ResultFrame";
 import { outcomeLabel, outcomeTone, percent } from "../format";
-import { civilInput, useIntake } from "../state";
+import { civilInput, civilRole, useIntake } from "../state";
 
 // 刑事結果頁也用這個長條
 export { Bar };
@@ -31,6 +31,21 @@ const TABS = [
   { key: "cases", label: "相似判決", line: "點「判決導讀」可閱讀全文，並查看原告主張、被告抗辯與法院判斷的段落標示。" },
 ] as const;
 type TabKey = (typeof TABS)[number]["key"];
+
+/** 被告：分頁名稱和解說員的話換成被告的角度（key 不變）。 */
+const DEFENDANT_TABS: Record<TabKey, { label: string; line: string }> = {
+  overview: { label: "整體結果", line: "我是解說員。上面是模型估的「對方（原告）會贏的機率」，下面是相似判決的結果。" },
+  amount: { label: "可能要賠的金額", line: "這是相似判決裡，原告贏的時候法院判准的金額，也就是被告要賠的。範圍通常很寬。" },
+  evidence: { label: "證據對照", line: "這裡對照的是原告輸掉（被告贏）的相似判決，提到哪些證據。" },
+  defense: { label: "被告的說法", line: "這些是相似判決裡被告常見的說法，以及提出時原告輸的比例。你寫過的會標上「你有提到」。" },
+  cases: { label: "相似判決", line: "點「判決導讀」可閱讀全文，看被告怎麼答辯、法院怎麼判斷。" },
+};
+
+function tabsFor(defendant: boolean) {
+  return TABS.map((t) => (defendant ? { key: t.key, ...DEFENDANT_TABS[t.key] } : t));
+}
+
+const DEFENDANT_NOTICE: ReactNode = "你是被告：下面的「勝訴」都是指原告（告你的人）勝訴；原告敗訴，就是你不用賠。";
 
 const NOTICE: ReactNode[] = [
   <>這份結果<b>不是法律意見</b>，也不是對你案子的預測。</>,
@@ -63,13 +78,16 @@ export default function CivilResult() {
   if (!intake.maskedText) return <Navigate to={intake.text ? "/confirm" : "/start"} replace />;
 
   const mid = intake.mids.length === 1 ? intake.mids[0] : "";
-  const title = `民事參考結果${intake.mids.length ? `：${intake.mids.join("、")}` : ""}`;
+  // 角色以回應為準（舊版後端沒有 role，視為原告）；還沒拿到結果時看自己填的
+  const defendant = (report ? report.role ?? "plaintiff" : civilRole(intake)) === "defendant";
+  const tabs = tabsFor(defendant);
+  const title = `民事參考結果${defendant ? "（你是被告）" : ""}${intake.mids.length ? `：${intake.mids.join("、")}` : ""}`;
   const lead = report ? `比對了 ${report.n_compared} 件${mid ? "案由相同的" : ""}真實判決。` : "正在比對相似的真實判決……";
   const mock = report?.mock ?? false;
 
   return (
     <ResultFrame active="civil" title={title} lead={lead} mock={mock} maskedText={intake.maskedText} searchText={intake.searchText}
-      sceneLine={TABS.find((t) => t.key === tab)!.line} notice={NOTICE}>
+      sceneLine={tabs.find((t) => t.key === tab)!.line} notice={defendant ? [DEFENDANT_NOTICE, ...NOTICE] : NOTICE}>
       {error && (
         <ErrorBox message={error} onRetry={load} hint="請重新載入結果，或回上一步檢查描述。">
           <LinkButton variant="outline" to="/confirm?stage=6">回上一步</LinkButton>
@@ -77,15 +95,15 @@ export default function CivilResult() {
       )}
       {!report && !error && <LoadingPanel />}
       {report && (
-        <ResultTabs value={tab} onChange={setTab} mock={mock} tabs={TABS.map((t) => ({
+        <ResultTabs value={tab} onChange={setTab} mock={mock} tabs={tabs.map((t) => ({
           key: t.key,
           label: t.label,
           content: {
-            overview: <Overview report={report} />,
-            amount: <AmountPanel range={report.amount_range} mock={mock} cases={report.similar} />,
-            evidence: <EvidencePanel report={report} />,
-            defense: <DefensePanel report={report} />,
-            cases: <CasesPanel report={report} onlyWin={onlyWin} setOnlyWin={setOnlyWin} rewritten={Boolean(intake.searchText)} />,
+            overview: <Overview report={report} defendant={defendant} />,
+            amount: <AmountPanel range={report.amount_range} mock={mock} cases={report.similar} defendant={defendant} />,
+            evidence: <EvidencePanel report={report} defendant={defendant} />,
+            defense: <DefensePanel report={report} defendant={defendant} />,
+            cases: <CasesPanel report={report} onlyWin={onlyWin} setOnlyWin={setOnlyWin} rewritten={Boolean(intake.searchText)} defendant={defendant} />,
           }[t.key],
         }))} />
       )}
@@ -108,7 +126,14 @@ const SIGNAL: Record<CivilReport["prediction"]["signal"], { label: string; text:
  * 整體結果：最上面是模型判定（勝訴機率、金額模型、模型與測試成績），下面才是相似判決的勝敗當對照。
  * 模型是這個專案的技術重點，所以放在第一眼看到的位置；機率旁邊一定附「不是你會贏的機率」的說明。
  */
-function Overview({ report }: { report: CivilReport }) {
+/** 被告看的參考訊號：機率一樣是原告勝訴的機率，「較強」是對方的訊號較強。 */
+const DEFENDANT_SIGNAL: Record<CivilReport["prediction"]["signal"], { label: string; text: string }> = {
+  strong: { label: "對方較強", text: "依描述，模型估計原告（告你的人）的勝訴訊號較強。這只是過去判決的傾向，不是你這件的結果；可以參考「被告的說法」準備答辯。" },
+  weak: { label: "對方較弱", text: "依描述，模型估計原告的勝訴訊號較弱。可能是對方的主張較不利，也可能是資訊還不夠；這不代表你一定不用賠。" },
+  insufficient: { label: "資訊不足", text: "對方主張的描述太短，或看不出是哪一種糾紛，模型的參考訊號不可靠。建議回上一步補充起訴狀的內容，或直接看相似判決。" },
+};
+
+function Overview({ report, defendant = false }: { report: CivilReport; defendant?: boolean }) {
   const { total, win, partial, lose } = report.outcomes;
   const { signal } = report.prediction;
   const enough = total >= MIN_OUTCOME_CASES;
@@ -116,11 +141,13 @@ function Overview({ report }: { report: CivilReport }) {
   const mixed = enough && ((signal === "strong" && share < 0.4) || (signal === "weak" && share >= 0.7));
   return (
     <>
-      <ModelVerdict report={report} />
+      <ModelVerdict report={report} defendant={defendant} />
       <h3 className="mt-2 text-lg font-bold">對照：相似判決的結果</h3>
       {enough ? (
         <>
-          <p className="text-muted-foreground">{total} 件雙方都有攻防的相似判決，結果是：</p>
+          <p className="text-muted-foreground">
+            {total} 件雙方都有攻防的相似判決，結果是：{defendant && `（「敗訴」是原告輸，也就是被告不用賠，共 ${lose} 件）`}
+          </p>
           <OutcomeBar counts={{ win, partial, lose }} />
         </>
       ) : (
@@ -139,65 +166,78 @@ function Overview({ report }: { report: CivilReport }) {
   );
 }
 
-function ModelVerdict({ report }: { report: CivilReport }) {
+function ModelVerdict({ report, defendant = false }: { report: CivilReport; defendant?: boolean }) {
   const { win_probability: p, signal, model, warnings } = report.prediction;
   const range = report.amount_range;
+  const signals = defendant ? DEFENDANT_SIGNAL : SIGNAL;
+  const probLabel = defendant ? "對方（原告）勝訴的機率（勝訴或一部勝訴）" : "勝訴機率（勝訴或一部勝訴）";
   return (
     <section aria-labelledby="model-verdict-title" className="flex flex-col gap-3 rounded-[14px] border-2 border-primary bg-card px-4 py-4 sm:px-5">
       <PanelTitle mock={report.mock}><span id="model-verdict-title">模型判定</span></PanelTitle>
       <div className="flex flex-wrap items-end gap-x-6 gap-y-2">
         <p className="flex flex-col">
-          <span className="flex items-center gap-1 text-[15px] text-muted-foreground">勝訴機率（勝訴或一部勝訴）<InfoLink to="勝訴機率" label="勝訴機率說明" /></span>
+          <span className="flex items-center gap-1 text-[15px] text-muted-foreground">{probLabel}<InfoLink to="勝訴機率" label="勝訴機率說明" /></span>
           <b className="text-[40px] leading-[1.2] font-extrabold tabular-nums">{percent(p)}</b>
         </p>
-        <p className="pb-1.5 text-lg font-bold">參考訊號：{SIGNAL[signal].label}</p>
+        <p className="pb-1.5 text-lg font-bold">參考訊號：{signals[signal].label}</p>
       </div>
       <div className="flex flex-col gap-1">
-        <Bar value={p} className="h-3.5" label={`勝訴機率 ${percent(p)}`} />
+        <Bar value={p} className="h-3.5" label={`${probLabel} ${percent(p)}`} />
         <div className="relative flex justify-between text-sm text-muted-foreground tabular-nums">
           <span>0%</span>
-          <span className="absolute left-1/2 -translate-x-1/2">50%（判勝訴的界線）</span>
+          <span className="absolute left-1/2 -translate-x-1/2">50%（判{defendant ? "原告" : ""}勝訴的界線）</span>
           <span>100%</span>
         </div>
       </div>
-      <p className="text-[15px]">{SIGNAL[signal].text}</p>
-      <p className="text-[15px] text-muted-foreground">這是模型根據文字估出來的數字，不是你會贏的機率。模型是用判決書的文字訓練的，一般口語描述算出來的機率常常偏低，也比較分不出輸贏。</p>
-      <AmountVerdict range={range} />
+      {defendant && (
+        <p className="text-[15px]">
+          換成你的角度：模型估計原告<b>敗訴（你不用賠）</b>的機率約 <b className="tabular-nums">{percent(1 - p)}</b>。
+        </p>
+      )}
+      <p className="text-[15px]">{signals[signal].text}</p>
+      <p className="text-[15px] text-muted-foreground">
+        {defendant
+          ? "這是模型根據對方的主張和你的說法估出來的數字，不是你這件會輸或會贏的機率。模型是用判決書的文字訓練的，一般口語描述算出來的機率不一定準。"
+          : "這是模型根據文字估出來的數字，不是你會贏的機率。模型是用判決書的文字訓練的，一般口語描述算出來的機率常常偏低，也比較分不出輸贏。"}
+      </p>
+      <AmountVerdict range={range} defendant={defendant} />
       {warnings.map((w) => <p key={w} className="text-[15px] font-bold">{w}</p>)}
       <div className="flex flex-col gap-1 border-t pt-3">
-        <p className="text-[15px]"><b>勝敗模型</b>（{model.name}）：{model.description}。</p>
-        <ModelScore model={model} />
+        <p className="text-[15px]"><b>{defendant ? "被告端勝敗模型" : "勝敗模型"}</b>（{model.name}）：{model.description}。</p>
+        <ModelScore model={model} defendant={defendant} />
       </div>
     </section>
   );
 }
 
 /** 模型判定裡的金額一行：有用金額模型時寫範圍；沒用時說明為什麼改用相似判決。 */
-function AmountVerdict({ range }: { range: AmountRange | null }) {
+function AmountVerdict({ range, defendant = false }: { range: AmountRange | null; defendant?: boolean }) {
+  const tab = defendant ? "可能要賠的金額" : "可能的金額";
   if (range?.source === "model") {
     return (
       <p className="text-[15px]">
         <b>金額模型</b>：如果判決是一部勝訴，{range.claimed
-          ? <>可能判准 <b className="tabular-nums">{yuan(range.amount_low)} ～ {yuan(range.amount_high)} 元</b>（中位數 {yuan(range.amount_median)} 元）</>
-          : <>可能判准請求金額的 <b className="tabular-nums">{percent(range.ratio_low)}～{percent(range.ratio_high)}</b></>}
-        ；用過去的判決測試，10 件約有 {Math.round(range.coverage * 10)} 件落在範圍內。細節見「可能的金額」。
+          ? <>{defendant ? "你可能要賠" : "可能判准"} <b className="tabular-nums">{yuan(range.amount_low)} ～ {yuan(range.amount_high)} 元</b>（中位數 {yuan(range.amount_median)} 元）</>
+          : <>{defendant ? "你可能要賠" : "可能判准"}請求金額的 <b className="tabular-nums">{percent(range.ratio_low)}～{percent(range.ratio_high)}</b></>}
+        ；用過去的判決測試，10 件約有 {Math.round(range.coverage * 10)} 件落在範圍內。細節見「{tab}」。
       </p>
     );
   }
   return (
     <p className="text-[15px] text-muted-foreground">
-      <b>金額模型</b>：要選一個糾紛類型，並填法院或請求金額才會使用；這次「可能的金額」改用相似判決的判准比例。
+      <b>金額模型</b>：要選一個糾紛類型，並填法院或{defendant ? "對方請求的" : "請求"}金額才會使用；這次「{tab}」改用相似判決的判准比例。
     </p>
   );
 }
 
-function ModelScore({ model }: { model: CivilReport["prediction"]["model"] }) {
+function ModelScore({ model, defendant = false }: { model: CivilReport["prediction"]["model"]; defendant?: boolean }) {
   const { win_precision: wp, win_recall: wr, lose_precision: lp, lose_recall: lr } = model;
   if (wp == null || wr == null || lp == null || lr == null) return null;
+  const who = defendant ? "原告" : "";
   return (
     <p className="text-sm text-muted-foreground">
-      測試成績（用沒參與訓練的判決文字）：判勝訴的案件有 {percent(wp)} 真的勝訴，實際勝訴的案件有 {percent(wr)} 被判出來；
-      判敗訴的案件有 {percent(lp)} 真的敗訴，實際敗訴的案件有 {percent(lr)} 被判出來。
+      測試成績（用沒參與訓練的判決文字）：判{who}勝訴的案件有 {percent(wp)} 真的勝訴，實際勝訴的案件有 {percent(wr)} 被判出來；
+      判{who}敗訴的案件有 {percent(lp)} 真的敗訴，實際敗訴的案件有 {percent(lr)} 被判出來。
       <InfoLink to="Precision、Recall" label="Precision、Recall 說明" />
     </p>
   );
@@ -213,11 +253,14 @@ function SourceChip({ tone, children }: { tone: "win" | "partial" | "lose"; chil
  * 四種情況，標題和說明都不同：模型推估（若為一部勝訴，虛線）、相似判決（實線）、
  * 沒填請求金額（只給比例）、相似判決不夠（不給範圍）。
  */
-function AmountPanel({ range, mock, cases = [] }: { range: AmountRange | null; mock: boolean; cases?: SimilarCase[] }) {
+function AmountPanel({ range, mock, cases = [], defendant = false }: {
+  range: AmountRange | null; mock: boolean; cases?: SimilarCase[]; defendant?: boolean;
+}) {
+  const verb = defendant ? "你可能要賠" : "可能判准";
   if (!range) {
     return (
       <>
-        <PanelTitle mock={mock}>可能判准的金額</PanelTitle>
+        <PanelTitle mock={mock}>{defendant ? "可能要賠的金額" : "可能判准的金額"}</PanelTitle>
         <EmptyState title="無法估出金額範圍" icon={<CircleMinusIcon className="size-7 text-ink-3" aria-hidden="true" />}>
           相似的勝訴判決太少，或描述看不出是哪一種糾紛，估出來的範圍不可靠，所以不顯示。你可以參考「相似判決」分頁，或回上一步補充細節。
         </EmptyState>
@@ -227,7 +270,9 @@ function AmountPanel({ range, mock, cases = [] }: { range: AmountRange | null; m
   }
   // 模型推估的是「若為一部勝訴」：全部勝訴通常就是請求的全部金額，不在這個範圍裡
   const isModel = range.source === "model";
-  const when = isModel ? "如果判決是「一部勝訴」，" : "如果勝訴，";
+  const when = defendant
+    ? (isModel ? "如果判決是原告「一部勝訴」，" : "如果原告勝訴，")
+    : (isModel ? "如果判決是「一部勝訴」，" : "如果勝訴，");
   const hits = Math.round(range.coverage * 10);
   const claimed = range.claimed;
   const coverage = isModel
@@ -236,7 +281,7 @@ function AmountPanel({ range, mock, cases = [] }: { range: AmountRange | null; m
 
   return (
     <>
-      <PanelTitle mock={mock}>{claimed ? `${when}可能判准的金額` : `${when}可能判准的比例`}</PanelTitle>
+      <PanelTitle mock={mock}>{claimed ? `${when}${verb}的金額` : `${when}${verb}的比例`}</PanelTitle>
       <div className="flex flex-wrap items-center gap-3">
         {claimed
           ? isModel
@@ -252,7 +297,7 @@ function AmountPanel({ range, mock, cases = [] }: { range: AmountRange | null; m
         <>
           <div>
             <p className="text-[30px] leading-[1.3] font-extrabold tabular-nums sm:text-[40px]">{yuan(range.amount_low)} ～ {yuan(range.amount_high)} 元</p>
-            <p className="text-muted-foreground">你請求 <b className="text-foreground tabular-nums">{yuan(claimed)} 元</b></p>
+            <p className="text-muted-foreground">{defendant ? "對方請求" : "你請求"} <b className="text-foreground tabular-nums">{yuan(claimed)} 元</b></p>
           </div>
           <RangeBar low={range.ratio_low} median={range.ratio_median} high={range.ratio_high} dashed={isModel}
             medianLabel={`中位數 ${yuan(range.amount_median)}`} startLabel="0 元" endLabel={`請求 ${yuan(claimed)} 元`}
@@ -274,7 +319,8 @@ function AmountPanel({ range, mock, cases = [] }: { range: AmountRange | null; m
         <p>相似的勝訴判決 {range.n_wins} 件中，<b>{range.n_full_wins ?? 0} 件是全部勝訴</b>（判准請求的全部金額）。</p>
       ) : null}
       {isModel && <Note>模型推估的範圍<b>很寬</b>，因為同樣的案情，法院判准的比例落差很大，只能看個大概。如果判決是全部勝訴，通常就是請求的全部金額。</Note>}
-      {!claimed && <Note>想看到實際的金額範圍？<Link to="/start?stage=3">回上一步填寫想請求的金額</Link>，資料會保留。</Note>}
+      {defendant && <p className="text-[15px] text-muted-foreground">原告敗訴時你不用賠；這裡的範圍只在原告勝訴（全部或一部分）時才有意義，勝負的機率見「整體結果」。</p>}
+      {!claimed && <Note>想看到實際的金額範圍？<Link to="/start?stage=3">{defendant ? "回上一步填寫對方請求的金額" : "回上一步填寫想請求的金額"}</Link>，資料會保留。</Note>}
       <AmountDetail range={range} />
       <DamageReasons cases={cases} />
     </>
@@ -308,18 +354,19 @@ function AmountDetail({ range }: { range: AmountRange }) {
 
 /* ── 證據對照 ── */
 
-function EvidencePanel({ report }: { report: CivilReport }) {
+function EvidencePanel({ report, defendant = false }: { report: CivilReport; defendant?: boolean }) {
+  const cases = defendant ? "原告敗訴（被告贏）的相似判決" : "相似的勝訴判決";
   return (
     <>
       <PanelTitle mock={report.mock}>證據對照</PanelTitle>
-      <p className="text-muted-foreground">相似的勝訴判決裡，有多少比例提到這項證據；右邊是你勾選或在描述裡提到的證據。</p>
+      <p className="text-muted-foreground">{cases}裡，有多少比例提到這項證據；右邊是你勾選或在描述裡提到的證據。</p>
       {report.evidence.length === 0 ? (
         <EmptyState title="沒有可以對照的證據資料">這類案子的判決很少寫明用了哪些證據。可以直接看「相似判決」分頁。</EmptyState>
       ) : (
         <div className="flex max-w-[760px] flex-col">
           {report.evidence.map((e) => (
             <MiniBarRow key={e.key} label={e.label} value={e.share} valueText={percent(e.share)}
-              alt={`${e.label}：${percent(e.share)} 的相似勝訴判決有提到`}
+              alt={`${e.label}：${percent(e.share)} 的${defendant ? cases : "相似勝訴判決"}有提到`}
               className="border-b py-3 last:border-b-0 sm:grid-cols-[150px_minmax(0,1fr)_56px_120px]">
               <span className="max-sm:col-span-2">
                 {e.user_has
@@ -330,26 +377,46 @@ function EvidencePanel({ report }: { report: CivilReport }) {
           ))}
         </div>
       )}
-      <p className="text-[15px] text-muted-foreground">沒提到不代表會輸，只是勝訴的案子比較常拿出這些；提到也不代表法院一定採信。</p>
+      <p className="text-[15px] text-muted-foreground">
+        {defendant
+          ? "這些證據多半是原告拿出來的，被告贏的案子裡提到，常是法院認為不足以證明；提到也不代表法院一定採信。"
+          : "沒提到不代表會輸，只是勝訴的案子比較常拿出這些；提到也不代表法院一定採信。"}
+      </p>
     </>
   );
 }
 
-/* ── 對方的說法 ── */
+/* ── 對方的說法／被告的說法 ── */
 
-function DefensePanel({ report }: { report: CivilReport }) {
+/** 被告的說法：抗辯標籤是寫給原告看的（「你也有過失」），被告看時把「你」換成「原告」。 */
+function defenseLabel(label: string, defendant: boolean) {
+  return defendant ? label.replace(/^你/, "原告") : label;
+}
+
+function DefensePanel({ report, defendant = false }: { report: CivilReport; defendant?: boolean }) {
   return (
     <>
-      <PanelTitle mock={report.mock}>相似判決中的被告抗辯</PanelTitle>
-      <p className="text-muted-foreground">數字表示各項說法在相似判決中出現的比例。</p>
+      <PanelTitle mock={report.mock}>{defendant ? "相似判決中被告常見的說法" : "相似判決中的被告抗辯"}</PanelTitle>
+      <p className="text-muted-foreground">
+        數字表示各項說法在相似判決中出現的比例。{defendant && "展開可以看提出這個說法的判決裡，原告輸的比例；標上「你有提到」的是你寫過的說法。"}
+      </p>
       {report.defenses.length === 0 ? (
-        <EmptyState title="未整理出常見的抗辯">這些判決中沒有整理出常見說法，對方仍可能提出反駁。</EmptyState>
+        <EmptyState title="未整理出常見的抗辯">
+          {defendant ? "這些判決中沒有整理出常見說法。可以到「相似判決」分頁，看被告實際怎麼答辯。" : "這些判決中沒有整理出常見說法，對方仍可能提出反駁。"}
+        </EmptyState>
       ) : (
         <div className="flex max-w-[760px] flex-col gap-2">
           {report.defenses.map((d) => (
-            <Disclosure key={d.key} summary={<><span className="flex-1">{d.label}</span><span className="tabular-nums">{percent(d.share)}</span></>}>
-              <Bar value={d.share} label={`${d.label}：出現在 ${percent(d.share)} 的相似判決`} />
+            <Disclosure key={d.key} summary={<>
+              <span className="flex-1">{defenseLabel(d.label, defendant)}</span>
+              {defendant && d.user_has && <span className="inline-flex items-center gap-1 text-sm font-bold text-secondary-foreground"><CheckIcon className="size-4" aria-hidden="true" />你有提到</span>}
+              <span className="tabular-nums">{percent(d.share)}</span>
+            </>}>
+              <Bar value={d.share} label={`${defenseLabel(d.label, defendant)}：出現在 ${percent(d.share)} 的相似判決`} />
               <p className="text-[15px] text-muted-foreground">{d.description}。</p>
+              {defendant && (d.lose_share != null
+                ? <p className="text-[15px]">提出這個說法的 {d.n_raised ?? 0} 件相似判決中，<b className="tabular-nums">{percent(d.lose_share)}</b> 原告敗訴。這是相關、不是因果：說法有沒有用，要看證據和個案。</p>
+                : <p className="text-[15px] text-muted-foreground">提出這個說法的相似判決太少（{d.n_raised ?? 0} 件），不計算原告敗訴的比例。</p>)}
               {d.label.includes("與有過失") && (
                 <a href={`/guide#${encodeURIComponent("與有過失")}`} target="_blank" rel="noreferrer" className="w-fit text-[15px] font-semibold decoration-dotted">什麼是「與有過失」？</a>
               )}
@@ -363,17 +430,19 @@ function DefensePanel({ report }: { report: CivilReport }) {
 
 /* ── 相似判決 ── */
 
-function CasesPanel({ report, onlyWin, setOnlyWin, rewritten }: {
-  report: CivilReport; onlyWin: boolean; setOnlyWin: (v: boolean) => void; rewritten: boolean;
+function CasesPanel({ report, onlyWin, setOnlyWin, rewritten, defendant = false }: {
+  report: CivilReport; onlyWin: boolean; setOnlyWin: (v: boolean) => void; rewritten: boolean; defendant?: boolean;
 }) {
   const cases = report.similar;
-  const visible = (c: SimilarCase) => !onlyWin || outcomeTone(c.outcome) !== "lose";
+  // 被告想看的是自己這一方贏的判決（原告敗訴）
+  const filterLabel = defendant ? "只看被告贏的（原告敗訴）" : "只看原告勝訴的";
+  const visible = (c: SimilarCase) => !onlyWin || (defendant ? outcomeTone(c.outcome) === "lose" : outcomeTone(c.outcome) !== "lose");
   const shown = cases.filter(visible);
   return (
     <>
       <PanelTitle mock={report.mock} action={
         <label className="no-print inline-flex min-h-11 cursor-pointer items-center gap-2.5 font-semibold">
-          <Switch size="lg" checked={onlyWin} onCheckedChange={(v) => setOnlyWin(Boolean(v))} aria-label="只看原告勝訴的" />只看原告勝訴的
+          <Switch size="lg" checked={onlyWin} onCheckedChange={(v) => setOnlyWin(Boolean(v))} aria-label={filterLabel} />{filterLabel}
         </label>
       }>相似的真實判決</PanelTitle>
       <p className="text-[15px] text-muted-foreground">
@@ -417,7 +486,7 @@ function CasesPanel({ report, onlyWin, setOnlyWin, rewritten }: {
       </Table>
       {shown.length === 0 && (
         <EmptyState title="沒有符合的判決" className="no-print">
-          這 {cases.length} 件相似判決都不是原告勝訴的。關掉「只看原告勝訴的」就能看到。
+          這 {cases.length} 件相似判決都不是{defendant ? "原告敗訴" : "原告勝訴"}的。關掉「{filterLabel}」就能看到。
         </EmptyState>
       )}
       {cases.some((c) => (c.reasoning ?? []).length > 0) && (

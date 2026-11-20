@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { civilInput, EMPTY_INTAKE, fullText, loadIntake, STORAGE_KEY } from "../state";
+import { civilInput, claimPart, DEFENSE_MARKER, EMPTY_INTAKE, fullText, loadIntake, STORAGE_KEY } from "../state";
 
 describe("fullText", () => {
   it("描述加上有回答的追問", () => {
@@ -18,6 +18,17 @@ describe("fullText", () => {
     expect(fullText({ ...base, caseType: "civil" })).toBe("被打");
     expect(fullText({ ...base, caseType: "criminal", lawyer: "" })).toBe("被打\n手上的證據：驗傷單、診斷證明、證人");
   });
+  it("民事被告：你的說法和追問的回答接在答辯標記後面；沒寫就不加標記", () => {
+    const base = { ...EMPTY_INTAKE, caseType: "civil" as const, role: "defendant" as const, text: "對方說我欠他錢" };
+    expect(fullText(base)).toBe("對方說我欠他錢");
+    const full = fullText({
+      ...base, defenseText: " 我已經還了 ",
+      followupAnswers: { paid: { question: "有沒有還過？", answer: "還了一半" } },
+    });
+    expect(full).toBe(`對方說我欠他錢\n${DEFENSE_MARKER}\n我已經還了\n追問：有沒有還過？\n回答：還了一半`);
+    expect(claimPart(full)).toBe("對方說我欠他錢");
+    expect(claimPart("沒有標記")).toBe("沒有標記");
+  });
 });
 
 describe("civilInput", () => {
@@ -27,9 +38,18 @@ describe("civilInput", () => {
       lawyer: "no", defendantType: "company", claimedAmount: "50萬", evidence: ["transfer"],
     });
     expect(input).toEqual({
-      text: "我是【姓名】", search_text: null, mid: "民間借貸", court: null, plaintiff_has_lawyer: false,
-      defendant_type: "company", claimed_amount: 500000, evidence: ["transfer"],
+      text: "我是【姓名】", role: "plaintiff", search_text: null, mid: "民間借貸", court: null, plaintiff_has_lawyer: false,
+      defendant_has_lawyer: null, defendant_type: "company", claimed_amount: 500000, evidence: ["transfer"],
     });
+  });
+  it("被告：律師是被告自己的；只有選民事才算被告", () => {
+    const base = { ...EMPTY_INTAKE, text: "x", maskedText: "x", lawyer: "yes" as const, role: "defendant" as const };
+    const input = civilInput({ ...base, caseType: "civil" });
+    expect(input.role).toBe("defendant");
+    expect(input.defendant_has_lawyer).toBe(true);
+    expect(input.plaintiff_has_lawyer).toBeNull();
+    // 「不確定」同時查刑事，用原告的問法
+    expect(civilInput({ ...base, caseType: "unsure" }).role).toBe("plaintiff");
   });
   it("沒填的是 null", () => {
     const input = civilInput({ ...EMPTY_INTAKE, text: "x", maskedText: "x" });
