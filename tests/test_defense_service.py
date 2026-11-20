@@ -50,6 +50,9 @@ class TestUserDefenseTypes(unittest.TestCase):
         found = user_defense_types("是對方闖紅燈；看護費一天三千元太高，而且我已經付過十萬元。")
         self.assertEqual(found, ["contributory", "excessive", "paid"])
 
+    def test_denying_the_loan(self):
+        self.assertEqual(user_defense_types("那三十萬元不是借款，是投資，我們從來沒有約定要還"), ["dispute_fact"])
+
     def test_negated_is_not_counted(self):
         self.assertEqual(user_defense_types("我沒有付過任何錢"), [])
         self.assertEqual(user_defense_types("我沒有錯"), ["no_fault"])
