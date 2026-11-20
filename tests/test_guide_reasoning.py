@@ -106,11 +106,79 @@ class TestForCase(unittest.TestCase):
         it = reasoning.for_case(self.db, 1, self.COURT, self.paras)["items"][0]
         self.assertTrue(self.paras[it["paragraph"]]["text"][it["start"]:it["end"]].endswith("堪信為真實"))
 
+    def test_quote_across_paragraphs(self):
+        """引文跨兩個導讀段落：paragraph 是開頭那段，parts 列出兩段各自要標的範圍。"""
+        q = "堪信為真實。三、綜上"
+        self.write([self.row("EV", q, "有利原告")])
+        it = reasoning.for_case(self.db, 1, self.COURT, self.paras)["items"][0]
+        self.assertEqual(it["paragraph"], 3)
+        marked = "".join(self.paras[x["paragraph"]]["text"][x["start"]:x["end"]] for x in it["parts"])
+        self.assertEqual([x["paragraph"] for x in it["parts"]], [3, 4])
+        self.assertEqual(marked, q)
+        self.assertEqual(it["parts"][0], {"paragraph": 3, "start": it["start"], "end": it["end"]})
+
+    def test_single_paragraph_has_one_part(self):
+        self.write([self.row("CONCL", "原告之請求有理由，應予准許", "有理由")])
+        it = reasoning.for_case(self.db, 1, self.COURT, self.paras)["items"][0]
+        self.assertEqual(it["parts"], [{"paragraph": it["paragraph"], "start": it["start"], "end": it["end"]}])
+
     def test_no_data(self):
         self.assertIsNone(reasoning.for_case(Path(self.tmp.name) / "沒有.sqlite", 1, self.COURT, self.paras))
         self.assertIsNone(reasoning.for_case(None, 1, self.COURT, self.paras))
         self.write([self.row("CONCL", "原告之請求有理由，應予准許", "有理由")])
         self.assertIsNone(reasoning.for_case(self.db, 999, self.COURT, self.paras))   # 這件沒有標註
+
+
+class TestBriefs(unittest.TestCase):
+    """reasoning.briefs：相似判決列表用的精簡版，一次查多件，只對有標註的判決讀法院判斷段。"""
+    COURT = TestForCase.COURT
+
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.db = Path(self.tmp.name) / "guide.sqlite"
+        self.asked = []
+
+    def tearDown(self):
+        self.tmp.cleanup()
+
+    def court_of(self, case_id):
+        self.asked.append(case_id)
+        return self.COURT
+
+    def write(self, rows):
+        with closing(sqlite3.connect(self.db)) as g:
+            g.executescript(guide_batch.GUIDE_SCHEMA)
+            g.executemany("INSERT INTO reasoning (case_id, unit_idx, label, polarity, basis, quote, span_start, span_end) "
+                          "VALUES (?,?,?,?,?,?,?,?)", rows)
+            g.commit()
+
+    def row(self, case_id, label, quote, pol=None):
+        s = self.COURT.index(quote)
+        return (case_id, 0, label, pol, None, quote, s, s + len(quote))
+
+    def test_groups_by_case(self):
+        self.write([self.row(1, "CONCL", "原告之請求有理由，應予准許", "有理由"),
+                    self.row(1, "CONCL", "原告之請求有理由", "有理由"),       # 重疊 → 只留較長的
+                    self.row(2, "SUB", "本件爭點為被告有無過失")])
+        r = reasoning.briefs(self.db, [1, 2, 3], self.court_of)
+        self.assertEqual(set(r), {1, 2})                                  # 3 沒有標註
+        self.assertEqual(sorted(self.asked), [1, 2])                      # 沒標註的不讀全文
+        self.assertEqual([(i["label"], i["polarity"], i["text"]) for i in r[1]],
+                         [("CONCL", "有理由", "原告之請求有理由，應予准許")])
+
+    def test_text_is_full_span_for_marked_quote(self):
+        q = "二、原告提出診斷證明書〔略〕堪信為真實"
+        s = self.COURT.index("二、原告"); e = self.COURT.index("堪信為真實") + len("堪信為真實")
+        self.write([(1, 0, "EV", "有利原告", "明示評價", q, s, e)])
+        it = reasoning.briefs(self.db, [1], self.court_of)[1][0]
+        self.assertEqual((it["quote"], it["text"], it["basis"]), (q, self.COURT[s:e], "明示評價"))
+
+    def test_no_data(self):
+        self.assertEqual(reasoning.briefs(None, [1], self.court_of), {})
+        self.assertEqual(reasoning.briefs(self.db, [1], self.court_of), {})    # 檔案不存在
+        self.write([(1, 0, "SUB", None, None, "這句不在判決裡", 0, 5)])
+        self.assertEqual(reasoning.briefs(self.db, [1], self.court_of), {})    # 引文對不上 → 略過
+        self.assertEqual(reasoning.briefs(self.db, [], self.court_of), {})
 
 
 class TestExportAnchor(unittest.TestCase):
@@ -190,6 +258,30 @@ class TestEndToEnd(unittest.TestCase):
         with closing(sqlite3.connect(retrieval_build.artifact_dir(Path(self.tmp.name)) / "cases.sqlite")) as con:
             other = con.execute("SELECT id FROM cases WHERE id != ? LIMIT 1", (self.case_id,)).fetchone()[0]
         self.assertIsNone(self.client.get(f"/api/judgments/civil/{other}/guide").json()["reasoning"])
+
+    def test_similar_list_attaches_reasoning(self):
+        """相似判決列表：有標註的判決附上 reasoning（含完整原文），沒有的不附。"""
+        from backend.civil_service import CivilService
+        service = CivilService(Path(self.tmp.name))
+        with closing(sqlite3.connect(retrieval_build.artifact_dir(Path(self.tmp.name)) / "cases.sqlite")) as con:
+            other = con.execute("SELECT id FROM cases WHERE id != ? LIMIT 1", (self.case_id,)).fetchone()[0]
+        cases = [{"case_id": self.case_id}, {"case_id": other}]
+        service._attach_reasoning(cases)
+        self.assertEqual([(i["label"], i["text"]) for i in cases[0]["reasoning"]], [("CONCL", "綜上，原告之請求有理由")])
+        self.assertNotIn("reasoning", cases[1])
+
+    def test_report_schema_accepts_reasoning(self):
+        r = self.client.post("/api/civil/report", json={"text": "被告駕車撞傷我，我想請求賠償醫藥費。" * 3}).json()
+        self.assertIn("similar", r)
+        for c in r["similar"]:
+            self.assertTrue(c.get("reasoning") is None or all("text" in i for i in c["reasoning"]))
+
+    def test_mock_similar_cases_have_sample_reasoning(self):
+        client = TestClient(create_app(Settings(artifacts_dir=Path(self.tmp.name), mode="mock")))
+        similar = client.post("/api/civil/report", json={"text": "被告駕車撞傷我，我想請求賠償醫藥費。" * 3}).json()["similar"]
+        self.assertTrue(any(c["reasoning"] for c in similar))
+        self.assertTrue(any(c["reasoning"] is None for c in similar))
+        self.assertTrue(any(i["label"] == "DAM" for c in similar for i in (c["reasoning"] or [])))
 
     def test_mock_guide_has_sample_reasoning(self):
         client = TestClient(create_app(Settings(artifacts_dir=Path(self.tmp.name), mode="mock")))

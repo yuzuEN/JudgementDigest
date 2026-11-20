@@ -109,6 +109,19 @@ export interface SimilarCase {
   url?: string | null;
   /** 民事：和使用者的情況相同的地方（同類糾紛、請求金額相近、都有的證據、同一法院）；示例資料與舊版後端沒有 */
   common?: string[];
+  /** 民事：有標註的判決才有「法院怎麼認定」；沒有標註、舊版後端時是 null 或不存在 */
+  reasoning?: ReasoningQuote[] | null;
+}
+
+/** 相似判決列表用的「法院怎麼認定」：引文與它在判決裡的完整原文（不對段落） */
+export interface ReasoningQuote {
+  label: string;
+  polarity?: string | null;
+  basis?: string | null;
+  /** 標註的引文（太長時是「開頭〔略〕結尾」） */
+  quote: string;
+  /** 引文在判決裡的完整原文 */
+  text: string;
 }
 
 /** 相似判決是在哪個範圍裡找的 */
@@ -210,6 +223,14 @@ export interface ReasoningItem {
   polarity?: string | null;
   basis?: string | null;
   quote: string;
+  paragraph: number;
+  start: number;
+  end: number;
+  /** 引文跨段時，每一段要標的範圍；舊版後端沒有，就只標 paragraph 那一段 */
+  parts?: ReasoningPart[];
+}
+
+export interface ReasoningPart {
   paragraph: number;
   start: number;
   end: number;

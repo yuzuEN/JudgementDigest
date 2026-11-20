@@ -7,7 +7,7 @@ import { api } from "../api/client";
 import type { Guide, GuideFunction } from "../api/types";
 import { Bar } from "../components/casey/Bars";
 import { OutcomeChip } from "../components/casey/OutcomeChip";
-import { MarkedText, ReasoningCard } from "../components/casey/Reasoning";
+import { MarkedText, partIn, ReasoningCard } from "../components/casey/Reasoning";
 import { InfoNote, LoadingPanel } from "../components/casey/ResultTabs";
 import { SampleTag } from "../components/casey/Sample";
 import { ErrorBox } from "../components/Common";
@@ -64,7 +64,7 @@ export default function Reading() {
         {!guide && !error && <LoadingPanel>正在整理這件判決…</LoadingPanel>}
         {guide && (
           <div className="flex flex-wrap items-start gap-7">
-            <aside className="flex w-full min-w-0 flex-[1_1_280px] flex-col gap-4 sm:max-w-[360px]">
+            <aside className="flex w-full min-w-0 flex-[1_1_280px] flex-col gap-4 sm:max-w-[360px] lg:self-stretch">
               <Card className="gap-4 px-6.5" aria-labelledby="basic-title">
                 <h2 id="basic-title" className="text-xl font-bold">判決資料</h2>
                 <dl className="m-0 flex flex-col gap-2.5 text-[15px]">
@@ -140,7 +140,7 @@ export default function Reading() {
                     className={cn("para flex flex-col gap-1.5 rounded-[12px] px-4 py-3.5 transition-colors motion-reduce:transition-none",
                       on[p.function] ? f.on : "border border-dashed border-input bg-transparent")}>
                     <span className="text-[13px] font-extrabold tracking-[.06em]">{f.label}</span>
-                    <p className="leading-loose"><MarkedText text={p.text} item={activeItem?.paragraph === i ? activeItem : null} /></p>
+                    <p className="leading-loose"><MarkedText text={p.text} item={partIn(activeItem, i)} /></p>
                   </section>
                 );
               })}

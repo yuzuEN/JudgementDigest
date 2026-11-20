@@ -1,6 +1,11 @@
+import { useState } from "react";
 import { cn } from "@/lib/utils";
 import { Card } from "@/components/ui/card";
-import type { Reasoning, ReasoningItem } from "../../api/types";
+import type { Reasoning, ReasoningItem, ReasoningPart, ReasoningQuote, SimilarCase } from "../../api/types";
+import { outcomeLabel, outcomeTone } from "../../format";
+import { InfoLink } from "../Common";
+import { LinkButton } from "../LinkButton";
+import { OutcomeChip } from "./OutcomeChip";
 
 /**
  * 判決導讀「法院怎麼認定」（D3）。
@@ -47,12 +52,61 @@ export function shownGroups(reasoning: Reasoning | null | undefined) {
     .filter((g) => g.items.length > 0);
 }
 
-function Tag({ item }: { item: ReasoningItem }) {
+function Tag({ item }: { item: { polarity?: string | null } }) {
   if (!item.polarity) return null;
   return (
     <span className="inline-flex w-fit flex-none items-center rounded-full border-[1.5px] border-input bg-muted px-2.5 text-sm leading-[1.8] font-bold whitespace-nowrap text-foreground">
       {item.polarity}
     </span>
+  );
+}
+
+/**
+ * 收起來的項目：螢幕上用 inline style 藏起來，列印時用 !important 蓋過，全部印出來
+ * （和網站其他地方一樣：列印時按鈕隱藏，內容直接印出來）。
+ */
+const collapsed = (hide: boolean, printDisplay: string) =>
+  hide ? { style: { display: "none" }, className: printDisplay } : {};
+
+/** 每組先顯示幾處；長判決（例如結論 17 處）其餘收起來，才不會把後面的分組擠到很下面 */
+export const GROUP_PREVIEW = 3;
+
+function ReasoningGroup({ group: g, active, onSelect }: {
+  group: ReturnType<typeof shownGroups>[number];
+  active: number | null;
+  onSelect: (index: number) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const hidden = g.items.length - GROUP_PREVIEW;
+  // 選到的項目在收起的部分時（例如從段落標示回來），整組展開
+  const expanded = open || hidden <= 0 || g.items.slice(GROUP_PREVIEW).some((x) => x.index === active);
+  return (
+    <section aria-labelledby={`reasoning-${g.label}`} className="flex flex-col gap-2">
+      <div className="flex items-baseline justify-between gap-2">
+        <h3 id={`reasoning-${g.label}`} className="text-base font-bold">{g.title}</h3>
+        <span className="text-sm text-muted-foreground">{g.items.length} 處</span>
+      </div>
+      <p className="text-sm text-muted-foreground">{g.hint}</p>
+      <ul className="m-0 flex list-none flex-col gap-2 p-0">
+        {g.items.map(({ item, index }, k) => (
+          <li key={index} {...collapsed(!expanded && k >= GROUP_PREVIEW, "print:!block")}>
+            <button type="button" aria-pressed={active === index} onClick={() => onSelect(index)}
+              className={cn("flex w-full min-h-11 flex-col gap-1.5 rounded-[12px] border-2 bg-card px-3.5 py-2.5 text-left",
+                active === index ? "border-primary" : "border-input")}>
+              <Tag item={item} />
+              <span className="text-[15px] leading-relaxed">「{displayQuote(item.quote)}」</span>
+            </button>
+          </li>
+        ))}
+      </ul>
+      {hidden > 0 && (
+        <button type="button" aria-expanded={expanded} onClick={() => setOpen(!expanded)}
+          className="no-print min-h-11 w-fit rounded-[10px] px-2 text-[15px] font-bold text-primary hover:bg-accent">
+          {expanded ? "收起" : `顯示全部 ${g.items.length} 處`}
+        </button>
+      )}
+      {g.status === "note" && <p className="text-sm text-muted-foreground">這類標示的抽查正確率較低，請特別對照原文。</p>}
+    </section>
   );
 }
 
@@ -64,42 +118,40 @@ export function ReasoningCard({ reasoning, active, onSelect }: {
   const groups = shownGroups(reasoning);
   if (!reasoning || groups.length === 0) return null;
   return (
-    <Card className="gap-4 px-6.5" aria-labelledby="reasoning-title">
+    <>
+    {/* 寬螢幕（左右兩欄）：卡片黏在畫面上，捲全文時一直看得到；太長時卡片自己捲動。
+        排到左欄最後（order-last），下面就沒有別的卡片會從它上方的空隙捲過去 */}
+    <Card id="reasoning-card" aria-labelledby="reasoning-title"
+      className="scroll-mt-4 gap-4 px-6.5 lg:order-last lg:sticky lg:top-4 lg:max-h-[calc(100vh-2rem)] lg:overflow-y-auto print:static print:max-h-none print:overflow-visible">
       <div className="flex flex-col gap-1.5">
         <h2 id="reasoning-title" className="text-xl font-bold">法院怎麼認定</h2>
         <p className="text-[15px] text-muted-foreground">點一下，右邊的全文會捲到那一段，並標出這句原文。</p>
       </div>
-      {groups.map((g) => (
-        <section key={g.label} aria-labelledby={`reasoning-${g.label}`} className="flex flex-col gap-2">
-          <div className="flex items-baseline justify-between gap-2">
-            <h3 id={`reasoning-${g.label}`} className="text-base font-bold">{g.title}</h3>
-            <span className="text-sm text-muted-foreground">{g.items.length} 處</span>
-          </div>
-          <p className="text-sm text-muted-foreground">{g.hint}</p>
-          <ul className="m-0 flex list-none flex-col gap-2 p-0">
-            {g.items.map(({ item, index }) => (
-              <li key={index}>
-                <button type="button" aria-pressed={active === index} onClick={() => onSelect(index)}
-                  className={cn("flex w-full min-h-11 flex-col gap-1.5 rounded-[12px] border-2 bg-card px-3.5 py-2.5 text-left",
-                    active === index ? "border-primary" : "border-input")}>
-                  <Tag item={item} />
-                  <span className="text-[15px] leading-relaxed">「{displayQuote(item.quote)}」</span>
-                </button>
-              </li>
-            ))}
-          </ul>
-          {g.status === "note" && <p className="text-sm text-muted-foreground">這類標示的抽查正確率較低，請特別對照原文。</p>}
-        </section>
-      ))}
+      {groups.map((g) => <ReasoningGroup key={g.label} group={g} active={active} onSelect={onSelect} />)}
       <p className="text-sm text-muted-foreground">
         依標註手冊 {reasoning.manual_version} 由 AI 標註、人工抽查，可能有誤，請以判決原文為準。
       </p>
     </Card>
+    {/* 窄螢幕（單欄）卡片不會黏住：點過一項、畫面捲到原文之後，右下角給一顆回到卡片的按鈕 */}
+    {active !== null && (
+      <button type="button" onClick={() => document.getElementById("reasoning-card")?.scrollIntoView?.({ behavior: "smooth", block: "start" })}
+        className="no-print fixed right-4 bottom-4 z-10 min-h-11 rounded-full border-2 border-primary bg-card px-4 text-[15px] font-bold text-primary shadow-md hover:bg-accent lg:hidden">
+        回到法院怎麼認定
+      </button>
+    )}
+    </>
   );
 }
 
+/** 選到的引文在第 i 段要標的範圍（引文可能跨好幾段）；這段沒有就是 null */
+export function partIn(item: ReasoningItem | null, i: number): ReasoningPart | null {
+  if (!item) return null;
+  if (item.parts?.length) return item.parts.find((x) => x.paragraph === i) ?? null;
+  return item.paragraph === i ? item : null;
+}
+
 /** 段落文字：選到的引文用 mark 標出（只標在這一段裡的部分） */
-export function MarkedText({ text, item }: { text: string; item: ReasoningItem | null }) {
+export function MarkedText({ text, item }: { text: string; item: ReasoningPart | null }) {
   if (!item || item.start < 0 || item.end <= item.start || item.end > text.length) return <>{text}</>;
   return (
     <>
@@ -107,5 +159,140 @@ export function MarkedText({ text, item }: { text: string; item: ReasoningItem |
       <mark className="rounded-[4px] bg-info px-0.5 text-foreground ring-2 ring-primary">{text.slice(item.start, item.end)}</mark>
       {text.slice(item.end)}
     </>
+  );
+}
+
+/* ── 相似判決列表與「可能的金額」分頁（B、C）── */
+
+/** 只留抽查後可以顯示的標籤（和導讀頁同一套 REASONING_SHOWN） */
+const shownQuotes = (items: ReasoningQuote[] | null | undefined) => (items ?? []).filter((x) => REASONING_SHOWN[x.label]);
+
+/** 列表摘要挑哪一句：金額怎麼決定 → 法律上怎麼認定 → 依常理怎麼判斷（EV 抽查正確率較低，不放在摘要） */
+const BRIEF_ORDER = ["DAM", "SUB", "EXP"];
+
+/** 結論方向固定這個順序顯示，不照判決裡出現的順序 */
+const DIRECTION_ORDER = ["有理由", "一部有理由", "無理由"];
+
+/**
+ * 金額的斟酌：慰撫金（精神上損害）最需要法院裁量，排在前面；其餘照判決裡的順序。
+ * 引文不一定寫出「慰撫金」（例如「認原告分別請求227,400元⋯尚屬過高，應分別以33,045元為宜」），
+ * 所以「過高」「一切情狀」這種酌定慰撫金的典型寫法也算。
+ */
+const SOLATIUM = /慰撫金|慰藉金|精神|過高|一切情狀/;
+export const damFirst = (items: ReasoningQuote[]) =>
+  [...items.filter((x) => SOLATIUM.test(x.text)), ...items.filter((x) => !SOLATIUM.test(x.text))];
+
+/**
+ * 相似判決列表每件下面的一行：「法院怎麼認定」＋結論方向，以及一句原文。
+ * 沒有標註的判決不顯示（目前只有部分判決有標註）。
+ */
+export function ReasoningBrief({ items }: { items?: ReasoningQuote[] | null }) {
+  const shown = shownQuotes(items);
+  if (shown.length === 0) return null;
+  const found = new Set(shown.filter((x) => x.label === "CONCL" && x.polarity).map((x) => x.polarity!));
+  const directions = [...DIRECTION_ORDER.filter((d) => found.has(d)), ...[...found].filter((d) => !DIRECTION_ORDER.includes(d))];
+  const pick = BRIEF_ORDER.map((label) => damFirst(shown.filter((x) => x.label === label))[0]).find(Boolean);
+  const title = pick && REASONING_GROUPS.find((g) => g.label === pick.label)?.title;
+  if (directions.length === 0 && !pick) return null;
+  return (
+    <span className="mt-1.5 flex flex-col gap-1 text-sm">
+      <span className="flex flex-wrap items-center gap-1.5">
+        <span className="text-muted-foreground">法院怎麼認定</span>
+        {directions.map((d) => (
+          <span key={d} className="rounded-full border border-input bg-secondary px-2 leading-6 text-secondary-foreground">{d}</span>
+        ))}
+        {directions.length > 0 && <InfoLink to="有理由、一部有理由、無理由" label="有理由、一部有理由、無理由的說明" />}
+      </span>
+      {pick && (
+        <span className="line-clamp-2 leading-relaxed text-foreground print:line-clamp-none">
+          <b>{title}：</b>「{displayQuote(pick.quote)}」
+        </span>
+      )}
+    </span>
+  );
+}
+
+/**
+ * 先顯示引文：太長的引文是「開頭⋯⋯結尾」，結尾通常就是法院定的金額（例如「以15萬元為適當」），
+ * 直接截斷全文反而會把結論切掉。需要時再展開完整原文。
+ */
+function DamQuote({ item }: { item: ReasoningQuote }) {
+  const [full, setFull] = useState(false);
+  const short = displayQuote(item.quote);
+  const long = item.text !== item.quote;
+  return (
+    <>
+      <span className={cn("text-[15px] leading-relaxed", !full && "line-clamp-4 print:line-clamp-none")}>「{full ? item.text : short}」</span>
+      {long && (
+        <button type="button" aria-expanded={full} onClick={() => setFull(!full)}
+          className="no-print min-h-11 w-fit rounded-[10px] px-2 text-sm font-bold text-primary hover:bg-accent">
+          {full ? "收起原文" : "看完整原文"}
+        </button>
+      )}
+    </>
+  );
+}
+
+const MAX_DAM_QUOTES = 2;   // 每件判決最多列幾處金額的斟酌（慰撫金優先），其餘到判決導讀看
+export const DAM_CASES_PREVIEW = 5;   // 先列幾件判決，其餘按「顯示其他 N 件」
+const yuan = (n: number | null | undefined) => (n === null || n === undefined ? "—" : Math.round(n).toLocaleString("en-US"));
+
+/**
+ * 「可能的金額」分頁下面：相似判決的法院怎麼決定金額（DAM 的原文並排）。
+ * 金額範圍只告訴你「判多少」，這裡讓你看到「為什麼判這麼多」：法院斟酌了哪些因素。
+ */
+export function DamageReasons({ cases }: { cases: SimilarCase[] }) {
+  const [open, setOpen] = useState(false);
+  const rows = cases
+    .map((c) => ({ c, items: damFirst(shownQuotes(c.reasoning).filter((x) => x.label === "DAM")) }))
+    .filter((r) => r.items.length > 0);
+  if (rows.length === 0) return null;
+  const hidden = rows.length - DAM_CASES_PREVIEW;
+  return (
+    <section aria-labelledby="damage-reasons-title" className="flex flex-col gap-3">
+      <div className="flex flex-col gap-1.5">
+        <h3 className="flex items-center gap-1 text-lg font-bold">
+          <span id="damage-reasons-title">相似判決的法院怎麼決定金額</span><InfoLink to="法院怎麼認定" label="法院怎麼認定的說明" />
+        </h3>
+        <p className="text-[15px] text-muted-foreground">
+          範圍只說明判多少；下面是 {rows.length} 件相似判決裡，法院斟酌金額的原文，可以看出法院考量了哪些因素。「酌減」是判准的比請求的少，「全額准許」是照請求的金額判准。<InfoLink to="酌減" label="酌減的說明" />
+        </p>
+      </div>
+      <ul className="m-0 flex list-none flex-col gap-3 p-0">
+        {rows.map(({ c, items }, k) => (
+          <li key={c.case_id} {...collapsed(!open && k >= DAM_CASES_PREVIEW, "print:!flex")}
+            className={cn("flex flex-col gap-2 rounded-[12px] border-2 border-input bg-card px-3.5 py-3",
+              !open && k >= DAM_CASES_PREVIEW && "print:!flex")}>
+            <div className="flex flex-wrap items-center gap-2">
+              <b className="text-[15px]">{c.case_number}</b>
+              <OutcomeChip tone={outcomeTone(c.outcome)}>{outcomeLabel(c.outcome)}</OutcomeChip>
+              {c.claimed_amount ? (
+                <span className="text-sm text-muted-foreground tabular-nums">判准 <b className="text-foreground">{yuan(c.awarded_amount ?? 0)}</b> ／ 請求 {yuan(c.claimed_amount)} 元</span>
+              ) : null}
+            </div>
+            <ul className="m-0 flex list-none flex-col gap-2 p-0">
+              {items.slice(0, MAX_DAM_QUOTES).map((it, i) => (
+                <li key={i} className="flex flex-col gap-1">
+                  <Tag item={it} />
+                  <DamQuote item={it} />
+                </li>
+              ))}
+            </ul>
+            <span className="flex flex-wrap items-center gap-3">
+              {items.length > MAX_DAM_QUOTES && <span className="text-sm text-muted-foreground">還有 {items.length - MAX_DAM_QUOTES} 處</span>}
+              <LinkButton variant="outline" size="sm" to={`/judgment/civil/${c.case_id}`} className="no-print"
+                aria-label={`${c.case_number} 判決導讀`}>判決導讀</LinkButton>
+            </span>
+          </li>
+        ))}
+      </ul>
+      {hidden > 0 && (
+        <button type="button" aria-expanded={open} onClick={() => setOpen(!open)}
+          className="no-print min-h-11 w-fit rounded-[10px] px-2 text-[15px] font-bold text-primary hover:bg-accent">
+          {open ? "收起" : `顯示其他 ${hidden} 件`}
+        </button>
+      )}
+      <p className="text-sm text-muted-foreground">由 AI 依標註手冊標註、人工抽查，可能有誤，請以判決原文為準。只有部分判決有標註。</p>
+    </section>
   );
 }
