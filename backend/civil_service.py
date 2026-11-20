@@ -17,6 +17,7 @@ from typing import Dict, List, Optional, Tuple
 import numpy as np
 
 from backend import mock
+from backend import reasoning as reasoning_store
 from backend.quality import looks_like_dispute, win_signal
 from civil.dataset.text import prepare_input
 from civil.insights import (EVIDENCE, QUESTIONNAIRE_EVIDENCE, amount_fields, amount_range, outcome_counts, user_evidence, without_questions, defense_table, evidence_table,
@@ -83,6 +84,7 @@ class CivilService:
         self.model = self.meta = self.index = None
         self.amount_model = self.amount_meta = None
         self.db_path: Optional[Path] = None
+        self.reasoning_db = reasoning_store.db_path(artifacts_dir)   # 判決導讀「法院怎麼認定」，選用
         if force_mock:
             return
         model_dir = model_service.artifact_dir(artifacts_dir)
@@ -356,5 +358,7 @@ class CivilService:
             return None
         r = found[0]
         s = self._query("SELECT claim, defense, court FROM sections WHERE id = ?", (case_id,))[0]
-        return {"case": self._case(r, 0.0), "paragraphs": guide_paragraphs(s["claim"], s["defense"], s["court"]),
+        paragraphs = guide_paragraphs(s["claim"], s["defense"], s["court"])
+        return {"case": self._case(r, 0.0), "paragraphs": paragraphs,
+                "reasoning": reasoning_store.for_case(self.reasoning_db, case_id, s["court"], paragraphs),
                 "labeler": GUIDE_LABELER, "mock": False}

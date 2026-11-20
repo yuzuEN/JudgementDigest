@@ -91,8 +91,18 @@ def guide(case: Dict) -> Dict:
         ("court", "本院審酌上開證據，認被告右轉未禮讓直行車，有過失；原告亦與有過失，應負擔百分之二十之過失責任。"),
     ]
     labels = {"claim": "原告主張", "defense": "被告答辯", "issue": "爭點", "evidence": "證據", "court": "法院判斷"}
-    return {"case": case, "labeler": "mock", "mock": True,
-            "paragraphs": [{"function": f, "label": labels[f], "text": "（示例）" + t} for f, t in paragraphs]}
+    paras = [{"function": f, "label": labels[f], "text": "（示例）" + t} for f, t in paragraphs]
+
+    def item(label, i, quote, polarity=None, basis=None):
+        s = paras[i]["text"].index(quote)
+        return {"label": label, "polarity": polarity, "basis": basis, "quote": quote, "paragraph": i,
+                "start": s, "end": s + len(quote)}
+    reasoning = {"labeler": "mock", "manual_version": "v0.6", "items": [
+        item("EV", 3, "原告提出之診斷證明書記載其受有右手橈骨骨折", "有利原告", "明示評價"),
+        item("SUB", 4, "認被告右轉未禮讓直行車，有過失"),
+        item("DAM", 4, "原告亦與有過失，應負擔百分之二十之過失責任", "酌減"),
+    ]}
+    return {"case": case, "labeler": "mock", "mock": True, "paragraphs": paras, "reasoning": reasoning}
 
 
 def criminal_guide(case: Dict) -> Dict:

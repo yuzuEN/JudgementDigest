@@ -442,6 +442,7 @@ class TestCuesAndPrompts(unittest.TestCase):
             self.assertTrue(quote_anchored("CONCL", t), t)
         self.assertFalse(quote_anchored("CONCL", "請求被告給付積欠之租金33,000元，併主張自起訴狀繕本送達翌日"))  # 只引到請求內容
         self.assertTrue(quote_anchored("EV", "原告此部分主張與其提出之上開會議資料所載內容相左，實難採信"))
+        self.assertTrue(quote_anchored("EV", "是認被告就此部分之主張，難為憑採"))   # v0.6 抽查 4113
         self.assertFalse(quote_anchored("EV", "此有除戶戶籍謄本、繼承系統表、本院公告、上開裁定在卷可稽"))  # 只列舉證據
         self.assertTrue(quote_anchored("RULE", "法院對於慰撫金之量定，應斟酌實際加害情形"))
         self.assertNotIn("SUB", cue_hits("即屬有據"))   # CONCL 的用語不能被 SUB 的新寫法吃掉

@@ -283,9 +283,27 @@ class CriminalGuide(BaseModel):
     paragraphs: List[CriminalGuideParagraph]
 
 
+class ReasoningItem(BaseModel):
+    """「法院怎麼認定」的一項：標籤、引文，以及它在導讀段落裡的位置（點了跳到該段並標出引文）。"""
+    label: str                           # CONCL、SUB、EV、DAM、BOP⋯⋯（annotation/論點標註手冊）
+    polarity: Optional[str] = None       # EV 傾向、DAM 方向、CONCL 方向
+    basis: Optional[str] = None          # EV：明示評價／依證據推論
+    quote: str                           # 標註的引文（太長時是「開頭〔略〕結尾」）
+    paragraph: int                       # paragraphs 的序號
+    start: int                           # 在該段 text 裡的起訖位置
+    end: int
+
+
+class Reasoning(BaseModel):
+    labeler: str                         # 例如 llm-p6.0
+    manual_version: str
+    items: List[ReasoningItem]
+
+
 class Guide(BaseModel):
     case: SimilarCase
     paragraphs: List[GuideParagraph]
     criminal: Optional[CriminalGuide] = None   # 刑事導讀（全文分段）；民事用 paragraphs
+    reasoning: Optional[Reasoning] = None      # 民事「法院怎麼認定」：有標註的判決才有，沒有時是 null
     labeler: str
     mock: bool

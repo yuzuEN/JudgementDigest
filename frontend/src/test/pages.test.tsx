@@ -1278,6 +1278,47 @@ describe("判決導讀", () => {
     renderAt("/judgment/:source/:caseId", <Reading />, "/judgment/civil/999");
     expect(await screen.findByRole("alert")).toBeInTheDocument();
   });
+
+  it("沒有標註時不顯示「法院怎麼認定」", async () => {
+    mockApi({ "GET /judgments/civil/11/guide": () => GUIDE });
+    renderAt("/judgment/:source/:caseId", <Reading />, "/judgment/civil/11");
+    await screen.findByRole("heading", { name: "判決資料" });
+    expect(screen.queryByRole("heading", { name: "法院怎麼認定" })).not.toBeInTheDocument();
+  });
+
+  it("法院怎麼認定：依標籤分組，點了捲到那一段並標出引文；沒抽查過的標籤不顯示", async () => {
+    const reasoning = {
+      labeler: "llm-p6.0", manual_version: "v0.6", items: [
+        { label: "EV", polarity: "有利原告", basis: "明示評價", quote: "診斷證明書", paragraph: 2, start: 4, end: 9 },
+        { label: "CONCL", polarity: "有理由", quote: "原告之請求有理由", paragraph: 3, start: 3, end: 11 },
+        { label: "BOP", quote: "本件爭點為被告有無過失", paragraph: 1, start: 0, end: 11 },
+        { label: "CONCL", polarity: "有理由", quote: "綜上〔略〕有理由", paragraph: 3, start: 0, end: 11 },
+      ] };
+    mockApi({ "GET /judgments/civil/11/guide": () => ({ ...GUIDE, reasoning }) });
+    const scroll = vi.fn();
+    Element.prototype.scrollIntoView = scroll;
+    const user = userEvent.setup();
+    const { container } = renderAt("/judgment/:source/:caseId", <Reading />, "/judgment/civil/11");
+    const card = (await screen.findByRole("heading", { name: "法院怎麼認定" })).closest("[aria-labelledby=reasoning-title]")!;
+    // 分組順序：結論在前；BOP 還沒抽查過，不顯示
+    const groups = within(card as HTMLElement).getAllByRole("heading", { level: 3 }).map((h) => h.textContent);
+    expect(groups).toEqual(["法院的結論", "證據怎麼評價"]);
+    expect(card).not.toHaveTextContent("本件爭點為被告有無過失");
+    expect(card).toHaveTextContent("「綜上⋯⋯有理由」");          // 〔略〕顯示成刪節號
+    expect(card).toHaveTextContent("請特別對照原文");             // EV 是 note
+    expect(container.querySelector("mark")).toBeNull();
+    const ev = within(card as HTMLElement).getByRole("button", { name: /診斷證明書/ });
+    await user.click(ev);
+    expect(ev).toHaveAttribute("aria-pressed", "true");
+    const mark = container.querySelector("#para-2 mark");
+    expect(mark).toHaveTextContent("診斷證明書");
+    expect(scroll).toHaveBeenCalled();
+    // 換一項：舊的標示移除，只標新的那段
+    await user.click(within(card as HTMLElement).getByRole("button", { name: /原告之請求有理由/ }));
+    expect(container.querySelector("#para-2 mark")).toBeNull();
+    expect(container.querySelector("#para-3 mark")).toHaveTextContent("原告之請求有理由");
+    expect(ev).toHaveAttribute("aria-pressed", "false");
+  });
 });
 
 
