@@ -230,8 +230,7 @@ export function DamageReasons({ cases }: { cases: SimilarCase[] }) {
           <span id="damage-reasons-title">相似判決的法院怎麼決定金額</span><InfoLink to="法院怎麼認定" label="法院怎麼認定的說明" />
         </h3>
         <p className="text-[15px] text-muted-foreground">
-          範圍只說明判多少；下面是 {rows.length} 件相似判決裡，法院斟酌金額的原文，可以看出法院考量了哪些因素。
-          「酌減」是判准的比請求的少。<InfoLink to="酌減" label="酌減的說明" />
+          範圍只說明判多少；下面是 {rows.length} 件相似判決裡，法院斟酌金額的原文，可以看出法院考量了哪些因素。「酌減」是判准的比請求的少，「全額准許」是照請求的金額判准。<InfoLink to="酌減" label="酌減的說明" />
         </p>
       </div>
       <ul className="m-0 flex list-none flex-col gap-3 p-0">
