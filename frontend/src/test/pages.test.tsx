@@ -1388,6 +1388,7 @@ describe("判決導讀", () => {
     expect(card).toHaveTextContent("「綜上⋯⋯有理由」");          // 〔略〕顯示成刪節號
     expect(card).toHaveTextContent("請特別對照原文");             // EV 是 note
     expect(container.querySelector("mark")).toBeNull();
+    expect(screen.queryByRole("button", { name: "回到法院怎麼認定" })).not.toBeInTheDocument();   // 還沒點過
     const ev = within(card as HTMLElement).getByRole("button", { name: /診斷證明書/ });
     await user.click(ev);
     expect(ev).toHaveAttribute("aria-pressed", "true");
@@ -1399,6 +1400,10 @@ describe("判決導讀", () => {
     expect(container.querySelector("#para-2 mark")).toBeNull();
     expect(container.querySelector("#para-3 mark")).toHaveTextContent("原告之請求有理由");
     expect(ev).toHaveAttribute("aria-pressed", "false");
+    // 點過一項之後，有回到卡片的按鈕（窄螢幕用；寬螢幕卡片黏在畫面上，按鈕用 CSS 藏起來）
+    scroll.mockClear();
+    await user.click(screen.getByRole("button", { name: "回到法院怎麼認定" }));
+    expect(scroll).toHaveBeenCalledWith({ behavior: "smooth", block: "start" });
   });
 
   it("法院怎麼認定：一組超過 3 處時先收起，按鈕展開、收起", async () => {

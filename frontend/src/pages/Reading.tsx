@@ -64,7 +64,7 @@ export default function Reading() {
         {!guide && !error && <LoadingPanel>正在整理這件判決…</LoadingPanel>}
         {guide && (
           <div className="flex flex-wrap items-start gap-7">
-            <aside className="flex w-full min-w-0 flex-[1_1_280px] flex-col gap-4 sm:max-w-[360px]">
+            <aside className="flex w-full min-w-0 flex-[1_1_280px] flex-col gap-4 sm:max-w-[360px] lg:self-stretch">
               <Card className="gap-4 px-6.5" aria-labelledby="basic-title">
                 <h2 id="basic-title" className="text-xl font-bold">判決資料</h2>
                 <dl className="m-0 flex flex-col gap-2.5 text-[15px]">
