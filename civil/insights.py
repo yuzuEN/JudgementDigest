@@ -99,6 +99,32 @@ def defense_types(text: str) -> List[str]:
     return [k for k, rx in _DEFENSE_RE if rx.search(text or "")]
 
 
+# 被告自己寫的答辯是口語（「太高」「已經付過」），DEFENSES 的關鍵字是判決書用語，抓不到。
+# 這組只用來讀使用者的答辯；判決的抗辯（建檢索資料時算好的）仍用 DEFENSES，兩邊的 key 相同。
+_USER_DEFENSE_RE = [(k, re.compile(rx)) for k, rx in [
+    ("contributory", r"與有過失|也有(?:過失|責任|錯)|闖紅燈|自己也"),
+    ("excessive", r"過高|太高|太多|太貴|不合理|灌水|浮報|沒必要|不必要|不需要"),
+    ("paid", r"已(?:經)?(?:清償|給付|償還|支付|賠償)|(?:付|還|賠)(?:過|了|清)|和解|強制險|保險(?:已經)?(?:理賠|賠)"),
+    ("limitation", r"時效"),
+    ("causation", r"因果關係|不是(?:我|因為我).{0,4}(?:造成|害)的"),
+    ("no_fault", r"沒有過失|無過失|沒有錯|不是我的錯|(?:不用|不必|不需要?)負(?:責|任何責任)|沒有責任"),
+    ("offset", r"抵銷|也欠我"),
+    ("dispute_fact", r"否認|偽造|不實|根本沒有|沒有這回事|沒有(?:借|簽|拿|收到)|不是我簽"),
+]]
+_USER_DEFENSE_NEGATION = re.compile(r"沒有?|未|並非")
+
+
+def user_defense_types(text: str) -> List[str]:
+    """使用者（被告）答辯裡提到哪幾類說法。前面兩個字有否定（「我沒有付過」）的不算。"""
+    found = set()
+    for sentence in _SENTENCE.split(text or ""):
+        for key, rx in _USER_DEFENSE_RE:
+            hit = rx.search(sentence)
+            if hit and not _USER_DEFENSE_NEGATION.search(sentence[max(0, hit.start() - 2):hit.start()]):
+                found.add(key)
+    return [k for k, _, _, _ in DEFENSES if k in found]
+
+
 def evidence_table(neighbor_evidence: Sequence[Iterable[str]], user_has: Iterable[str]) -> List[Dict]:
     """
     相似「勝訴」判決裡提到各項證據的比例，和使用者有沒有這項證據並列。

@@ -26,7 +26,7 @@ from backend import reasoning as reasoning_store
 from backend.quality import looks_like_dispute, win_signal
 from civil.dataset.text import prepare_input
 from civil.insights import (EVIDENCE, QUESTIONNAIRE_EVIDENCE, amount_fields, amount_range, outcome_counts, user_evidence, without_questions, defense_table, evidence_table,
-                            defense_types, guide_paragraphs, split_defense, GUIDE_LABELER)
+                            guide_paragraphs, split_defense, user_defense_types, GUIDE_LABELER)
 from civil.models import amount_service
 from civil.models import defense_service
 from civil.models import service as model_service
@@ -377,7 +377,7 @@ class CivilService:
             "evidence": evidence_table([self.case_evidence[r] for r in compared], user_evidence(req.text, req.evidence)),
             "defenses": defense_table([self.case_defenses[r] for r in rows], N_DEFENSES[role],
                                       wins=[int(self.y[r]) for r in rows],
-                                      user_has=defense_types(without_questions(self.parts(req)[1]))),
+                                      user_has=user_defense_types(without_questions(self.parts(req)[1]))),
             "outcomes": outcome_counts([self.outcomes[r] for r in rows]),
             # 被告未到庭的判決不算進比例，但要讓使用者知道有多少：看不分層的前 N_NEIGHBORS 件
             "default_cases": int(self.default[self.index.top(sim, N_NEIGHBORS, self._allowed(mid))[0]].sum()),

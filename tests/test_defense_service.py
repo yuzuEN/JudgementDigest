@@ -15,7 +15,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from backend.civil_service import DEFENSE_FALLBACK_NOTE  # noqa: E402
 from backend.main import create_app  # noqa: E402
 from backend.settings import Settings  # noqa: E402
-from civil.insights import DEFENSE_MARKER, defense_table, split_defense  # noqa: E402
+from civil.insights import DEFENSE_MARKER, defense_table, split_defense, user_defense_types  # noqa: E402
 from civil.models import defense_service as D  # noqa: E402
 from tests.test_backend import build_artifacts  # noqa: E402
 from tests.test_civil_service import WIN  # noqa: E402
@@ -43,6 +43,16 @@ class TestSplitDefense(unittest.TestCase):
         self.assertEqual(split_defense(f"對方說我欠錢\n{DEFENSE_MARKER}\n我已經還了"), ("對方說我欠錢", "我已經還了"))
         self.assertEqual(split_defense("沒有答辯"), ("沒有答辯", ""))
         self.assertEqual(split_defense(""), ("", ""))
+
+
+class TestUserDefenseTypes(unittest.TestCase):
+    def test_colloquial_defenses(self):
+        found = user_defense_types("是對方闖紅燈；看護費一天三千元太高，而且我已經付過十萬元。")
+        self.assertEqual(found, ["contributory", "excessive", "paid"])
+
+    def test_negated_is_not_counted(self):
+        self.assertEqual(user_defense_types("我沒有付過任何錢"), [])
+        self.assertEqual(user_defense_types("我沒有錯"), ["no_fault"])
 
 
 class TestDefenseTable(unittest.TestCase):
