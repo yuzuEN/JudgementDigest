@@ -9,12 +9,15 @@
   2. 對不上（例如資料版本更新、遮名改過）就用 resolve_quote 在整個法院判斷段重新找；找不到就略過該項
   3. 位置落在哪個導讀段落，就掛在那一段；跨到下一段的部分不標色（只標開頭所在的那一段）
 同一標籤、範圍重疊的項目（例如「綜上」重述同一個結論）只留範圍較長的一筆。
+
+briefs()：相似判決列表與「可能的金額」分頁用的精簡版（不對段落，只回傳引文和完整原文），
+一次查列表裡的所有判決，沒有標註的判決不會出現在結果裡。
 """
 
 import sqlite3
 from contextlib import closing
 from pathlib import Path
-from typing import Dict, List, Optional
+from typing import Callable, Dict, Iterable, List, Optional
 
 from annotation.quotes import resolve_quote
 
@@ -85,3 +88,37 @@ def for_case(db: Optional[Path], case_id: int, court: str, paragraphs: List[Dict
         it.pop("_start"), it.pop("_end")
     return {"labeler": f"llm-{meta.get('prompt_version', '')}", "manual_version": meta.get("manual_version", ""),
             "items": items}
+
+
+def briefs(db: Optional[Path], case_ids: Iterable[int], court_of: Callable[[int], str]) -> Dict[int, List[Dict]]:
+    """
+    {case_id: [{"label", "polarity", "basis", "quote", "text"}]}；text 是引文在判決裡的完整原文
+    （引文是「開頭〔略〕結尾」時，text 是整段）。court_of(case_id) 回傳該判決的法院判斷段，只對有標註的判決呼叫。
+    """
+    ids = sorted({int(i) for i in case_ids})
+    if db is None or not Path(db).exists() or not ids:
+        return {}
+    marks = ",".join("?" * len(ids))
+    with closing(sqlite3.connect(f"file:{db}?mode=ro", uri=True)) as con:
+        rows = con.execute("SELECT case_id, label, polarity, basis, quote, span_start, span_end FROM reasoning "
+                           f"WHERE case_id IN ({marks}) ORDER BY case_id, span_start", ids).fetchall()
+    by_case: Dict[int, list] = {}
+    for r in rows:
+        by_case.setdefault(r[0], []).append(r[1:])
+    out: Dict[int, List[Dict]] = {}
+    for case_id, case_rows in by_case.items():
+        court = court_of(case_id)
+        if not court:
+            continue
+        items = []
+        for label, pol, basis, quote, start, end in case_rows:
+            loc = _locate(court, quote, label, start, end)
+            if loc is None:
+                continue
+            items.append({"label": label, "polarity": pol, "basis": basis, "quote": quote,
+                          "text": court[loc[0]:loc[1]], "_start": loc[0], "_end": loc[1]})
+        if items:
+            for it in (items := _dedupe(items)):
+                it.pop("_start"), it.pop("_end")
+            out[case_id] = items
+    return out

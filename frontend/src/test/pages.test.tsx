@@ -882,6 +882,26 @@ describe("民事結果", () => {
       expect(panel).not.toHaveTextContent("件是全部勝訴");
     });
 
+    it("有標註金額斟酌的相似判決：列出法院怎麼決定金額的原文，連到判決導讀", async () => {
+      const [first, second] = CIVIL_REPORT.similar;
+      const dam = { label: "DAM", polarity: "酌減", quote: "審酌〔略〕為適當", text: "審酌原告傷勢等一切情狀，認慰撫金以十萬元為適當" };
+      await show({ similar: [{ ...first, reasoning: [dam] }, { ...second, reasoning: [{ ...dam, label: "SUB" }] }] });
+      const panel = await openTab("可能的金額");
+      const section = within(panel).getByRole("region", { name: "相似判決的法院怎麼決定金額" });
+      expect(section).toHaveTextContent("1 件相似判決");
+      expect(section).toHaveTextContent("「審酌原告傷勢等一切情狀，認慰撫金以十萬元為適當」");
+      expect(section).toHaveTextContent("酌減");
+      expect(section).toHaveTextContent("判准 310,000 ／ 請求 480,000 元");
+      expect(section).not.toHaveTextContent(second.case_number);
+      expect(within(section).getByRole("link", { name: `${first.case_number} 判決導讀` })).toHaveAttribute("href", "/judgment/civil/11");
+      expect(within(section).getByRole("link", { name: /酌減的說明/ }).getAttribute("href")).toBe(`/guide#${encodeURIComponent("酌減")}`);
+    });
+
+    it("沒有標註時不顯示法院怎麼決定金額", async () => {
+      const panel = await amount(CIVIL_REPORT.amount_range);
+      expect(within(panel).queryByRole("region", { name: "相似判決的法院怎麼決定金額" })).not.toBeInTheDocument();
+    });
+
     it("模型：相似的勝訴判決不夠時仍給範圍，只是沒有分布可看", async () => {
       const panel = await amount({ ...model, n_cases: null, buckets: [] });
       expect(panel).toHaveTextContent("180,000 ～ 420,000 元");
@@ -953,6 +973,33 @@ describe("民事結果", () => {
       const rows = within(table).getAllByRole("row").slice(1);
       expect(rows[0]).toHaveTextContent("相同點請求金額相近（你 30 萬／這件 28 萬）同一法院");
       expect(rows[1]).not.toHaveTextContent("相同點");
+    });
+
+    it("有標註的判決下面顯示法院怎麼認定：結論方向與一句原文（金額優先，EV 不放摘要）", async () => {
+      const [first, second] = CIVIL_REPORT.similar;
+      const q = (label: string, text: string, polarity: string | null = null) => ({ label, polarity, quote: text, text });
+      await show({ similar: [
+        { ...first, reasoning: [q("CONCL", "一部有理由之結論", "一部有理由"), q("CONCL", "其餘無理由", "無理由"),
+          q("EV", "證人證述堪信為真實", "有利原告"), q("SUB", "被告有過失"), q("DAM", "慰撫金以十萬元為適當", "酌減")] },
+        { ...second, reasoning: [q("EV", "證人證述堪信為真實", "有利原告")] },
+      ] });
+      const panel = await openTab("相似判決");
+      const rows = within(within(panel).getByRole("table")).getAllByRole("row").slice(1);
+      expect(rows[0]).toHaveTextContent("法院怎麼認定一部有理由無理由");
+      expect(rows[0]).toHaveTextContent("金額怎麼決定：「慰撫金以十萬元為適當」");
+      expect(rows[0]).not.toHaveTextContent("堪信為真實");
+      expect(rows[1]).not.toHaveTextContent("法院怎麼認定");     // 只有 EV → 摘要沒有可顯示的
+      expect(panel).toHaveTextContent("由 AI 依標註手冊標註、人工抽查");
+      expect(within(rows[0]).getByRole("link", { name: /有理由、一部有理由、無理由的說明/ }).getAttribute("href"))
+        .toBe(`/guide#${encodeURIComponent("有理由、一部有理由、無理由")}`);
+      expect(within(panel).getByRole("link", { name: /^法院怎麼認定的說明/ }).getAttribute("href"))
+        .toBe(`/guide#${encodeURIComponent("法院怎麼認定")}`);
+    });
+
+    it("沒有標註時不顯示法院怎麼認定", async () => {
+      await show();
+      const panel = await openTab("相似判決");
+      expect(panel).not.toHaveTextContent("法院怎麼認定");
     });
 
     it("相似判決沒有請求金額時，判准金額照樣顯示", async () => {

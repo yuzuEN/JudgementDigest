@@ -12,6 +12,7 @@ import { EmptyState } from "../components/casey/EmptyState";
 import { OutcomeBar } from "../components/casey/OutcomeBar";
 import { OutcomeChip } from "../components/casey/OutcomeChip";
 import { RangeBar } from "../components/casey/RangeBar";
+import { DamageReasons, ReasoningBrief } from "../components/casey/Reasoning";
 import { InfoNote as Note, LoadingPanel, PanelTitle, ResultTabs, useResultTab } from "../components/casey/ResultTabs";
 import { CommonPoints, corpusLead, ErrorBox, InfoLink, LAF_URL } from "../components/Common";
 import { LinkButton } from "../components/LinkButton";
@@ -81,7 +82,7 @@ export default function CivilResult() {
           label: t.label,
           content: {
             overview: <Overview report={report} />,
-            amount: <AmountPanel range={report.amount_range} mock={mock} />,
+            amount: <AmountPanel range={report.amount_range} mock={mock} cases={report.similar} />,
             evidence: <EvidencePanel report={report} />,
             defense: <DefensePanel report={report} />,
             cases: <CasesPanel report={report} onlyWin={onlyWin} setOnlyWin={setOnlyWin} rewritten={Boolean(intake.searchText)} />,
@@ -212,7 +213,7 @@ function SourceChip({ tone, children }: { tone: "win" | "partial" | "lose"; chil
  * 四種情況，標題和說明都不同：模型推估（若為一部勝訴，虛線）、相似判決（實線）、
  * 沒填請求金額（只給比例）、相似判決不夠（不給範圍）。
  */
-function AmountPanel({ range, mock }: { range: AmountRange | null; mock: boolean }) {
+function AmountPanel({ range, mock, cases = [] }: { range: AmountRange | null; mock: boolean; cases?: SimilarCase[] }) {
   if (!range) {
     return (
       <>
@@ -220,6 +221,7 @@ function AmountPanel({ range, mock }: { range: AmountRange | null; mock: boolean
         <EmptyState title="無法估出金額範圍" icon={<CircleMinusIcon className="size-7 text-ink-3" aria-hidden="true" />}>
           相似的勝訴判決太少，或描述看不出是哪一種糾紛，估出來的範圍不可靠，所以不顯示。你可以參考「相似判決」分頁，或回上一步補充細節。
         </EmptyState>
+        <DamageReasons cases={cases} />
       </>
     );
   }
@@ -274,6 +276,7 @@ function AmountPanel({ range, mock }: { range: AmountRange | null; mock: boolean
       {isModel && <Note>模型推估的範圍<b>很寬</b>，因為同樣的案情，法院判准的比例落差很大，只能看個大概。如果判決是全部勝訴，通常就是請求的全部金額。</Note>}
       {!claimed && <Note>想看到實際的金額範圍？<Link to="/start?stage=3">回上一步填寫想請求的金額</Link>，資料會保留。</Note>}
       <AmountDetail range={range} />
+      <DamageReasons cases={cases} />
     </>
   );
 }
@@ -388,7 +391,7 @@ function CasesPanel({ report, onlyWin, setOnlyWin, rewritten }: {
         <TableBody>
           {cases.map((c) => (
             <TableRow key={c.case_id} className={visible(c) ? undefined : "screen-hidden"}>
-              <TableCell className="py-3.5 align-top whitespace-normal"><b>{c.case_number}</b><br /><span className="line-clamp-3 text-sm text-muted-foreground print:line-clamp-none">{c.summary}</span><CommonPoints points={c.common} /></TableCell>
+              <TableCell className="py-3.5 align-top whitespace-normal"><b>{c.case_number}</b><br /><span className="line-clamp-3 text-sm text-muted-foreground print:line-clamp-none">{c.summary}</span><CommonPoints points={c.common} /><ReasoningBrief items={c.reasoning} /></TableCell>
               <TableCell className="py-3.5 align-top">
                 <span className="flex flex-col gap-1">
                   <OutcomeChip tone={outcomeTone(c.outcome)}>{outcomeLabel(c.outcome)}</OutcomeChip>
@@ -416,6 +419,11 @@ function CasesPanel({ report, onlyWin, setOnlyWin, rewritten }: {
         <EmptyState title="沒有符合的判決" className="no-print">
           這 {cases.length} 件相似判決都不是原告勝訴的。關掉「只看原告勝訴的」就能看到。
         </EmptyState>
+      )}
+      {cases.some((c) => (c.reasoning ?? []).length > 0) && (
+        <p className="text-[15px] text-muted-foreground">
+          「法院怎麼認定」由 AI 依標註手冊標註、人工抽查，可能有誤；只有部分判決有標註。點「判決導讀」可以看完整的認定和原文。<InfoLink to="法院怎麼認定" label="法院怎麼認定的說明" />
+        </p>
       )}
       {cases.some((c) => c.default_judgment) && (
         <p className={cn("text-[15px] text-muted-foreground", !shown.some((c) => c.default_judgment) && "screen-hidden")}>

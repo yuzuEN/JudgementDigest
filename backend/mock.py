@@ -28,10 +28,27 @@ _MOCK_CASES = [
 ]
 
 
+def _quote(label, text, polarity=None, basis=None):
+    return {"label": label, "polarity": polarity, "basis": basis, "quote": text, "text": text}
+
+
+# 示例的「法院怎麼認定」：只有部分判決有，表示有標註的判決才會顯示
+_MOCK_REASONING = {
+    0: [_quote("CONCL", "原告請求被告給付三十一萬元，為有理由，逾此部分之請求，為無理由", "一部有理由"),
+        _quote("SUB", "被告右轉未禮讓直行車，有過失"),
+        _quote("DAM", "審酌原告所受傷勢、兩造之身分地位及經濟狀況等一切情狀，認原告請求之精神慰撫金以十五萬元為適當", "酌減")],
+    2: [_quote("CONCL", "原告請求被告給付四十萬元，為有理由，逾此部分之請求，為無理由", "一部有理由"),
+        _quote("DAM", "原告就本件事故之發生亦與有過失，應減輕被告賠償金額百分之三十", "酌減")],
+    3: [_quote("CONCL", "原告之請求，為無理由，應予駁回", "無理由"),
+        _quote("SUB", "原告未能證明其因本件事故受有薪資損失，此部分請求即屬無據")],
+}
+
+
 def civil_cases(mid: str = "侵權：交通事故") -> List[Dict]:
     return [{"source": "civil", "case_id": -(i + 1), "case_number": "臺灣○○地方法院 ○○○ 年度訴字第 ○○○ 號",
              "court": "臺灣○○地方法院", "year": "○○○", "mid": mid or "侵權：交通事故", "outcome": outcome,
-             "similarity": sim, "summary": f"（示例）{summary}", "claimed_amount": claimed, "awarded_amount": awarded}
+             "similarity": sim, "summary": f"（示例）{summary}", "claimed_amount": claimed, "awarded_amount": awarded,
+             **({"reasoning": _MOCK_REASONING[i]} if i in _MOCK_REASONING else {})}
             for i, (summary, outcome, claimed, awarded, sim) in enumerate(_MOCK_CASES)]
 
 

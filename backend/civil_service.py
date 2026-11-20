@@ -239,7 +239,19 @@ class CivilService:
             case["common"] = common_points(case, self.case_evidence[row], mine,
                                            mid if allowed is None else None,
                                            getattr(req, "claimed_amount", None), getattr(req, "court", None))
+        self._attach_reasoning(picked)
         return picked
+
+    def _court_text(self, case_id: int) -> str:
+        found = self._query("SELECT court FROM sections WHERE id = ?", (case_id,))
+        return (found[0]["court"] or "") if found else ""
+
+    def _attach_reasoning(self, cases: List[Dict]) -> None:
+        """有標註的判決附上「法院怎麼認定」（列表摘要與「可能的金額」分頁用）；沒有 guide.sqlite 時什麼都不做。"""
+        found = reasoning_store.briefs(self.reasoning_db, [c["case_id"] for c in cases], self._court_text)
+        for case in cases:
+            if case["case_id"] in found:
+                case["reasoning"] = found[case["case_id"]]
 
     def _shortlist(self, rows, sims, n: int) -> List[Dict]:
         """

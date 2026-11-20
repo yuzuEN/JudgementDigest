@@ -147,6 +147,15 @@ class AmountRange(BaseModel):
     n_full_wins: Optional[int] = Field(default=None, description="其中全部勝訴（含確認勝訴）的件數")
 
 
+class ReasoningQuote(BaseModel):
+    """相似判決列表用的「法院怎麼認定」：不對段落，只有引文和它在判決裡的完整原文。"""
+    label: str                           # CONCL、SUB、EV、DAM、EXP⋯⋯（annotation/論點標註手冊）
+    polarity: Optional[str] = None
+    basis: Optional[str] = None
+    quote: str                           # 標註的引文（太長時是「開頭〔略〕結尾」）
+    text: str                            # 引文在判決裡的完整原文
+
+
 class SimilarCase(BaseModel):
     source: Literal["civil", "criminal"]
     case_id: int
@@ -163,6 +172,7 @@ class SimilarCase(BaseModel):
     default_judgment: bool = False      # 一造辯論：被告沒有到庭
     url: Optional[str] = None           # 司法院裁判書系統的原文網址（民事舊版檢索資料沒有時為 None）
     common: List[str] = []              # 民事：和使用者的情況相同的地方（同類糾紛、請求金額相近、都有的證據、同一法院），用結構化欄位比對
+    reasoning: Optional[List[ReasoningQuote]] = None   # 民事：有標註的判決才有「法院怎麼認定」（backend/reasoning.py）
 
 
 class EvidenceRow(BaseModel):
