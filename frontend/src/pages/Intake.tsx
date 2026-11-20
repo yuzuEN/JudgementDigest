@@ -298,7 +298,7 @@ function CriminalTips() {
       <ul className="m-0 flex list-disc flex-col gap-2 pl-5 text-[15px] text-muted-foreground">
         <li>寫清楚時間、地點、發生了什麼，以及你被指控（或想指控）什麼事。</li>
         <li>有起訴書或傳票，可以直接貼「犯罪事實」那一段。</li>
-        <li>不用寫你認為的罪名，系統會從相似判決找出可能的罪名。</li>
+        <li>不用寫你認為的罪名，系統會從你描述的事情推估可能的罪名。</li>
       </ul>
     </div>
   );
