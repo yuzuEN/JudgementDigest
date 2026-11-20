@@ -889,6 +889,8 @@ describe("民事結果", () => {
       const panel = await openTab("可能的金額");
       const section = within(panel).getByRole("region", { name: "相似判決的法院怎麼決定金額" });
       expect(section).toHaveTextContent("1 件相似判決");
+      expect(section).toHaveTextContent("「審酌⋯⋯為適當」");                    // 先顯示引文（保留結尾的金額）
+      await userEvent.setup().click(within(section).getByRole("button", { name: "看完整原文" }));
       expect(section).toHaveTextContent("「審酌原告傷勢等一切情狀，認慰撫金以十萬元為適當」");
       expect(section).toHaveTextContent("酌減");
       expect(section).toHaveTextContent("判准 310,000 ／ 請求 480,000 元");
@@ -1021,11 +1023,11 @@ describe("民事結果", () => {
       const [first] = CIVIL_REPORT.similar;
       const q = (label: string, text: string, polarity: string | null = null) => ({ label, polarity, quote: text, text });
       await show({ similar: [{ ...first, reasoning: [q("CONCL", "其餘無理由", "無理由"), q("CONCL", "部分准許", "一部有理由"),
-        q("CONCL", "此部分准許", "有理由"), q("DAM", "機車修理費折舊後為710元", "酌減"), q("DAM", "精神慰撫金以3萬元為適當", "酌減")] }] });
+        q("CONCL", "此部分准許", "有理由"), q("DAM", "機車修理費折舊後為710元", "酌減"), q("DAM", "請求227,400元尚屬過高，應以33,045元為宜", "酌減")] }] });
       const panel = await openTab("相似判決");
       const row = within(within(panel).getByRole("table")).getAllByRole("row")[1];
       expect(row).toHaveTextContent("法院怎麼認定有理由一部有理由無理由");
-      expect(row).toHaveTextContent("金額怎麼決定：「精神慰撫金以3萬元為適當」");
+      expect(row).toHaveTextContent("金額怎麼決定：「請求227,400元尚屬過高，應以33,045元為宜」");   // 沒寫「慰撫金」也算
     });
 
     it("沒有標註時不顯示法院怎麼認定", async () => {

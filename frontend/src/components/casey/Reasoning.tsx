@@ -148,8 +148,12 @@ const BRIEF_ORDER = ["DAM", "SUB", "EXP"];
 /** 結論方向固定這個順序顯示，不照判決裡出現的順序 */
 const DIRECTION_ORDER = ["有理由", "一部有理由", "無理由"];
 
-/** 金額的斟酌：慰撫金（精神上損害）最需要法院裁量，排在前面；其餘照判決裡的順序 */
-const SOLATIUM = /慰撫金|慰藉金|精神/;
+/**
+ * 金額的斟酌：慰撫金（精神上損害）最需要法院裁量，排在前面；其餘照判決裡的順序。
+ * 引文不一定寫出「慰撫金」（例如「認原告分別請求227,400元⋯尚屬過高，應分別以33,045元為宜」），
+ * 所以「過高」「一切情狀」這種酌定慰撫金的典型寫法也算。
+ */
+const SOLATIUM = /慰撫金|慰藉金|精神|過高|一切情狀/;
 export const damFirst = (items: ReasoningQuote[]) =>
   [...items.filter((x) => SOLATIUM.test(x.text)), ...items.filter((x) => !SOLATIUM.test(x.text))];
 
@@ -176,10 +180,31 @@ export function ReasoningBrief({ items }: { items?: ReasoningQuote[] | null }) {
       </span>
       {pick && (
         <span className="line-clamp-2 leading-relaxed text-foreground print:line-clamp-none">
-          <b>{title}：</b>「{pick.text}」
+          <b>{title}：</b>「{displayQuote(pick.quote)}」
         </span>
       )}
     </span>
+  );
+}
+
+/**
+ * 先顯示引文：太長的引文是「開頭⋯⋯結尾」，結尾通常就是法院定的金額（例如「以15萬元為適當」），
+ * 直接截斷全文反而會把結論切掉。需要時再展開完整原文。
+ */
+function DamQuote({ item }: { item: ReasoningQuote }) {
+  const [full, setFull] = useState(false);
+  const short = displayQuote(item.quote);
+  const long = item.text !== item.quote;
+  return (
+    <>
+      <span className={cn("text-[15px] leading-relaxed", !full && "line-clamp-4 print:line-clamp-none")}>「{full ? item.text : short}」</span>
+      {long && (
+        <button type="button" aria-expanded={full} onClick={() => setFull(!full)}
+          className="no-print min-h-11 w-fit rounded-[10px] px-2 text-sm font-bold text-primary hover:bg-accent">
+          {full ? "收起原文" : "看完整原文"}
+        </button>
+      )}
+    </>
   );
 }
 
@@ -223,7 +248,7 @@ export function DamageReasons({ cases }: { cases: SimilarCase[] }) {
               {items.slice(0, MAX_DAM_QUOTES).map((it, i) => (
                 <li key={i} className="flex flex-col gap-1">
                   <Tag item={it} />
-                  <span className="line-clamp-4 text-[15px] leading-relaxed print:line-clamp-none">「{it.text}」</span>
+                  <DamQuote item={it} />
                 </li>
               ))}
             </ul>
