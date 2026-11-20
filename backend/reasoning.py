@@ -7,7 +7,8 @@
 引文位置的對法：
   1. 先檢查匯出時存的位置在目前的判決文字上是否還對得上（同一份 retrieval_civil 資料就會對上）
   2. 對不上（例如資料版本更新、遮名改過）就用 resolve_quote 在整個法院判斷段重新找；找不到就略過該項
-  3. 位置落在哪個導讀段落，就掛在那一段；跨到下一段的部分不標色（只標開頭所在的那一段）
+  3. 位置落在哪個導讀段落，就掛在那一段（paragraph/start/end 是開頭所在的那一段）；
+     引文跨到下一段時（導讀段落是依長度切的，可能切在句子中間），parts 列出每一段要標的範圍
 同一標籤、範圍重疊的項目（例如「綜上」重述同一個結論）只留範圍較長的一筆。
 
 briefs()：相似判決列表與「可能的金額」分頁用的精簡版（不對段落，只回傳引文和完整原文），
@@ -75,12 +76,14 @@ def for_case(db: Optional[Path], case_id: int, court: str, paragraphs: List[Dict
         loc = _locate(court, quote, label, start, end)
         if loc is None:
             continue
-        hit = next(((i, ps, pe) for i, ps, pe in spans if ps <= loc[0] < pe), None)
-        if hit is None:
+        if not any(ps <= loc[0] < pe for _, ps, pe in spans):
             continue
-        i, ps, pe = hit
+        parts = [{"paragraph": i, "start": max(loc[0], ps) - ps, "end": min(loc[1], pe) - ps}
+                 for i, ps, pe in spans if ps < loc[1] and loc[0] < pe]
+        parts = [x for x in parts if x["end"] > x["start"]]
+        first = parts[0]
         items.append({"label": label, "polarity": pol, "basis": basis, "quote": quote,
-                      "paragraph": i, "start": loc[0] - ps, "end": min(loc[1], pe) - ps,
+                      "paragraph": first["paragraph"], "start": first["start"], "end": first["end"], "parts": parts,
                       "_start": loc[0], "_end": loc[1]})
     if not items:
         return None

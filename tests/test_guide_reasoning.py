@@ -106,6 +106,22 @@ class TestForCase(unittest.TestCase):
         it = reasoning.for_case(self.db, 1, self.COURT, self.paras)["items"][0]
         self.assertTrue(self.paras[it["paragraph"]]["text"][it["start"]:it["end"]].endswith("堪信為真實"))
 
+    def test_quote_across_paragraphs(self):
+        """引文跨兩個導讀段落：paragraph 是開頭那段，parts 列出兩段各自要標的範圍。"""
+        q = "堪信為真實。三、綜上"
+        self.write([self.row("EV", q, "有利原告")])
+        it = reasoning.for_case(self.db, 1, self.COURT, self.paras)["items"][0]
+        self.assertEqual(it["paragraph"], 3)
+        marked = "".join(self.paras[x["paragraph"]]["text"][x["start"]:x["end"]] for x in it["parts"])
+        self.assertEqual([x["paragraph"] for x in it["parts"]], [3, 4])
+        self.assertEqual(marked, q)
+        self.assertEqual(it["parts"][0], {"paragraph": 3, "start": it["start"], "end": it["end"]})
+
+    def test_single_paragraph_has_one_part(self):
+        self.write([self.row("CONCL", "原告之請求有理由，應予准許", "有理由")])
+        it = reasoning.for_case(self.db, 1, self.COURT, self.paras)["items"][0]
+        self.assertEqual(it["parts"], [{"paragraph": it["paragraph"], "start": it["start"], "end": it["end"]}])
+
     def test_no_data(self):
         self.assertIsNone(reasoning.for_case(Path(self.tmp.name) / "沒有.sqlite", 1, self.COURT, self.paras))
         self.assertIsNone(reasoning.for_case(None, 1, self.COURT, self.paras))

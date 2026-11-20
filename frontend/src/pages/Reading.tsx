@@ -7,7 +7,7 @@ import { api } from "../api/client";
 import type { Guide, GuideFunction } from "../api/types";
 import { Bar } from "../components/casey/Bars";
 import { OutcomeChip } from "../components/casey/OutcomeChip";
-import { MarkedText, ReasoningCard } from "../components/casey/Reasoning";
+import { MarkedText, partIn, ReasoningCard } from "../components/casey/Reasoning";
 import { InfoNote, LoadingPanel } from "../components/casey/ResultTabs";
 import { SampleTag } from "../components/casey/Sample";
 import { ErrorBox } from "../components/Common";
@@ -140,7 +140,7 @@ export default function Reading() {
                     className={cn("para flex flex-col gap-1.5 rounded-[12px] px-4 py-3.5 transition-colors motion-reduce:transition-none",
                       on[p.function] ? f.on : "border border-dashed border-input bg-transparent")}>
                     <span className="text-[13px] font-extrabold tracking-[.06em]">{f.label}</span>
-                    <p className="leading-loose"><MarkedText text={p.text} item={activeItem?.paragraph === i ? activeItem : null} /></p>
+                    <p className="leading-loose"><MarkedText text={p.text} item={partIn(activeItem, i)} /></p>
                   </section>
                 );
               })}

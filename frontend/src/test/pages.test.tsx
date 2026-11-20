@@ -1406,6 +1406,20 @@ describe("判決導讀", () => {
     expect(scroll).toHaveBeenCalledWith({ behavior: "smooth", block: "start" });
   });
 
+  it("法院怎麼認定：引文跨兩段時，兩段都標出來", async () => {
+    const reasoning = { labeler: "llm-p6.0", manual_version: "v0.6", items: [
+      { label: "CONCL", polarity: "有理由", quote: "跨段的引文", paragraph: 2, start: 4, end: 9,
+        parts: [{ paragraph: 2, start: 4, end: 9 }, { paragraph: 3, start: 0, end: 3 }] },
+    ] };
+    mockApi({ "GET /judgments/civil/11/guide": () => ({ ...GUIDE, reasoning }) });
+    const user = userEvent.setup();
+    const { container } = renderAt("/judgment/:source/:caseId", <Reading />, "/judgment/civil/11");
+    const card = (await screen.findByRole("heading", { name: "法院怎麼認定" })).closest("[aria-labelledby=reasoning-title]") as HTMLElement;
+    await user.click(within(card).getByRole("button", { name: /跨段的引文/ }));
+    expect(container.querySelector("#para-2 mark")).not.toBeNull();
+    expect(container.querySelector("#para-3 mark")).toHaveTextContent(GUIDE.paragraphs[3].text.slice(0, 3));
+  });
+
   it("法院怎麼認定：一組超過 3 處時先收起，按鈕展開、收起", async () => {
     const items = Array.from({ length: 5 }, (_, i) => (
       { label: "CONCL", polarity: "有理由", quote: `第${i + 1}項請求有理由`, paragraph: 3, start: 0, end: 3 }));

@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { cn } from "@/lib/utils";
 import { Card } from "@/components/ui/card";
-import type { Reasoning, ReasoningItem, ReasoningQuote, SimilarCase } from "../../api/types";
+import type { Reasoning, ReasoningItem, ReasoningPart, ReasoningQuote, SimilarCase } from "../../api/types";
 import { outcomeLabel, outcomeTone } from "../../format";
 import { InfoLink } from "../Common";
 import { LinkButton } from "../LinkButton";
@@ -136,8 +136,15 @@ export function ReasoningCard({ reasoning, active, onSelect }: {
   );
 }
 
+/** 選到的引文在第 i 段要標的範圍（引文可能跨好幾段）；這段沒有就是 null */
+export function partIn(item: ReasoningItem | null, i: number): ReasoningPart | null {
+  if (!item) return null;
+  if (item.parts?.length) return item.parts.find((x) => x.paragraph === i) ?? null;
+  return item.paragraph === i ? item : null;
+}
+
 /** 段落文字：選到的引文用 mark 標出（只標在這一段裡的部分） */
-export function MarkedText({ text, item }: { text: string; item: ReasoningItem | null }) {
+export function MarkedText({ text, item }: { text: string; item: ReasoningPart | null }) {
   if (!item || item.start < 0 || item.end <= item.start || item.end > text.length) return <>{text}</>;
   return (
     <>

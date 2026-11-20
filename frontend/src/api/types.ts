@@ -226,6 +226,14 @@ export interface ReasoningItem {
   paragraph: number;
   start: number;
   end: number;
+  /** 引文跨段時，每一段要標的範圍；舊版後端沒有，就只標 paragraph 那一段 */
+  parts?: ReasoningPart[];
+}
+
+export interface ReasoningPart {
+  paragraph: number;
+  start: number;
+  end: number;
 }
 
 export interface Reasoning {

@@ -293,15 +293,23 @@ class CriminalGuide(BaseModel):
     paragraphs: List[CriminalGuideParagraph]
 
 
+class ReasoningPart(BaseModel):
+    """引文在某一個導讀段落裡要標的範圍（引文跨段時有好幾個）。"""
+    paragraph: int
+    start: int
+    end: int
+
+
 class ReasoningItem(BaseModel):
     """「法院怎麼認定」的一項：標籤、引文，以及它在導讀段落裡的位置（點了跳到該段並標出引文）。"""
     label: str                           # CONCL、SUB、EV、DAM、BOP⋯⋯（annotation/論點標註手冊）
     polarity: Optional[str] = None       # EV 傾向、DAM 方向、CONCL 方向
     basis: Optional[str] = None          # EV：明示評價／依證據推論
     quote: str                           # 標註的引文（太長時是「開頭〔略〕結尾」）
-    paragraph: int                       # paragraphs 的序號
+    paragraph: int                       # paragraphs 的序號（開頭所在的那一段）
     start: int                           # 在該段 text 裡的起訖位置
     end: int
+    parts: List[ReasoningPart] = []      # 引文跨段時，每一段要標的範圍（第一個就是 paragraph/start/end）
 
 
 class Reasoning(BaseModel):
