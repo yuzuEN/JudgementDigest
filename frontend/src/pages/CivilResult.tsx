@@ -446,7 +446,8 @@ function CasesPanel({ report, onlyWin, setOnlyWin, rewritten, defendant = false 
         </label>
       }>相似的真實判決</PanelTitle>
       <p className="text-[15px] text-muted-foreground">
-        {corpusLead({ scope: report.mock ? null : report.search_scope, shown: cases.length, civil: true })}{rewritten ? "這次用你確認過的整理文字搜尋。" : "這次用你原本的描述搜尋。"}「被告未到庭」代表一造辯論，只聽了原告一方的說法。<InfoLink to="相似判決怎麼找" label="相似判決怎麼找的說明" />
+        {corpusLead({ scope: report.mock ? null : report.search_scope, shown: cases.length, civil: true })}{rewritten ? "這次用你確認過的整理文字搜尋。" : "這次用你原本的描述搜尋。"}
+        {defendant && report.search_scope?.defense_used && "除了對方的主張，也比對了判決裡被告的答辯和你寫的說法。"}「被告未到庭」代表一造辯論，只聽了原告一方的說法。<InfoLink to="相似判決怎麼找" label="相似判決怎麼找的說明" />
       </p>
       <Table className="min-w-[680px] text-[15px]">
         <TableHeader>

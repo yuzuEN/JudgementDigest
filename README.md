@@ -144,6 +144,7 @@ docker compose up --build
 | `civil_winloss_v1/` | 民事勝敗模型（約 9 MB） | `scripts/sync_civil_models.sh` |
 | `civil_amount_v1/` | 民事獲償比例模型（約 8 MB） | 同上（民事三個資料夾一起下載） |
 | `civil_defense_v1/` | 民事被告端勝敗模型（選用） | 同上（上傳後才下載得到；沒有時被告改用原告端模型） |
+| `retrieval_civil_defense_v1/` | 民事被告答辯的檢索索引（選用，約 600 MB） | 同上（沒有時被告只用對方的主張找相似判決） |
 | `retrieval_civil_v6/` | 民事相似判決檢索（約 3.1 GB） | 同上，或 `bash scripts/sync_retrieval.sh civil` |
 | `retrieval_criminal_v1/` | 刑事相似判決檢索（約 481 MB） | `scripts/sync_criminal_models.sh`（和刑事 SVM 一起下載），或 `bash scripts/sync_retrieval.sh criminal` |
 
@@ -196,6 +197,7 @@ python -m civil.models.service evaluate       # 5 折評估
 python -m civil.models.service train          # → artifacts/civil_winloss_v1/
 python -m civil.models.amount_service train   # → artifacts/civil_amount_v1/（選用：金額範圍改用模型推估）
 python -m civil.models.defense_service train  # → artifacts/civil_defense_v1/（選用：民事被告端）
+python -m retrieval.defense_index build       # → artifacts/retrieval_civil_defense_v1/（選用：被告答辯也用來找相似判決，要先有 retrieval_civil_v6）
 python -m retrieval.build                     # → artifacts/retrieval_civil_v6/（要有 judgments.db，約 35 分鐘）
 ```
 
