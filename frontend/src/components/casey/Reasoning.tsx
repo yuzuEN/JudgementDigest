@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { cn } from "@/lib/utils";
 import { Card } from "@/components/ui/card";
 import type { Reasoning, ReasoningItem, ReasoningQuote, SimilarCase } from "../../api/types";
@@ -60,6 +61,49 @@ function Tag({ item }: { item: { polarity?: string | null } }) {
   );
 }
 
+/** 每組先顯示幾處；長判決（例如結論 17 處）其餘收起來，才不會把後面的分組擠到很下面 */
+export const GROUP_PREVIEW = 3;
+
+function ReasoningGroup({ group: g, active, onSelect }: {
+  group: ReturnType<typeof shownGroups>[number];
+  active: number | null;
+  onSelect: (index: number) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const hidden = g.items.length - GROUP_PREVIEW;
+  // 選到的項目在收起的部分時（例如從段落標示回來），整組展開
+  const expanded = open || hidden <= 0 || g.items.slice(GROUP_PREVIEW).some((x) => x.index === active);
+  const items = expanded ? g.items : g.items.slice(0, GROUP_PREVIEW);
+  return (
+    <section aria-labelledby={`reasoning-${g.label}`} className="flex flex-col gap-2">
+      <div className="flex items-baseline justify-between gap-2">
+        <h3 id={`reasoning-${g.label}`} className="text-base font-bold">{g.title}</h3>
+        <span className="text-sm text-muted-foreground">{g.items.length} 處</span>
+      </div>
+      <p className="text-sm text-muted-foreground">{g.hint}</p>
+      <ul className="m-0 flex list-none flex-col gap-2 p-0">
+        {items.map(({ item, index }) => (
+          <li key={index}>
+            <button type="button" aria-pressed={active === index} onClick={() => onSelect(index)}
+              className={cn("flex w-full min-h-11 flex-col gap-1.5 rounded-[12px] border-2 bg-card px-3.5 py-2.5 text-left",
+                active === index ? "border-primary" : "border-input")}>
+              <Tag item={item} />
+              <span className="text-[15px] leading-relaxed">「{displayQuote(item.quote)}」</span>
+            </button>
+          </li>
+        ))}
+      </ul>
+      {hidden > 0 && (
+        <button type="button" aria-expanded={expanded} onClick={() => setOpen(!expanded)}
+          className="no-print min-h-11 w-fit rounded-[10px] px-2 text-[15px] font-bold text-primary hover:bg-accent">
+          {expanded ? "收起" : `顯示全部 ${g.items.length} 處`}
+        </button>
+      )}
+      {g.status === "note" && <p className="text-sm text-muted-foreground">這類標示的抽查正確率較低，請特別對照原文。</p>}
+    </section>
+  );
+}
+
 export function ReasoningCard({ reasoning, active, onSelect }: {
   reasoning: Reasoning | null | undefined;
   active: number | null;
@@ -73,28 +117,7 @@ export function ReasoningCard({ reasoning, active, onSelect }: {
         <h2 id="reasoning-title" className="text-xl font-bold">法院怎麼認定</h2>
         <p className="text-[15px] text-muted-foreground">點一下，右邊的全文會捲到那一段，並標出這句原文。</p>
       </div>
-      {groups.map((g) => (
-        <section key={g.label} aria-labelledby={`reasoning-${g.label}`} className="flex flex-col gap-2">
-          <div className="flex items-baseline justify-between gap-2">
-            <h3 id={`reasoning-${g.label}`} className="text-base font-bold">{g.title}</h3>
-            <span className="text-sm text-muted-foreground">{g.items.length} 處</span>
-          </div>
-          <p className="text-sm text-muted-foreground">{g.hint}</p>
-          <ul className="m-0 flex list-none flex-col gap-2 p-0">
-            {g.items.map(({ item, index }) => (
-              <li key={index}>
-                <button type="button" aria-pressed={active === index} onClick={() => onSelect(index)}
-                  className={cn("flex w-full min-h-11 flex-col gap-1.5 rounded-[12px] border-2 bg-card px-3.5 py-2.5 text-left",
-                    active === index ? "border-primary" : "border-input")}>
-                  <Tag item={item} />
-                  <span className="text-[15px] leading-relaxed">「{displayQuote(item.quote)}」</span>
-                </button>
-              </li>
-            ))}
-          </ul>
-          {g.status === "note" && <p className="text-sm text-muted-foreground">這類標示的抽查正確率較低，請特別對照原文。</p>}
-        </section>
-      ))}
+      {groups.map((g) => <ReasoningGroup key={g.label} group={g} active={active} onSelect={onSelect} />)}
       <p className="text-sm text-muted-foreground">
         依標註手冊 {reasoning.manual_version} 由 AI 標註、人工抽查，可能有誤，請以判決原文為準。
       </p>
@@ -122,6 +145,14 @@ const shownQuotes = (items: ReasoningQuote[] | null | undefined) => (items ?? []
 /** 列表摘要挑哪一句：金額怎麼決定 → 法律上怎麼認定 → 依常理怎麼判斷（EV 抽查正確率較低，不放在摘要） */
 const BRIEF_ORDER = ["DAM", "SUB", "EXP"];
 
+/** 結論方向固定這個順序顯示，不照判決裡出現的順序 */
+const DIRECTION_ORDER = ["有理由", "一部有理由", "無理由"];
+
+/** 金額的斟酌：慰撫金（精神上損害）最需要法院裁量，排在前面；其餘照判決裡的順序 */
+const SOLATIUM = /慰撫金|慰藉金|精神/;
+export const damFirst = (items: ReasoningQuote[]) =>
+  [...items.filter((x) => SOLATIUM.test(x.text)), ...items.filter((x) => !SOLATIUM.test(x.text))];
+
 /**
  * 相似判決列表每件下面的一行：「法院怎麼認定」＋結論方向，以及一句原文。
  * 沒有標註的判決不顯示（目前只有部分判決有標註）。
@@ -129,8 +160,9 @@ const BRIEF_ORDER = ["DAM", "SUB", "EXP"];
 export function ReasoningBrief({ items }: { items?: ReasoningQuote[] | null }) {
   const shown = shownQuotes(items);
   if (shown.length === 0) return null;
-  const directions = [...new Set(shown.filter((x) => x.label === "CONCL" && x.polarity).map((x) => x.polarity!))];
-  const pick = BRIEF_ORDER.map((label) => shown.find((x) => x.label === label)).find(Boolean);
+  const found = new Set(shown.filter((x) => x.label === "CONCL" && x.polarity).map((x) => x.polarity!));
+  const directions = [...DIRECTION_ORDER.filter((d) => found.has(d)), ...[...found].filter((d) => !DIRECTION_ORDER.includes(d))];
+  const pick = BRIEF_ORDER.map((label) => damFirst(shown.filter((x) => x.label === label))[0]).find(Boolean);
   const title = pick && REASONING_GROUPS.find((g) => g.label === pick.label)?.title;
   if (directions.length === 0 && !pick) return null;
   return (
@@ -151,7 +183,8 @@ export function ReasoningBrief({ items }: { items?: ReasoningQuote[] | null }) {
   );
 }
 
-const MAX_DAM_QUOTES = 3;   // 每件判決最多列幾處金額的斟酌，其餘到判決導讀看
+const MAX_DAM_QUOTES = 2;   // 每件判決最多列幾處金額的斟酌（慰撫金優先），其餘到判決導讀看
+export const DAM_CASES_PREVIEW = 5;   // 先列幾件判決，其餘按「顯示其他 N 件」
 const yuan = (n: number | null | undefined) => (n === null || n === undefined ? "—" : Math.round(n).toLocaleString("en-US"));
 
 /**
@@ -159,10 +192,12 @@ const yuan = (n: number | null | undefined) => (n === null || n === undefined ? 
  * 金額範圍只告訴你「判多少」，這裡讓你看到「為什麼判這麼多」：法院斟酌了哪些因素。
  */
 export function DamageReasons({ cases }: { cases: SimilarCase[] }) {
+  const [open, setOpen] = useState(false);
   const rows = cases
-    .map((c) => ({ c, items: shownQuotes(c.reasoning).filter((x) => x.label === "DAM") }))
+    .map((c) => ({ c, items: damFirst(shownQuotes(c.reasoning).filter((x) => x.label === "DAM")) }))
     .filter((r) => r.items.length > 0);
   if (rows.length === 0) return null;
+  const hidden = rows.length - DAM_CASES_PREVIEW;
   return (
     <section aria-labelledby="damage-reasons-title" className="flex flex-col gap-3">
       <div className="flex flex-col gap-1.5">
@@ -175,7 +210,7 @@ export function DamageReasons({ cases }: { cases: SimilarCase[] }) {
         </p>
       </div>
       <ul className="m-0 flex list-none flex-col gap-3 p-0">
-        {rows.map(({ c, items }) => (
+        {(open || hidden <= 0 ? rows : rows.slice(0, DAM_CASES_PREVIEW)).map(({ c, items }) => (
           <li key={c.case_id} className="flex flex-col gap-2 rounded-[12px] border-2 border-input bg-card px-3.5 py-3">
             <div className="flex flex-wrap items-center gap-2">
               <b className="text-[15px]">{c.case_number}</b>
@@ -200,6 +235,12 @@ export function DamageReasons({ cases }: { cases: SimilarCase[] }) {
           </li>
         ))}
       </ul>
+      {hidden > 0 && (
+        <button type="button" aria-expanded={open} onClick={() => setOpen(!open)}
+          className="no-print min-h-11 w-fit rounded-[10px] px-2 text-[15px] font-bold text-primary hover:bg-accent">
+          {open ? "收起" : `顯示其他 ${hidden} 件`}
+        </button>
+      )}
       <p className="text-sm text-muted-foreground">由 AI 依標註手冊標註、人工抽查，可能有誤，請以判決原文為準。只有部分判決有標註。</p>
     </section>
   );

@@ -897,6 +897,27 @@ describe("民事結果", () => {
       expect(within(section).getByRole("link", { name: /酌減的說明/ }).getAttribute("href")).toBe(`/guide#${encodeURIComponent("酌減")}`);
     });
 
+    it("法院怎麼決定金額：慰撫金排前面、每件最多 2 處，超過 5 件先收起", async () => {
+      const [first] = CIVIL_REPORT.similar;
+      const q = (text: string) => ({ label: "DAM", polarity: "酌減", quote: text, text });
+      const similar = Array.from({ length: 7 }, (_, i) => ({ ...first, case_id: 100 + i, case_number: `判決${i + 1}號`,
+        reasoning: [q("機車修理費折舊後為710元"), q("看護費以每日2,500元計算"), q("慰撫金以3萬元為適當")] }));
+      await show({ similar });
+      const user = userEvent.setup();
+      const panel = await openTab("可能的金額");
+      const section = within(panel).getByRole("region", { name: "相似判決的法院怎麼決定金額" });
+      const cards = () => within(section).getAllByRole("link", { name: /判決導讀/ });
+      expect(cards()).toHaveLength(5);
+      const firstCard = section.querySelector("li")!;
+      expect(firstCard.textContent!.indexOf("慰撫金")).toBeLessThan(firstCard.textContent!.indexOf("機車修理費"));
+      expect(firstCard).not.toHaveTextContent("看護費");
+      expect(firstCard).toHaveTextContent("還有 1 處");
+      await user.click(within(section).getByRole("button", { name: "顯示其他 2 件" }));
+      expect(cards()).toHaveLength(7);
+      await user.click(within(section).getByRole("button", { name: "收起" }));
+      expect(cards()).toHaveLength(5);
+    });
+
     it("沒有標註時不顯示法院怎麼決定金額", async () => {
       const panel = await amount(CIVIL_REPORT.amount_range);
       expect(within(panel).queryByRole("region", { name: "相似判決的法院怎麼決定金額" })).not.toBeInTheDocument();
@@ -994,6 +1015,17 @@ describe("民事結果", () => {
         .toBe(`/guide#${encodeURIComponent("有理由、一部有理由、無理由")}`);
       expect(within(panel).getByRole("link", { name: /^法院怎麼認定的說明/ }).getAttribute("href"))
         .toBe(`/guide#${encodeURIComponent("法院怎麼認定")}`);
+    });
+
+    it("法院怎麼認定：結論方向固定順序，金額摘要優先挑慰撫金", async () => {
+      const [first] = CIVIL_REPORT.similar;
+      const q = (label: string, text: string, polarity: string | null = null) => ({ label, polarity, quote: text, text });
+      await show({ similar: [{ ...first, reasoning: [q("CONCL", "其餘無理由", "無理由"), q("CONCL", "部分准許", "一部有理由"),
+        q("CONCL", "此部分准許", "有理由"), q("DAM", "機車修理費折舊後為710元", "酌減"), q("DAM", "精神慰撫金以3萬元為適當", "酌減")] }] });
+      const panel = await openTab("相似判決");
+      const row = within(within(panel).getByRole("table")).getAllByRole("row")[1];
+      expect(row).toHaveTextContent("法院怎麼認定有理由一部有理由無理由");
+      expect(row).toHaveTextContent("金額怎麼決定：「精神慰撫金以3萬元為適當」");
     });
 
     it("沒有標註時不顯示法院怎麼認定", async () => {
@@ -1365,6 +1397,22 @@ describe("判決導讀", () => {
     expect(container.querySelector("#para-2 mark")).toBeNull();
     expect(container.querySelector("#para-3 mark")).toHaveTextContent("原告之請求有理由");
     expect(ev).toHaveAttribute("aria-pressed", "false");
+  });
+
+  it("法院怎麼認定：一組超過 3 處時先收起，按鈕展開、收起", async () => {
+    const items = Array.from({ length: 5 }, (_, i) => (
+      { label: "CONCL", polarity: "有理由", quote: `第${i + 1}項請求有理由`, paragraph: 3, start: 0, end: 3 }));
+    mockApi({ "GET /judgments/civil/11/guide": () => ({ ...GUIDE, reasoning: { labeler: "llm-p6.0", manual_version: "v0.6", items } }) });
+    const user = userEvent.setup();
+    renderAt("/judgment/:source/:caseId", <Reading />, "/judgment/civil/11");
+    const card = (await screen.findByRole("heading", { name: "法院怎麼認定" })).closest("[aria-labelledby=reasoning-title]") as HTMLElement;
+    expect(card).toHaveTextContent("5 處");
+    expect(within(card).getAllByRole("button", { pressed: false })).toHaveLength(3);
+    expect(card).not.toHaveTextContent("第4項");
+    await user.click(within(card).getByRole("button", { name: "顯示全部 5 處" }));
+    expect(card).toHaveTextContent("第5項請求有理由");
+    await user.click(within(card).getByRole("button", { name: "收起" }));
+    expect(card).not.toHaveTextContent("第4項");
   });
 });
 
