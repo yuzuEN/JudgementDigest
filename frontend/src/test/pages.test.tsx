@@ -1429,11 +1429,13 @@ describe("判決導讀", () => {
     const card = (await screen.findByRole("heading", { name: "法院怎麼認定" })).closest("[aria-labelledby=reasoning-title]") as HTMLElement;
     expect(card).toHaveTextContent("5 處");
     expect(within(card).getAllByRole("button", { pressed: false })).toHaveLength(3);
-    expect(card).not.toHaveTextContent("第4項");
+    const fourth = within(card).getByText(/第4項/);
+    expect(fourth).not.toBeVisible();                         // 收起來（列印時仍會印出）
     await user.click(within(card).getByRole("button", { name: "顯示全部 5 處" }));
-    expect(card).toHaveTextContent("第5項請求有理由");
+    expect(fourth).toBeVisible();
+    expect(within(card).getByText(/第5項/)).toBeVisible();
     await user.click(within(card).getByRole("button", { name: "收起" }));
-    expect(card).not.toHaveTextContent("第4項");
+    expect(fourth).not.toBeVisible();
   });
 });
 

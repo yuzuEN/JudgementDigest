@@ -61,6 +61,13 @@ function Tag({ item }: { item: { polarity?: string | null } }) {
   );
 }
 
+/**
+ * 收起來的項目：螢幕上用 inline style 藏起來，列印時用 !important 蓋過，全部印出來
+ * （和網站其他地方一樣：列印時按鈕隱藏，內容直接印出來）。
+ */
+const collapsed = (hide: boolean, printDisplay: string) =>
+  hide ? { style: { display: "none" }, className: printDisplay } : {};
+
 /** 每組先顯示幾處；長判決（例如結論 17 處）其餘收起來，才不會把後面的分組擠到很下面 */
 export const GROUP_PREVIEW = 3;
 
@@ -73,7 +80,6 @@ function ReasoningGroup({ group: g, active, onSelect }: {
   const hidden = g.items.length - GROUP_PREVIEW;
   // 選到的項目在收起的部分時（例如從段落標示回來），整組展開
   const expanded = open || hidden <= 0 || g.items.slice(GROUP_PREVIEW).some((x) => x.index === active);
-  const items = expanded ? g.items : g.items.slice(0, GROUP_PREVIEW);
   return (
     <section aria-labelledby={`reasoning-${g.label}`} className="flex flex-col gap-2">
       <div className="flex items-baseline justify-between gap-2">
@@ -82,8 +88,8 @@ function ReasoningGroup({ group: g, active, onSelect }: {
       </div>
       <p className="text-sm text-muted-foreground">{g.hint}</p>
       <ul className="m-0 flex list-none flex-col gap-2 p-0">
-        {items.map(({ item, index }) => (
-          <li key={index}>
+        {g.items.map(({ item, index }, k) => (
+          <li key={index} {...collapsed(!expanded && k >= GROUP_PREVIEW, "print:!block")}>
             <button type="button" aria-pressed={active === index} onClick={() => onSelect(index)}
               className={cn("flex w-full min-h-11 flex-col gap-1.5 rounded-[12px] border-2 bg-card px-3.5 py-2.5 text-left",
                 active === index ? "border-primary" : "border-input")}>
@@ -252,8 +258,10 @@ export function DamageReasons({ cases }: { cases: SimilarCase[] }) {
         </p>
       </div>
       <ul className="m-0 flex list-none flex-col gap-3 p-0">
-        {(open || hidden <= 0 ? rows : rows.slice(0, DAM_CASES_PREVIEW)).map(({ c, items }) => (
-          <li key={c.case_id} className="flex flex-col gap-2 rounded-[12px] border-2 border-input bg-card px-3.5 py-3">
+        {rows.map(({ c, items }, k) => (
+          <li key={c.case_id} {...collapsed(!open && k >= DAM_CASES_PREVIEW, "print:!flex")}
+            className={cn("flex flex-col gap-2 rounded-[12px] border-2 border-input bg-card px-3.5 py-3",
+              !open && k >= DAM_CASES_PREVIEW && "print:!flex")}>
             <div className="flex flex-wrap items-center gap-2">
               <b className="text-[15px]">{c.case_number}</b>
               <OutcomeChip tone={outcomeTone(c.outcome)}>{outcomeLabel(c.outcome)}</OutcomeChip>
