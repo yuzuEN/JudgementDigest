@@ -108,10 +108,21 @@ function readStage(raw: string | null): 1 | 2 | 3 {
   return raw === "2" ? 2 : raw === "3" ? 3 : 1;
 }
 
+/**
+ * 第 2 關的字數夠不夠往下：原告至少 MIN_STORY 字；被告只要不是空白就好
+ * （被告常常只拿到開庭通知、沒有起訴狀，寫不出對方完整的主張；太短只提醒、不擋）。
+ */
+function storyEnough(intake: IntakeState): boolean {
+  const len = storyLength(intake.text);
+  return civilRole(intake) === "defendant" ? len > 0 : len >= MIN_STORY;
+}
+
 /** 這一關為什麼還不能往下；可以就回傳 null。 */
 function blocker(stage: number, intake: IntakeState): string | null {
   if (stage === 1 && !intake.caseType) return "請先選一種案件類型。";
-  if (stage === 2 && storyLength(intake.text) < MIN_STORY) return `案情至少要 ${MIN_STORY} 字。`;
+  if (stage === 2 && !storyEnough(intake)) {
+    return civilRole(intake) === "defendant" ? "請先寫對方告你什麼。" : `案情至少要 ${MIN_STORY} 字。`;
+  }
   if (stage === 3 && amountState(intake.claimedAmount) === "bad") return "金額格式不對，請修改。";
   return null;
 }
@@ -140,7 +151,7 @@ export default function Intake() {
 
   // 還沒選類型就直接開第 2、3 關：回第 1 關；直接開第 3 關、但案情還不夠時，回到第 2 關
   if (stage > 1 && !intake.caseType) return <Navigate to="/start?stage=1" replace />;
-  if (stage === 3 && storyLength(intake.text) < MIN_STORY) return <Navigate to="/start?stage=2" replace />;
+  if (stage === 3 && !storyEnough(intake)) return <Navigate to="/start?stage=2" replace />;
 
   const go = (n: number) => setParams({ stage: String(n) });
   const why = blocker(stage, intake);
@@ -292,7 +303,10 @@ function StoryField({ value, onChange, defendant = false }: { value: string; onC
             : "例如：去年三月我騎機車在路口被一輛右轉的汽車撞到，右手骨折住院五天，之後復健三個月沒辦法工作……"} />
         <div className="flex flex-wrap items-center justify-between gap-2">
           <span id="story-status" role="status" className={cn("text-[15px]", ok && "font-bold text-secondary-foreground")}>
-            {ok ? "字數夠了，可以進下一關。" : `再多寫一點：至少 ${MIN_STORY} 字，才找得到相似判決。`}
+            {ok ? "字數夠了，可以進下一關。"
+              : !defendant ? `再多寫一點：至少 ${MIN_STORY} 字，才找得到相似判決。`
+              : len === 0 ? "寫下對方告你什麼、要你賠多少。"
+              : "字數偏少，可以先進下一關，但結果可能比較不準。有起訴狀的話，貼「事實及理由」會更準。"}
           </span>
           <span className="text-sm text-muted-foreground tabular-nums">{value.length} / {MAX_STORY} 字</span>
         </div>

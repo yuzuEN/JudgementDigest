@@ -1524,6 +1524,20 @@ describe("民事被告端", () => {
     expect(screen.getByLabelText(/你的說法/)).toBeInTheDocument();
   });
 
+  it("被告的主張太短只提醒、不擋；空白才不能下一關", async () => {
+    mockApi({ "GET /meta/options": () => OPTIONS });
+    const user = userEvent.setup();
+    renderApp("/start?stage=2", { caseType: "civil", role: "defendant" });
+    const next = screen.getByRole("button", { name: "下一關" });
+    expect(next).toBeDisabled();
+    expect(screen.getByText("請先寫對方告你什麼。")).toBeInTheDocument();
+    await user.type(screen.getByLabelText("對方的主張"), "朋友告我欠他五萬元。");
+    expect(next).toBeEnabled();
+    expect(screen.getByText(/字數偏少，可以先進下一關/)).toBeInTheDocument();
+    await user.click(next);
+    expect(screen.getByRole("heading", { name: /第 3 關/ })).toBeInTheDocument();
+  });
+
   it("結果頁換成被告的角度：對方勝訴的機率、你不用賠的機率、你有提到的說法", async () => {
     const report = {
       ...CIVIL_REPORT, role: "defendant" as const,
