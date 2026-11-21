@@ -1,7 +1,7 @@
 """
 建立上線用的民事檢索資料：索引、案件清單（已遮名）、每件判決提到的證據與被告抗辯類型。
 
-    python -m retrieval.build                  # 輸出到 artifacts/retrieval_civil_v6/
+    python -m retrieval.build                  # 輸出到 artifacts/retrieval_civil_v7/
     python -m retrieval.build --ner-names data_masking/ner_civil.jsonl   # 加上人名辨識找到的名字（retrieval/ner.py）
 
 輸出：
@@ -28,7 +28,7 @@ from retrieval.engine import TfidfIndex
 from retrieval.masking import (by_appearance, listed_with, mask_parties, name_word_frequencies, party_names,
                                party_roles, third_party_names, usable_person_names)
 
-NAME = "retrieval_civil_v6"
+NAME = "retrieval_civil_v7"
 VOCAB_SAMPLE = 60_000     # 字典與 IDF 只用這麼多筆建（完整語料的字元 n-gram 字典太吃記憶體）
 SUMMARY_LEN = 90
 JUDICIAL_PREFIX = "https://judgment.judicial.gov.tw/"
@@ -67,9 +67,12 @@ def write_artifacts(corpus: pd.DataFrame, sections: pd.DataFrame, out: Path, ver
     urls = [u if isinstance(u, str) and u.startswith(JUDICIAL_PREFIX) else None
             for u in (corpus.url if "url" in corpus else [None] * len(corpus))]
     s = corpus[["id"]].merge(sections, on="id", how="left", validate="1:1").fillna("")
-    # 第三人的名字用整件判決找：同一個人在別的段落可能沒有寫「訴外人」
-    others = [third_party_names("\n".join(parts)) for parts in
-              zip(corpus.plaintiff_claim_text, s.plaintiff_claim_text, s.defendant_defense_text, s.court_reasoning_text)]
+    # 第三人的名字用整件判決找：同一個人在別的段落可能沒有寫「訴外人」。
+    # 開頭是一般詞的名字（「曾承博」「方若蓁」）要這件判決的人名辨識也找到才收（masking._COMMON_WEAK）
+    raw_ner = [ner_names.get(int(i), []) if ner_names is not None else [] for i in corpus.id]
+    others = [third_party_names("\n".join(parts), r) for parts, r in
+              zip(zip(corpus.plaintiff_claim_text, s.plaintiff_claim_text, s.defendant_defense_text,
+                      s.court_reasoning_text), raw_ner)]
     if ner_names is not None:
         if rare_two_char is None or common_words is None:
             texts = ("\n".join(parts) for parts in
@@ -80,9 +83,9 @@ def write_artifacts(corpus: pd.DataFrame, sections: pd.DataFrame, out: Path, ver
         others = [set(o) | set(usable_person_names(ner_names.get(int(i), []), rare_two_char, common_words))
                   for o, i in zip(others, corpus.id)]
     # 列舉裡夾在已知名字之間、人名辨識漏掉的名字（「【關係人80】、吳渭渠、【關係人83】」）
-    others = [set(o) | set(listed_with("\n".join(parts), set(o) | set(party_names(p, d))))
-              for o, parts, p, d in zip(others, zip(s.plaintiff_claim_text, s.defendant_defense_text,
-                                                    s.court_reasoning_text), s.plaintiff, s.defendant)]
+    others = [set(o) | set(listed_with("\n".join(parts), set(o) | set(party_names(p, d)), r))
+              for o, parts, p, d, r in zip(others, zip(s.plaintiff_claim_text, s.defendant_defense_text,
+                                                       s.court_reasoning_text), s.plaintiff, s.defendant, raw_ner)]
     # 【關係人1】【關係人2】依導讀的閱讀順序（原告主張、被告答辯、法院判斷）第一次出現的位置編號
     # 當事人、代理人的名字不拿關係人的編號（人名辨識也會找到他們）
     others = [by_appearance(o, "\n".join(parts), [n for role in party_roles(p, d, (pa, da)) for n in role])

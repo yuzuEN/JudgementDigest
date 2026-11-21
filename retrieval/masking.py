@@ -163,55 +163,107 @@ _SURNAMES = ("陳林黃張李王吳劉蔡楊許鄭謝郭洪曾邱廖賴徐周葉
              "范宋方鄧杜傅侯曹薛丁卓阮馬董溫唐藍石蔣古紀姚連馮歐程湯田康姜白汪鄒尤巫鐘黎涂龔嚴韓袁金童陸夏柳邵錢伍倪"
              "于譚駱熊任甘秦顧毛賀史")
 _NAME_STOP = "於和與及等到之的為在表稱證並則就係已曾亦是向對將把被有無不所以而但"
+_NAME = r"[" + _SURNAMES + r"](?:(?![" + _NAME_STOP + r"])[" + _HAN + r"]){1,2}"
+# 姓氏開頭的常見詞：稱謂、列舉後面接這些詞時不是人名。分兩級（2026-11-21，全部 18.8 萬件重建後和 v6 逐件比對訂的）：
+# - _COMMON_STRONG：不會是名字的開頭（「證人陳述稱」「配偶任職於」「訴外人高雄市」「原告要求伊張貼系爭啟事」），一律不當名字。
+# - _COMMON_WEAK：是一般詞，也是常見的名字開頭（「證人曾經」vs「訴外人曾承博」、「方若」「何能賢」「許可傑」「尤其亮」）。
+#   同一件判決的人名辨識（CKIP）也認出這個名字時才遮；沒有人名辨識的地方（刑事）一律不遮。
+# 遮名原則是不要遮錯：名字會在整件判決全文取代，把一般詞當成名字，整件判決的「陳述」都會變成【關係人】；
+# 反過來，排除清單擋到真名也是錯，所以名字開頭常見的詞放在 _COMMON_WEAK，不放 _COMMON_STRONG。
+_COMMON_STRONG = (
+    r"何人|何者|何以|何時|何處|高雄|高等|高院|方式|方法|方面|任何|任意|連同|連帶|金額|金融|程度|石油|江蘇|馬祖|新北|白天|"
+    r"田地|古蹟|陳報|陳述|施作|施加|施工|施行|董事|曾經|曾匯|曾於|曾向|曾與|簡稱|"
+    r"高度|陳情|陳稱|陳請|陳訴|陳設|陳舊|程序|程式|方才|方能|方可|方便|方即|方始|方知|方會|"
+    r"金錢|紀錄|陸續|任職|任一|任由|任憑|任令|連續|連結|連絡|連繫|"
+    r"高達(?:新臺幣|[^一-鿿]|[一二三四五六七八九十百千萬約])|高額|高職|高齡|高價|高速|高利貸|"
+    r"許多|顧問|施用|施詐|施暴|施打|施設|施做|施測|施予|張貼|簡訊|簡單|簡報|周轉|周知|馬上|馬來西|嚴格|"
+    r"曾多次|曾提|曾因|曾說|曾任職|曾至現|曾受|曾交|曾告|曾出|曾收|曾要|曾自陳|曾自行|曾發|曾簽|曾同意|曾請|"
+    r"曾傳送|曾傳訊|曾傳喚|曾傳達|曾見過|曾見聞|曾見一|曾約|曾遭|曾詢|曾聽|曾支|曾具|曾協|曾代為|曾接|曾由|曾通知|"
+    r"曾先後|曾持|曾指|曾親|曾否|曾再三|曾再次|曾再度|曾開立|"
+    r"何須|何必|何需|何要|何會|何未|何故|錢包|錢財|甘冒|顏面")
+_COMMON_WEAK = (r"陳明|簡易|陳列|方為|方若|曾任|曾再|曾在|曾承|曾自|曾先|曾見|曾多|曾通|曾開|曾代|曾至|曾同|曾傳|"
+                r"何得|何能|何可|何來|方得|康復|高鐵|高中|高利|高達|許可|尤其|馬來|石頭|連江")
+_WEAK_RE = re.compile(_COMMON_WEAK)
+_NOT_NAME_STRONG = r"(?!" + _COMMON_STRONG + r")"
+# 沒有人名辨識可以確認時用（刑事、_NAME 的其他規則）：兩級都不當名字
+_NOT_NAME = r"(?!" + _COMMON_STRONG + r"|" + _COMMON_WEAK + r")"
+# 人名辨識結果的篩選：一定不是名字的詞，加上原本就排除的「陳明」「簡易」（「陳明」另用 _chen_ming_name 判斷）
+_NOT_NAME_NER = r"(?!" + _COMMON_STRONG + r"|陳明|簡易)"
 _THIRD_PARTY_RE = re.compile(
     r"(?:訴外人|證人|鑑定人|受僱人|配偶|之子|之女|之妻|之夫|父親|母親|兒子|女兒|胞兄|胞弟|胞姊|胞妹|之孫|曾孫|孫女|孫子|"
     r"友人|朋友|同事|鄰居|女友|男友|前妻|前夫|同居人|房東|房客)"
-    r"(?!方面|任何|連同|高度|金額|程度|石油)"
+    r"(?!方面|任何|連同|高度|金額|程度|石油)" + _NOT_NAME_STRONG +
     r"([" + _SURNAMES + r"](?:(?![" + _NAME_STOP + r"])[" + _HAN + r"]){1,2})")
+# 姓氏後面接這些字的不是人名：「訴外人歐凱資產管理公司」「訴外人陳達投資公司」是公司，「證人陳先生」是稱呼
+_NOT_NAME_AFTER_SURNAME = re.compile(r"先生|小姐|太太|女士")
+_NOT_NAME_AFTER_TWO = re.compile(r"資產|投資|公司|企業|實業|建設|銀行|股份|有限|工程|商行|開發|科技|國際|營造|事務所|診所|醫院")
 
 
-_NAME = r"[" + _SURNAMES + r"](?:(?![" + _NAME_STOP + r"])[" + _HAN + r"]){1,2}"
-_NOT_NAME = (r"(?!何人|何者|何以|何時|何處|高雄|高等|高院|方式|方法|方面|任何|任意|連同|連帶|金額|金融|程度|石油|江蘇|馬祖|連江|新北|白天|"
-             r"田地|古蹟|陳報|陳述|陳明|施作|施加|施工|施行|董事|曾經|曾匯|曾於|曾向|曾與|簡易|簡稱)")
+def _plausible_name(text: str, start: int) -> bool:
+    """從 start 開始的名字，後面是不是接著公司名稱或「先生」（有這些字時寧可不遮）。"""
+    return not (_NOT_NAME_AFTER_SURNAME.match(text, start + 1) or _NOT_NAME_AFTER_TWO.match(text, start + 2))
+
+
 # 「原名林朝文」「繼承人即蔡淑智」「前所有權人為蔡志陽」：沒有寫訴外人，但前面的字足以判斷是人名
 _NAMED_AS_RE = re.compile(
     r"(?:原名[：:]?|(?:訴外人|第三人|繼承人|債務人|保證人|負責人|代表人|所有權人|之父|之母|其子|其女|祖父|祖母)(?:即|為)|"
-    r"第三人|繼承人|其子|其女|祖父|祖母)" + _NOT_NAME + r"(" + _NAME + r")")
+    r"第三人|繼承人|其子|其女|祖父|祖母)" + _NOT_NAME_STRONG + r"(" + _NAME + r")")
 # 「訴外人王大明、謝新潭、陳榮坤合資」：列舉時只有第一個名字有稱謂
-_NAME_LIST_RE = re.compile(r"、" + _NOT_NAME + r"(" + _NAME + r")(?=[、，。）)及與和等共合均]|$)")
+_NAME_LIST_RE = re.compile(r"、" + _NOT_NAME_STRONG + r"(" + _NAME + r")(?=[、，。）)及與和等共合均]|$)")
 
 
-def _follow_list(text: str, end: int, names: set) -> None:
-    """從 end 開始往後找「、王大明、謝新潭」這種列舉，找到的名字加進 names。"""
+def _confirmed(name: str, person_names: Iterable[str]) -> bool:
+    """開頭是 _COMMON_WEAK 的名字，要人名辨識也找到（或是「陳明」開頭、_chen_ming_name 認得的名字）才算。"""
+    if not _WEAK_RE.match(name):
+        return True
+    return name in person_names or (name.startswith("陳明") and _chen_ming_name(name))
+
+
+def _follow_list(text: str, end: int, names: set, person_names: Iterable[str] = ()) -> None:
+    """從 end 開始往後找「、王大明、謝新潭」這種列舉，找到的名字加進 names。
+    遇到不能確認的名字（開頭是一般詞）就停：後面的列舉多半也不是人名。"""
     while True:
         item = _NAME_LIST_RE.match(text, end)
-        if not item:
+        if not item or not _confirmed(item.group(1), person_names):
             return
         names.add(item.group(1))
         end = item.end()
 
 
-def third_party_names(text: str) -> List[str]:
+def third_party_names(text: str, person_names: Optional[Iterable[str]] = None) -> List[str]:
+    """
+    稱謂（訴外人、證人、配偶……）後面的人名，以及跟在後面的列舉。
+    person_names：這件判決人名辨識（CKIP）的原始結果。開頭是 _COMMON_WEAK 的名字（「曾承博」「方若蓁」），
+    要人名辨識也找到才收；沒給時一律不收（寧可漏遮，不要把「曾經」「方若是」當成人名）。
+    """
     text = text or ""
-    names = set(_THIRD_PARTY_RE.findall(text)) | set(_NAMED_AS_RE.findall(text))
+    person_names = set(person_names or ())
+    names = set()
     for found in list(_THIRD_PARTY_RE.finditer(text)) + list(_NAMED_AS_RE.finditer(text)):
-        _follow_list(text, found.end(), names)
+        name = found.group(1)
+        if not _confirmed(name, person_names):
+            continue        # 第一個名字不能確認時，後面的列舉也不跟（「訴外人曾經、…」）
+        if _plausible_name(text, found.start(1)):
+            names.add(name)
+        _follow_list(text, found.end(), names, person_names)
     return sorted(names)
 
 
-def listed_with(text: str, known: Iterable[str]) -> List[str]:
+def listed_with(text: str, known: Iterable[str], person_names: Optional[Iterable[str]] = None) -> List[str]:
     """
     列舉裡跟在已知名字後面的名字（「【關係人80】、吳渭渠、【關係人83】」原文是一串人名，
     人名辨識漏掉其中一個時，靠前一個已知的名字補上）。回傳新找到的名字。
+    person_names：同 third_party_names，開頭是 _COMMON_WEAK 的名字要人名辨識也找到才收。
     """
     text = text or ""
     known = {n for n in known if n}
+    person_names = set(person_names or ())
     pattern = _name_pattern(known)
     if not pattern:
         return []
     found = set()
     for m in pattern.finditer(text):
-        _follow_list(text, m.end(), found)
+        _follow_list(text, m.end(), found, person_names)
     return sorted(found - known)
 
 
@@ -226,7 +278,8 @@ _NER_BAD_INNER = set("可卷於無庸僅參尚")
 _KINSHIP_FIRST = set("孫子女妻夫父母兄弟姊妹姪甥媳婿")
 # 法院給未成年人或匿名者的代稱（「蘇童」＝姓蘇的兒童、「王姓」「陳某」「林女」），不是真名，不用遮
 _PSEUDONYM_SECOND = set("童姓某氏男女")
-_NOT_PERSON = {"霍夫曼", "萊布尼茲", "萊布尼滋", "張冠李戴", "烏克麗麗", "亞帝芬奇", "三樓馬達", "卓見", "毛遂", "余裕"}
+_NOT_PERSON = {"霍夫曼", "萊布尼茲", "萊布尼滋", "張冠李戴", "烏克麗麗", "亞帝芬奇", "三樓馬達", "卓見", "毛遂", "余裕",
+               "屏恆地", "陳明鄭"}   # 後兩個：「屏恆地二字第…號函」（地政事務所的發文字號）、「原告陳明鄭○○」（陳明＋匿名的人）
 # 四個字的辨識結果常是三個字的名字多黏了一個字：「經查張德滿」→「查張德滿」、「王怡文固」「陳國輝代」。去掉黏上的字
 _GLUED_FIRST = set("查代姊兄弟妹母父")
 # 「蔡如滿伊」「錢祥瑞伊」：三個字的名字後面接代名詞「伊」；「劉伊峯嗣」：接「嗣後」
@@ -268,7 +321,7 @@ def _yi_name_ok(n: str, common_words: Optional[set]) -> bool:
 # 「陳明」是動詞（「陳明如下」「陳明願供擔保」），也是很常見的名字開頭（陳明輝、陳明華）。
 # 2026-11-14 第二次 60 件抽查：「陳彥達即陳明亭」的陳明亭因為開頭是「陳明」被擋掉；全部判決的辨識結果裡，
 # 「陳明」開頭的三個字有 282 種，約 240 種是真名。第三個字是動詞後面常接的字才當動詞
-_CHEN_MING_VERB_NEXT = set("如願其系確原伊為因係聲之以倘供告有依略時乃若待甲乙丙丁知該前擇並非訴准會人渠及與於在已經即對向就等"
+_CHEN_MING_VERB_NEXT = set("如願其將系確原伊為因係聲之以倘供告有依略時乃若待甲乙丙丁知該前擇並非訴准會人渠及與於在已經即對向就等"
                            "業同所則亦稱表請也而此後再兩須選負誤變何備核由嗣轉屈採爭彼曾行自法嘆")
 
 
@@ -352,7 +405,8 @@ def usable_person_names(names: Iterable[str], rare_two_char: Optional[set] = Non
     - 3–4 個中文字（含罕用字）。四個字的去掉黏上的字（「查張德滿」→「張德滿」）
     - 兩個字的只收 rare_two_char 裡的（rare_two_char_names：在全部判決裡很少出現的）；沒給就不收。
       人工抽查時「馬達」被當成人名遮掉，兩個字的辨識結果多半是一般詞（「陳情」「周全」）
-    - 已經遮過（含「○」）的、和 _NOT_NAME 的常見詞（「陳述」「簡易」）開頭相同的不收
+    - 已經遮過（含「○」）的、和 _NOT_NAME_NER 的常見詞（「陳述」「簡易」「張貼」）開頭相同的不收。
+      _COMMON_WEAK（「曾承」「方若」）不擋：人名辨識找到「曾承博」時多半是真名
     - 有「伊」的看 _yi_name_ok；common_words 是 name_word_frequencies 算出的一般詞
     """
     kept = set()
@@ -360,7 +414,7 @@ def usable_person_names(names: Iterable[str], rare_two_char: Optional[set] = Non
         n = (n or "").strip()
         if len(n) == 2:
             if (rare_two_char and n in rare_two_char and n not in _NOT_PERSON and _two_char_candidate(n)
-                    and re.match(_NOT_NAME, n)):
+                    and re.match(_NOT_NAME_NER, n)):
                 kept.add(n)
             continue
         n = _trim_glued(n)
@@ -372,7 +426,7 @@ def usable_person_names(names: Iterable[str], rare_two_char: Optional[set] = Non
             continue
         if n.endswith("之"):        # 「余梅之出資」「許北之」：後面的字黏上來
             continue
-        if re.match(_NOT_NAME, n) is None and not _chen_ming_name(n):   # _NOT_NAME 是否定預查，比對失敗＝開頭是常見詞
+        if re.match(_NOT_NAME_NER, n) is None and not _chen_ming_name(n):   # 否定預查，比對失敗＝開頭是常見詞
             continue
         kept.add(n)
     return sorted(kept)

@@ -1,10 +1,10 @@
 """
 民事被告端的「答辯索引」：用判決的被告答辯段建 TF-IDF，讓被告寫的答辯也能影響相似判決。
 
-    python -m retrieval.defense_index build       # → artifacts/retrieval_civil_defense_v1/（從 retrieval_civil_v6 的 sections 表建）
+    python -m retrieval.defense_index build       # → artifacts/retrieval_civil_defense_v2/（從 retrieval_civil_v7 的 sections 表建）
     python -m retrieval.defense_index evaluate    # 只用主張 vs 主張＋答辯（不同權重），輸出 defense_retrieval_eval.md
 
-主張索引（retrieval_civil_v6/index.joblib）是判決的原告主張；這個索引的列順序和它完全相同（cases 表的 row），
+主張索引（retrieval_civil_v7/index.joblib）是判決的原告主張；這個索引的列順序和它完全相同（cases 表的 row），
 所以兩個相似度可以直接加權合併：sim = (1 − w)·主張相似度 ＋ w·答辯相似度。
 答辯太短（少於 MIN_DEFENSE 字，例如一造辯論沒有答辯）的判決在這個索引裡是零向量，答辯相似度是 0。
 
@@ -28,7 +28,7 @@ from civil.dataset.text import prepare_input
 from retrieval import build as retrieval_build
 from retrieval.engine import TfidfIndex
 
-NAME = "retrieval_civil_defense_v1"
+NAME = "retrieval_civil_defense_v2"
 MIN_DEFENSE = 30          # 答辯少於這個字數的判決不建（零向量）
 VOCAB_SAMPLE = 60_000
 MASK_TAG = re.compile(r"【[^】]{0,12}】")
@@ -147,8 +147,8 @@ def report(r: Dict) -> str:
 def main():
     ap = argparse.ArgumentParser(description="民事被告端的答辯索引")
     ap.add_argument("action", choices=("build", "evaluate"))
-    ap.add_argument("--retrieval", default=None, help="主張的檢索資料；預設 artifacts/retrieval_civil_v6")
-    ap.add_argument("--out", default=None, help="答辯索引的資料夾；預設 artifacts/retrieval_civil_defense_v1")
+    ap.add_argument("--retrieval", default=None, help="主張的檢索資料；預設 artifacts/retrieval_civil_v7")
+    ap.add_argument("--out", default=None, help="答辯索引的資料夾；預設 artifacts/retrieval_civil_defense_v2")
     ap.add_argument("--queries", type=int, default=N_QUERIES)
     a = ap.parse_args()
     t0 = time.time()
