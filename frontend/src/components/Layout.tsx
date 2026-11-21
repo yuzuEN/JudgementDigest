@@ -31,8 +31,8 @@ function SiteFooter({ note }: { note?: ReactNode }) {
   return (
     <footer data-slot="site-footer" className="mt-auto border-t bg-muted pt-8 pb-10 text-[15px] text-muted-foreground">
       <div className={cn(PAGE, "flex flex-col gap-2")}>
-        {note ?? <p>本服務提供的是過去判決的統計參考，不是法律意見。</p>}
-        <p className="flex flex-wrap gap-x-4 gap-y-1">
+        {note}
+        <p className="flex flex-wrap justify-between gap-x-4 gap-y-2 max-sm:flex-col">
           <a href={LAF_URL} target="_blank" rel="noreferrer">法律扶助基金會</a>
           <Link to="/guide" className="text-link underline underline-offset-3">說明與法律小知識</Link>
           <a href={JUDICIAL_URL} target="_blank" rel="noreferrer">司法院裁判書查詢系統</a>

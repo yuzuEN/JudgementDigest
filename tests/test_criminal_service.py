@@ -135,7 +135,11 @@ class TestTrainedModel(unittest.TestCase):
         self.assertTrue(0 < charges[0]["probability"] <= 1)
         self.assertEqual([b["label"] for b in charges[0]["sentence"]], service.BUCKETS)
         self.assertAlmostEqual(sum(b["share"] for b in charges[0]["sentence"]), 1.0, places=5)
-        self.assertLessEqual(len(charges), service.MAX_SHOWN)
+        # 至少 3 個；機率到 50% 的全部都列
+        probs = [c["probability"] for c in charges]
+        self.assertGreaterEqual(len(charges), min(service.MIN_SHOWN, len(self.model.charge_mlb.classes_)))
+        self.assertEqual(probs, sorted(probs, reverse=True))
+        self.assertTrue(all(p >= service.SHOWN_THRESHOLD for p in probs[service.MIN_SHOWN:]))
 
     def test_platform_metrics(self):
         with tempfile.TemporaryDirectory() as d:

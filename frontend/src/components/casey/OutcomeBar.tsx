@@ -24,9 +24,11 @@ export function OutcomeBar({ counts, legend = true, className }: { counts: Outco
   const total = counts.win + counts.partial + counts.lose;
   return (
     <div className={cn("flex flex-col gap-2", className)}>
-      <div role="img" aria-label={outcomeSummary(counts)} className="flex h-[22px] overflow-hidden rounded-[11px] border-[1.5px] border-input bg-muted">
+      {/* 區段之間留 2px 底色間隔，相鄰兩色不會黏在一起；滑鼠移上去顯示件數 */}
+      <div role="img" aria-label={outcomeSummary(counts)}
+        className={cn("flex h-[22px] gap-[2px] overflow-hidden rounded-[11px] border-[1.5px] border-input", total > 0 ? "bg-card" : "bg-muted")}>
         {total > 0 && SEGMENTS.filter((s) => counts[s.key] > 0).map((s) => (
-          <div key={s.key} className={s.bar} style={{ width: `${(counts[s.key] / total) * 100}%` }} />
+          <div key={s.key} title={`${s.label} ${counts[s.key]} 件`} className={s.bar} style={{ flexBasis: 0, flexGrow: counts[s.key] }} />
         ))}
       </div>
       {legend && (

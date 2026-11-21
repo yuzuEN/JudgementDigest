@@ -8,7 +8,7 @@ from contextlib import contextmanager
 from pathlib import Path
 
 from backend.criminal_service import CriminalService
-from retrieval.criminal_guides import build, clean, dataset_guide, dataset_rows, judgment_guide, judgment_id, segment
+from retrieval.criminal_guides import build, clean, cn_number, executed_or_single, sentences, dataset_guide, dataset_rows, judgment_guide, judgment_id, segment
 from tests.test_criminal_service import synthetic, train_artifacts
 
 
@@ -151,6 +151,53 @@ class TestHardWraps(unittest.TestCase):
         fns = [(p["function"], p["text"][:6]) for p in self.paras if p["function"] in ("facts", "evidence", "court")]
         self.assertEqual(fns, [("facts", "一、犯罪事實"), ("facts", "㈠被告等人共"), ("evidence", "二、認定犯罪"),
                                ("evidence", "㈠被告於偵查"), ("court", "三、論罪科刑")])
+
+
+class TestSentences(unittest.TestCase):
+    def verdict(self, text):
+        return sentences([{"function": "verdict", "text": text, "part": None}])
+
+    def test_single_offence_has_no_executed_sentence(self):
+        self.assertEqual(self.verdict("被告犯恐嚇公眾罪，處有期徒刑貳月，如易科罰金，以新臺幣壹仟元折算壹日。"),
+                         {"declared": ["有期徒刑 2 月"], "executed": None})
+
+    def test_several_offences_and_executed_sentence(self):
+        got = self.verdict("被告犯轉讓禁藥罪，累犯，處有期徒刑肆月；又犯轉讓禁藥罪，累犯，處有期徒刑伍月。應執行有期徒刑柒月。")
+        self.assertEqual(got, {"declared": ["有期徒刑 4 月", "有期徒刑 5 月"], "executed": "有期徒刑 7 月"})
+
+    def test_same_sentence_for_each_count(self):
+        got = self.verdict("被告犯販賣第二級毒品罪，共陸罪，均累犯，各處有期徒刑拾年貳月。應執行有期徒刑拾壹年。")
+        self.assertEqual(got, {"declared": ["有期徒刑 10 年 2 月（共 6 罪，各）"], "executed": "有期徒刑 11 年"})
+
+    def test_fines_exemption_and_numerals(self):
+        self.assertEqual(self.verdict("被告犯公然侮辱罪，科罰金新臺幣伍仟元，如易服勞役，以新臺幣壹仟元折算壹日。")["declared"], ["罰金 5,000 元"])
+        self.assertEqual(self.verdict("被告犯毀損他人物品罪，免刑。")["declared"], ["免刑"])
+        self.assertEqual(self.verdict("被告犯詐欺罪，處有期徒刑叄年拾月，併科罰金新臺幣６千元。")["declared"], ["有期徒刑 3 年 10 月，併科罰金 6,000 元"])
+        self.assertEqual(cn_number("壹佰貳拾"), 120)
+        self.assertEqual(cn_number("兩萬伍仟"), 25000)
+
+    def test_messy_verdict_wording(self):
+        self.assertEqual(self.verdict("被告犯誹謗罪，共貳罪，分別處拘役貳拾日、伍拾日。應執行拘役陸拾日。"),
+                         {"declared": ["拘役 20 日", "拘役 50 日"], "executed": "拘役 60 日"})
+        got = self.verdict("被告販賣第三級毒品，處有期徒刑參年捌月。又製造第三級毒品，處有期徒刑肆年。所處有期徒刑部分，應執行有期徒刑陸年陸月。")
+        self.assertEqual(got, {"declared": ["有期徒刑 3 年 8 月", "有期徒刑 4 年"], "executed": "有期徒刑 6 年 6 月"})
+        self.assertEqual(self.verdict("被告有配偶而與人通姦，處有期徒刑貳月又拾伍日。")["declared"], ["有期徒刑 2 月 15 日"])
+        self.assertEqual(self.verdict("被告犯持有手槍罪，處有期徒刑1年7月，併科罰金新臺幣（下同）5萬元。")["declared"], ["有期徒刑 1 年 7 月，併科罰金 50,000 元"])
+        self.assertEqual(self.verdict("被告犯詐欺罪，處有期徒刑貮年参月併科罰金新臺幣玖萬元。")["declared"], ["有期徒刑 2 年 3 月，併科罰金 90,000 元"])
+        self.assertEqual(self.verdict("被告犯竊盜罪，處有期徒刑貳月扣案如附表所示之物均沒收之。")["declared"], ["有期徒刑 2 月"])
+
+    def test_executed_or_single(self):
+        """應執行刑欄：有應執行刑用它；一罪時用那一罪的宣告刑；數罪沒定應執行刑或刑在附表時留空。"""
+        self.assertEqual(executed_or_single({"declared": ["有期徒刑 4 月", "有期徒刑 5 月"], "executed": "有期徒刑 7 月"}), "有期徒刑 7 月")
+        self.assertEqual(executed_or_single({"declared": ["拘役 30 日"], "executed": None}), "拘役 30 日")
+        self.assertIsNone(executed_or_single({"declared": ["有期徒刑 4 月", "有期徒刑 5 月"], "executed": None}))
+        self.assertIsNone(executed_or_single({"declared": ["有期徒刑 1 年（共 3 罪，各）"], "executed": None}))
+        self.assertIsNone(executed_or_single({"declared": ["如附表所示之刑"], "executed": None}))
+        self.assertIsNone(executed_or_single({"declared": [], "executed": None}))
+
+    def test_attachment_verdict_is_ignored(self):
+        got = sentences([{"function": "verdict", "text": "被告處有期徒刑貳月。", "part": "附件：起訴書"}])
+        self.assertEqual(got, {"declared": [], "executed": None})
 
 
 class TestMasking(unittest.TestCase):

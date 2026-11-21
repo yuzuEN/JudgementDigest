@@ -7,6 +7,7 @@ COPY config.py ./
 COPY civil civil
 COPY criminal criminal
 COPY retrieval retrieval
+COPY annotation annotation
 COPY backend backend
 # 刑期模型只在推論時用到，不需要網路
 ENV HF_HUB_OFFLINE=1 TOKENIZERS_PARALLELISM=false

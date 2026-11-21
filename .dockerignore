@@ -4,6 +4,7 @@
 !civil/
 !criminal/
 !retrieval/
+!annotation/
 !backend/
 !frontend/
 frontend/node_modules/

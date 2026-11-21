@@ -1,10 +1,8 @@
 import { ArrowLeftIcon, DownloadIcon, PencilIcon } from "lucide-react";
 import { useEffect, type ReactNode } from "react";
-import { Link } from "react-router-dom";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
-import { useIntake } from "../state";
-import { DisclaimerFooter, PrintNotice } from "./casey/DisclaimerFooter";
+import { PrintNotice } from "./casey/DisclaimerFooter";
 import { SampleBanner } from "./casey/Sample";
 import { LinkButton } from "./LinkButton";
 import { BRAND, Layout, PAGE } from "./Layout";
@@ -31,42 +29,43 @@ function useOpenDetailsForPrint() {
   }, []);
 }
 
-/** 「不確定」時才有民事／刑事兩個分頁；選了民事或刑事就只有那一邊。 */
-function CaseSwitch({ active }: { active: "civil" | "criminal" }) {
-  const tab = (key: "civil" | "criminal", label: string) => {
-    const cls = "inline-flex min-h-11 items-center rounded-[var(--radius-control)] border-2 px-5 font-bold no-underline";
-    return key === active
-      ? <span className={cn(cls, "border-primary bg-primary text-primary-foreground")} aria-current="page">{label}</span>
-      : <Link to={`/result/${key}`} className={cn(cls, "border-input bg-card text-foreground hover:border-primary")}>{label}</Link>;
-  };
-  return (
-    <nav aria-label="結果類型" className="no-print flex flex-wrap items-center gap-2">
-      {tab("civil", "民事")}{tab("criminal", "刑事")}
-      <span className="text-[15px] text-muted-foreground">你選了「不確定」，可切換查看民事與刑事結果。</span>
-    </nav>
-  );
+/** 下載 PDF：開瀏覽器的列印，整頁（民事、刑事都在時兩者都印）存成 PDF。放在分頁列最右邊。 */
+export function PdfButton() {
+  return <Button variant="outline" className="no-print" onClick={() => window.print()}><DownloadIcon data-icon="inline-start" />下載 PDF</Button>;
 }
 
 /**
- * 民事、刑事結果頁共用的外框：解說員、示例資料標示、標題、下載 PDF、頁尾的「請注意」，
- * 以及只在列印時出現的報告抬頭與每頁頁尾。
+ * 結果的標題與說明。標題不換行（太長時以刪節號結尾，完整文字放在 title），
+ * 只有民事或只有刑事時是 h1；「不確定」兩者都放時各是 h2，頁面的 h1 在外框。
  */
-export function ResultFrame({ active, title, lead, mock, maskedText, searchText, sceneLine, notice, children }: {
-  active: "civil" | "criminal";
-  title: string;
-  lead: ReactNode;
+export function ResultHeading({ title, lead, level = 1, id }: { title: string; lead: ReactNode; level?: 1 | 2; id?: string }) {
+  const H = level === 1 ? "h1" : "h2";
+  return (
+    <div id={id} className="flex min-w-0 scroll-mt-4 flex-col gap-2">
+      <H title={title} className="truncate text-[26px] leading-[1.4] font-extrabold sm:text-[32px]">{title}</H>
+      <p className="text-lg leading-[1.8] text-muted-foreground">{lead}</p>
+    </div>
+  );
+}
+
+/** 結果頁解說員的話：民事、刑事、每個分頁都一樣。 */
+export const RESULT_LINE = "我是解說員。你可以參考模型給出的結果，也可以在相似判決中查找前10件最相似的判決書資訊，並參考導讀內容。";
+
+/**
+ * 民事、刑事結果頁共用的外框：解說員、示例資料標示、回上一步、這次比對用的描述，
+ * 以及只在列印時出現的報告抬頭與每頁頁尾。標題與下載 PDF 由裡面的結果區塊自己放（ResultHeading、PdfButton）。
+ */
+export function ResultFrame({ label, mock, maskedText, searchText, notice, children }: {
+  label: string;
   mock: boolean;
   maskedText: string;
   searchText?: string;
-  sceneLine: ReactNode;
   notice: ReactNode[];
   children: ReactNode;
 }) {
   useOpenDetailsForPrint();
-  const { intake } = useIntake();
-  const label = active === "civil" ? "民事" : "刑事";
   return (
-    <Layout stage={7} scene={{ who: "explainer", line: sceneLine }} footer={<DisclaimerFooter items={notice} />}>
+    <Layout stage={7} scene={{ who: "explainer", line: RESULT_LINE }}>
       {mock && <div className={cn(PAGE, "no-print pt-5")}><SampleBanner /></div>}
       <main className={cn(PAGE, "flex flex-col gap-6 pt-7 pb-14")}>
         <div className="print-only">
@@ -86,15 +85,15 @@ export function ResultFrame({ active, title, lead, mock, maskedText, searchText,
             <LinkButton variant="outline" to="/confirm?stage=6" className="border-input text-foreground"><ArrowLeftIcon data-icon="inline-start" />回上一步</LinkButton>
             <LinkButton variant="outline" to="/start?stage=2" className="border-input text-foreground"><PencilIcon data-icon="inline-start" />修改描述</LinkButton>
           </div>
-          {intake.caseType === "unsure" && <CaseSwitch active={active} />}
-          <div className="flex flex-wrap items-start justify-between gap-4">
-            <div className="flex min-w-0 flex-[1_1_420px] flex-col gap-2">
-              <h1 className="text-[26px] leading-[1.4] font-extrabold text-balance sm:text-[32px]">{title}</h1>
-              <p className="text-lg leading-[1.8] text-muted-foreground">{lead}</p>
-            </div>
-            <Button variant="outline" className="no-print" onClick={() => window.print()}><DownloadIcon data-icon="inline-start" />下載 PDF</Button>
-          </div>
         </div>
+        {/* 這次比對實際用的描述（整理後的寫法，或遮名後的原文）；列印版的抬頭已經有，這裡只在畫面上顯示 */}
+        <section aria-labelledby="used-text-title" className="no-print flex flex-col gap-6">
+          <div className="flex w-full flex-col gap-2 rounded-[16px] border-2 border-dashed border-primary bg-card px-5 py-4 text-left">
+            <h2 id="used-text-title" className="text-[15px] font-bold text-secondary-foreground">{searchText ? "這次比對用的描述（整理後的寫法）" : "這次比對用的描述"}</h2>
+            <p className="leading-loose whitespace-pre-wrap">{searchText || maskedText}</p>
+          </div>
+          <hr className="m-0 h-px border-0 bg-border" />
+        </section>
         {children}
         <PrintNotice items={notice} />
       </main>

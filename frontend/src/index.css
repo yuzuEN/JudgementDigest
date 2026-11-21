@@ -6,6 +6,7 @@
  * CasEY 設計 tokens（來源：docs/design/casey/tokens.css）。
  * 規則：不寫死色碼、不用 Tailwind 預設的 red-/green- 色階；結果顏色只用靛藍、淺藍、沙灰斜線，一律附文字。
  * 遮名只用橘色（mask），示例資料只用紫灰色（sample），這兩種顏色不要用在別處。
+ * 需要使用者再確認的提醒（AI 整理後多出的數字）用琥珀色（warn），比遮名的橘偏黃、偏淡。
  * 夜間模式跟著系統（theme.ts 會在 <html> 加上 .dark）。
  */
 @custom-variant dark (&:is(.dark *));
@@ -34,6 +35,7 @@
 
   /* CasEY：文字層級、連結 */
   --color-ink-3: var(--ink-3);
+  --color-ink-faint: var(--ink-faint);
   --color-link: var(--link);
   --color-brand-hover: var(--brand-hover);
 
@@ -54,6 +56,9 @@
   --color-sample: var(--sample-bg);
   --color-sample-fg: var(--sample-fg);
   --color-sample-line: var(--sample-line);
+  --color-warn: var(--warn-bg);
+  --color-warn-fg: var(--warn-fg);
+  --color-warn-line: var(--warn-line);
   --color-info: var(--info-bg);
   --color-info-line: var(--info-line);
 
@@ -98,6 +103,7 @@
   --radius: 0.75rem;
 
   --ink-3: #5E6872;
+  --ink-faint: #787062;              /* 和長條底色同一色系、淡一點的字（證據對照「你沒有提到」）；對比 ≥ 4.5:1 */
   --link: #14566B;
   --brand-hover: #144A5A;
 
@@ -114,6 +120,7 @@
   --mask-bg: #FFE0BA;  --mask-fg: #7A3200;  --mask-line: #E27D12;
   --sample-bg: #ECE8F7; --sample-fg: #362E63; --sample-line: #A99FD6;
   --info-bg: #EAF1F5;  --info-line: #AFC6D2;
+  --warn-bg: #FDF3DD;  --warn-fg: #6B4508;  --warn-line: #D99A2B;
 
   --passage-claim: #E2EAF8;
   --passage-defense: #EEE5F4;
@@ -149,17 +156,19 @@
     --ring: #8CCBDD;
 
     --ink-3: #9AA4AD;
+    --ink-faint: #958E82;
     --link: #9AD3E3;
     --brand-hover: #A8D9E7;
 
     --outcome-full: #9DB2EE;  --outcome-full-fg: #0F1C3D;
-    --outcome-part: #5FA9C0;  --outcome-part-bg: #1B3944;  --outcome-part-fg: #B5E0EE;
+    --outcome-part: #357F98;  --outcome-part-bg: #1B3944;  --outcome-part-fg: #B5E0EE;
     --outcome-lose-line: #8A8573; --outcome-lose-bg: #29271F; --outcome-lose-fg: #D9D4C2;
-    --outcome-lose-pattern: repeating-linear-gradient(45deg, #6E6958 0 4px, #2C2A22 4px 8px);
+    --outcome-lose-pattern: repeating-linear-gradient(45deg, #A89E82 0 4px, #2C2A22 4px 8px);
 
     --mask-bg: #4C2C0C;  --mask-fg: #FFCB94;  --mask-line: #E8913A;
     --sample-bg: #26233F; --sample-fg: #DAD5FF; --sample-line: #6C63A8;
     --info-bg: #162630;  --info-line: #35505E;
+    --warn-bg: #3A2C10;  --warn-fg: #F6D69A;  --warn-line: #C9902E;
 
     --passage-claim: #1D2B47; --passage-defense: #2E2442; --passage-issue: #3A3220;
     --passage-evidence: #173229; --passage-court: #182027;

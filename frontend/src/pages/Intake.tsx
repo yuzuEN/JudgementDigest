@@ -1,6 +1,6 @@
 import {
   ArrowLeftIcon, ArrowLeftRightIcon, ArrowRightIcon, CameraIcon, CheckIcon, ChevronDownIcon, ClipboardListIcon, FilePenLineIcon, InfoIcon,
-  MessageSquareQuoteIcon, MessagesSquareIcon, ReceiptTextIcon, SearchIcon, ShieldCheckIcon, StethoscopeIcon, UsersIcon, VideoIcon,
+  ListChecksIcon, MessageSquareQuoteIcon, MessagesSquareIcon, ReceiptTextIcon, SearchIcon, ShieldCheckIcon, StethoscopeIcon, UsersIcon, VideoIcon,
   type LucideIcon,
 } from "lucide-react";
 import { useEffect, useRef, useState, type ReactNode } from "react";
@@ -12,12 +12,13 @@ import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { Toggle } from "@/components/ui/toggle";
-import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { api } from "../api/client";
 import type { CaseType, CivilRole, DefendantType, Options } from "../api/types";
 import { AmountInput, amountState } from "../components/casey/AmountInput";
 import { EvidenceSlot } from "../components/casey/EvidenceSlot";
+import { MidLabels } from "../components/casey/MidLabels";
 import { RadioCards } from "../components/casey/RadioCards";
+import { Segmented } from "../components/casey/Segmented";
 import { ErrorBox } from "../components/Common";
 import { Layout, PAGE } from "../components/Layout";
 import { parseAmount } from "../format";
@@ -46,10 +47,9 @@ const CASE_TYPES: { value: CaseType; title: string; hint: string }[] = [
 const TYPE_LABEL: Record<CaseType | "", string> = { "": "還沒選", civil: "民事", criminal: "刑事", unsure: "不確定" };
 
 /** 選了類型之後，告訴使用者會得到什麼。 */
-const YOU_GET: Record<CaseType, string[]> = {
+const YOU_GET: Record<Exclude<CaseType, "unsure">, string[]> = {
   civil: ["相似判決裡，原告贏的比例", "可能判准的金額範圍", "相似的真實判決、證據對照、對方常見的說法"],
   criminal: ["可能的罪名與法條", "刑期落在哪個範圍", "相似的真實判決"],
-  unsure: ["民事與刑事的參考結果，分頁顯示"],
 };
 
 const SCENE_LINES: Record<number, string> = {
@@ -161,7 +161,7 @@ export default function Intake() {
   const titleProps = { ref: heading, tabIndex: -1, className: "text-[22px] leading-[1.45] font-extrabold text-balance outline-none sm:text-[26px]" };
 
   return (
-    <Layout stage={stage} scene={{ who: "organizer", line: SCENE_LINES[stage], note: stage === 1 }}>
+    <Layout stage={stage} scene={{ who: "organizer", line: SCENE_LINES[stage] }}>
       <div className={cn(PAGE, "pt-7 pb-16")}>
         <div className="flex flex-wrap items-start gap-7">
           <main className="flex min-w-0 flex-[999_1_560px] flex-col gap-6">
@@ -171,11 +171,11 @@ export default function Intake() {
                 <RadioCards label="案件類型" value={intake.caseType} options={CASE_TYPES} onChange={(caseType) => update({ caseType })} />
                 {intake.caseType === "civil" && (
                   <FieldBlock label={<span id="role-label">你是原告還是被告？</span>} hint="原告是提告的人，被告是被告的人。">
-                    <Segmented labelledBy="role-label" value={intake.role} items={ROLES} className="max-w-[520px]"
-                      onChange={(v) => { if (v) update({ role: v as CivilRole }); }} />
+                    <Segmented labelledBy="role-label" value={intake.role} items={ROLES} className="max-w-[520px]" required
+                      onChange={(v) => update({ role: v as CivilRole })} />
                   </FieldBlock>
                 )}
-                {intake.caseType && (
+                {intake.caseType && intake.caseType !== "unsure" && (
                   <Note>
                     <p className="font-bold">選{TYPE_LABEL[intake.caseType]}{intake.caseType === "civil" ? `（${ROLE_LABEL[role]}）` : ""}，你會得到：</p>
                     <ul className="m-0 list-disc pl-5 text-[15px]">
@@ -207,7 +207,7 @@ export default function Intake() {
                 {civil && (
                   <>
                     <CourtField courts={options?.courts ?? []} value={intake.court} onChange={(court) => update({ court })} defendant={defendant} />
-                    <FieldBlock label={<label htmlFor="amount">{defendant ? "對方請求的金額" : "想請求的金額"}</label>}
+                    <FieldBlock label={<span id="amount-label">{defendant ? "對方請求的金額" : "想請求的金額"}</span>}
                       hint={defendant ? "起訴狀「訴之聲明」寫的金額" : undefined}>
                       <AmountInput id="amount" value={intake.claimedAmount} onChange={(claimedAmount) => update({ claimedAmount })} />
                     </FieldBlock>
@@ -217,13 +217,14 @@ export default function Intake() {
                     </FieldBlock>
                   </>
                 )}
-                <FieldBlock label={<span id="lawyer-label">{lawyerQuestion(intake.caseType, role).label}</span>} hint={lawyerQuestion(intake.caseType, role).hint}>
+                <FieldBlock label={<span id="lawyer-label">{intake.caseType === "criminal" ? lawyerQuestion("criminal").label : <><b className="font-extrabold">你</b>{defendant ? "（被告）" : ""}是否有請律師</>}</span>}
+                  hint={intake.caseType === "criminal" || defendant ? lawyerQuestion(intake.caseType, role).hint : undefined}>
                   <Segmented labelledBy="lawyer-label" value={intake.lawyer} className="max-w-[320px]"
                     items={[{ value: "yes", label: "有" }, { value: "no", label: "沒有" }]}
                     onChange={(v) => update({ lawyer: v as IntakeState["lawyer"] })} />
                 </FieldBlock>
                 <FieldBlock label={<span id="evidence-label">證物欄</span>} hint="勾選手上有的證據，不需要上傳檔案。">
-                  <div role="group" aria-labelledby="evidence-label" className="grid grid-cols-[repeat(auto-fill,minmax(min(130px,100%),1fr))] gap-2.5">
+                  <div role="group" aria-labelledby="evidence-label" className="grid grid-cols-2 gap-2.5 sm:grid-cols-3">
                     {civil
                       ? (options?.evidence ?? []).map((e) => (
                           <EvidenceSlot key={e.key} label={e.label} icon={CIVIL_EVIDENCE_ICON[e.key] ?? FilePenLineIcon}
@@ -290,13 +291,9 @@ function StoryField({ value, onChange, defendant = false }: { value: string; onC
   return (
     <>
       <div className="flex flex-col gap-2">
-        <label htmlFor="story" className="font-bold">{defendant ? "對方的主張" : "事情經過"}</label>
-        <p id="story-hint" className="text-[15px] text-muted-foreground">
-          {defendant
-            ? "寫對方說發生了什麼事、要你賠什麼。收到起訴狀的話，可以直接貼「事實及理由」。"
-            : "也可以直接貼起訴書的「犯罪事實」或「事實及理由」。"}
-        </p>
-        <Textarea id="story" value={value} maxLength={MAX_STORY} aria-describedby="story-hint story-status"
+        <label htmlFor="story" className="text-lg font-bold">{defendant ? "對方的主張" : "事情經過"}</label>
+        {defendant && <p id="story-hint" className="text-[15px] text-muted-foreground">寫對方說發生了什麼事、要你賠什麼。收到起訴狀的話，可以直接貼「事實及理由」。</p>}
+        <Textarea id="story" value={value} maxLength={MAX_STORY} aria-describedby={defendant ? "story-hint story-status" : "story-status"}
           onChange={(e) => onChange(e.target.value)} className="min-h-[200px] resize-y"
           placeholder={defendant
             ? "例如：對方說去年三月我開車右轉時撞到他的機車，害他右手骨折住院五天，要我賠醫藥費和三個月不能工作的薪水，一共 50 萬……"
@@ -304,7 +301,7 @@ function StoryField({ value, onChange, defendant = false }: { value: string; onC
         <div className="flex flex-wrap items-center justify-between gap-2">
           <span id="story-status" role="status" className={cn("text-[15px]", ok && "font-bold text-secondary-foreground")}>
             {ok ? "字數夠了，可以進下一關。"
-              : !defendant ? `再多寫一點：至少 ${MIN_STORY} 字，才找得到相似判決。`
+              : !defendant ? `還需 ${MIN_STORY - len} 字`
               : len === 0 ? "寫下對方告你什麼、要你賠多少。"
               : "字數偏少，可以先進下一關，但結果可能比較不準。有起訴狀的話，貼「事實及理由」會更準。"}
           </span>
@@ -446,7 +443,11 @@ function DisputeKinds({ options, mids, onChange }: { options: Options | null; mi
         </div>
         <aside aria-label="已選類型的說明" className="flex min-w-0 flex-[1_1_260px] flex-col gap-2 rounded-[18px] border bg-muted p-5">
           <p className="font-bold">糾紛類型說明</p>
-          {mids.length === 0 && <p className="text-[15px] text-muted-foreground">還沒選。選到的類型，說明會出現在這裡。</p>}
+          {mids.length === 0 && (
+            <p className="flex flex-col items-center gap-2 py-6 text-center text-[15px] text-muted-foreground">
+              <ListChecksIcon className="size-7" aria-hidden="true" />尚未選擇
+            </p>
+          )}
           {mids.map((m) => (
             <div key={m} className="flex flex-col gap-0.5 rounded-[12px] border-[1.5px] border-primary bg-card px-3 py-2.5">
               <p className="text-[15px] font-bold">
@@ -468,7 +469,7 @@ function CourtField({ courts, value, onChange, defendant = false }: {
   const items = [{ value: null as string | null, label: "不指定" }, ...courts.map((c) => ({ value: c as string | null, label: `${c}地方法院` }))];
   return (
     <FieldBlock label={<label htmlFor="court">{defendant ? "案子在哪個法院？" : "打算在哪個法院？"}</label>}
-      hint={defendant ? "起訴狀或開庭通知上的法院，可以不選" : "可以不選"}>
+      hint={defendant ? "起訴狀或開庭通知上的法院，可以不選" : undefined}>
       <Select items={items} value={value || null} onValueChange={(v) => onChange((v as string | null) ?? "")}>
         <SelectTrigger id="court" className="w-full max-w-[360px]"><SelectValue /></SelectTrigger>
         <SelectContent>
@@ -476,28 +477,6 @@ function CourtField({ courts, value, onChange, defendant = false }: {
         </SelectContent>
       </Select>
     </FieldBlock>
-  );
-}
-
-/** 二選一、三選一：ToggleGroup 單選，再點一次可以取消（等於不確定）。 */
-function Segmented({ labelledBy, value, items, onChange, className }: {
-  labelledBy: string;
-  value: string;
-  items: { value: string; label: string }[];
-  onChange: (value: string) => void;
-  className?: string;
-}) {
-  return (
-    <ToggleGroup aria-labelledby={labelledBy} spacing={0} value={value ? [value] : []}
-      onValueChange={(v: string[]) => onChange(v[0] ?? "")}
-      className={cn("w-full overflow-hidden rounded-[12px] border-2 border-input bg-card", className)}>
-      {items.map((it) => (
-        <ToggleGroupItem key={it.value} value={it.value}
-          className="h-auto min-h-[50px] flex-1 rounded-none border-l-2 border-input px-2 text-base font-bold whitespace-normal text-foreground first:border-l-0 hover:bg-secondary aria-pressed:bg-primary aria-pressed:text-primary-foreground aria-pressed:hover:bg-primary">
-          {it.label}
-        </ToggleGroupItem>
-      ))}
-    </ToggleGroup>
   );
 }
 
@@ -514,7 +493,6 @@ function Summary({ intake }: { intake: IntakeState }) {
     [defendant ? "對方的主張" : "案情", intake.text.trim() ? `${intake.text.length} 字` : "還沒寫"],
     ...(defendant ? [["你的說法", intake.defenseText.trim() ? `${intake.defenseText.length} 字` : "未填"]] as [string, string][] : []),
     ...(civil ? [
-      ["糾紛類型", intake.mids.length ? intake.mids.join("、") : "未選"],
       ["請求金額", amount !== null ? `${amount.toLocaleString("en-US")} 元` : amountState(intake.claimedAmount) === "bad" ? "格式錯誤" : "未填"],
       [defendant ? "你（被告）" : "對方", DEFENDANT_TYPES.find((d) => d.value === intake.defendantType)?.label ?? "未選"],
     ] as [string, string][] : []),
@@ -529,10 +507,18 @@ function Summary({ intake }: { intake: IntakeState }) {
           <span className="text-sm text-muted-foreground">目前進度</span>
         </div>
         <dl className="m-0 flex flex-col gap-2 text-[15px]">
-          {rows.map(([k, v]) => (
-            <div key={k} className="flex items-start justify-between gap-3">
-              <dt className="flex-none text-muted-foreground">{k}</dt>
-              <dd className="m-0 text-right font-bold tabular-nums">{v}</dd>
+          {rows.map(([k, v], i) => (
+            <div key={k} className="contents">
+              <div className="flex items-start justify-between gap-3">
+                <dt className="flex-none text-muted-foreground">{k}</dt>
+                <dd className="m-0 text-right font-bold tabular-nums">{v}</dd>
+              </div>
+              {civil && i === 1 && (
+                <div className="flex items-start justify-between gap-3">
+                  <dt className="flex-none text-muted-foreground">糾紛類型</dt>
+                  <dd className="m-0">{intake.mids.length ? <MidLabels mids={intake.mids} vertical /> : <span className="font-bold">未選</span>}</dd>
+                </div>
+              )}
             </div>
           ))}
         </dl>
