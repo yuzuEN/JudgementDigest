@@ -2,6 +2,8 @@
 
 export type CaseType = "civil" | "criminal" | "unsure";
 export type DefendantType = "person" | "company" | "government";
+/** 民事：使用者是原告（要告對方）還是被告（被告了） */
+export type CivilRole = "plaintiff" | "defendant";
 
 export interface Health {
   status: string;
@@ -9,6 +11,10 @@ export interface Health {
   criminal: "model" | "mock";
   followup: "rules" | "llm";
   model: string | null;
+  /** 民事被告端：有被告端模型，或沒有、改用原告端模型 */
+  defense?: "model" | "fallback" | "mock";
+  /** 民事被告端：有答辯索引，被告寫的答辯也用來找相似判決 */
+  defense_search?: boolean;
   /** 民事金額範圍：有可用的獲償比例模型，或只用相似判決 */
   amount?: "model" | "similar" | "mock";
   /** 刑事的刑期用哪個模型；刑事是示例資料時為 null */
@@ -43,11 +49,14 @@ export interface FollowupResponse {
 }
 
 export interface CivilInput {
+  /** 被告時：對方的主張，你的答辯接在 DEFENSE_MARKER 那一行後面 */
   text: string;
+  role?: CivilRole;
   search_text?: string | null;
   mid?: string | null;
   court?: string | null;
   plaintiff_has_lawyer?: boolean | null;
+  defendant_has_lawyer?: boolean | null;
   defendant_type?: DefendantType | null;
   claimed_amount?: number | null;
   evidence: string[];
@@ -109,6 +118,19 @@ export interface SimilarCase {
   url?: string | null;
   /** 民事：和使用者的情況相同的地方（同類糾紛、請求金額相近、都有的證據、同一法院）；示例資料與舊版後端沒有 */
   common?: string[];
+  /** 民事：有標註的判決才有「法院怎麼認定」；沒有標註、舊版後端時是 null 或不存在 */
+  reasoning?: ReasoningQuote[] | null;
+}
+
+/** 相似判決列表用的「法院怎麼認定」：引文與它在判決裡的完整原文（不對段落） */
+export interface ReasoningQuote {
+  label: string;
+  polarity?: string | null;
+  basis?: string | null;
+  /** 標註的引文（太長時是「開頭〔略〕結尾」） */
+  quote: string;
+  /** 引文在判決裡的完整原文 */
+  text: string;
 }
 
 /** 相似判決是在哪個範圍裡找的 */
@@ -118,6 +140,8 @@ export interface SearchScope {
   mid?: string | null;
   /** 民事：案由是系統從描述判斷的（使用者沒選） */
   mid_inferred?: boolean;
+  /** 民事被告：相似判決也比對了你寫的答辯 */
+  defense_used?: boolean;
   /** 刑事：限定的罪名 */
   charge?: string | null;
 }
@@ -134,6 +158,12 @@ export interface DefenseRow {
   label: string;
   description: string;
   share: number;
+  /** 被告：你的答辯裡有提到這類說法 */
+  user_has?: boolean;
+  /** 提出這類說法的相似判決裡，原告敗訴的比例；件數太少時是 null */
+  lose_share?: number | null;
+  /** 提出這類說法的相似判決件數 */
+  n_raised?: number;
 }
 
 export interface OutcomeCounts {
@@ -151,6 +181,8 @@ export interface RewriteResponse {
 }
 
 export interface CivilReport {
+  /** 舊版後端沒有，視為 plaintiff */
+  role?: CivilRole;
   prediction: CivilPrediction;
   outcomes: OutcomeCounts;
   default_cases: number;
@@ -210,6 +242,14 @@ export interface ReasoningItem {
   polarity?: string | null;
   basis?: string | null;
   quote: string;
+  paragraph: number;
+  start: number;
+  end: number;
+  /** 引文跨段時，每一段要標的範圍；舊版後端沒有，就只標 paragraph 那一段 */
+  parts?: ReasoningPart[];
+}
+
+export interface ReasoningPart {
   paragraph: number;
   start: number;
   end: number;

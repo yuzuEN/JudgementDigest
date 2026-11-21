@@ -563,7 +563,7 @@ class TestWithAmountModel(unittest.TestCase):
         text, answers, claimed = spy.call_args.args
         self.assertEqual(claimed, 200000)
         self.assertEqual(answers, {"mid": "侵權：交通事故", "court": "臺北", "plaintiff_has_lawyer": True,
-                                   "defendant_is_corp": True})
+                                   "defendant_has_lawyer": None, "defendant_is_corp": True})
         self.assertNotIn("？", text)
 
     def test_falls_back_when_the_questionnaire_is_not_filled(self):

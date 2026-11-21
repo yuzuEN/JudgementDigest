@@ -5,7 +5,7 @@
 段落功能標註（annotation/）完成後，判決導讀改用標註模型；這裡的規則是第一版（rule-v0）。
 """
 import re
-from typing import Dict, Iterable, List, Optional, Sequence
+from typing import Dict, Iterable, List, Optional, Sequence, Tuple
 
 import numpy as np
 
@@ -46,6 +46,16 @@ ANSWER_PREFIX = "回答："
 _NEGATION = re.compile(r"沒有|沒|無|未|不")
 _YES = re.compile(r"^(?:有|有的|有喔|是|是的|對|對的)[。！!]?$")
 _SENTENCE = re.compile(r"[。；！？，,\n]")
+
+
+# 被告端：前端把使用者自己的答辯接在這一行後面，和對方的主張一起遮名、送出（見 split_defense）
+DEFENSE_MARKER = "【我的答辯】"
+
+
+def split_defense(text: str) -> Tuple[str, str]:
+    """被告端的全文切成（對方的主張, 自己的答辯）。沒有標記時整段都是主張、答辯空白。"""
+    head, _, tail = (text or "").partition(DEFENSE_MARKER)
+    return head.strip(), tail.strip()
 
 
 def without_questions(text: str) -> str:
@@ -89,6 +99,32 @@ def defense_types(text: str) -> List[str]:
     return [k for k, rx in _DEFENSE_RE if rx.search(text or "")]
 
 
+# 被告自己寫的答辯是口語（「太高」「已經付過」），DEFENSES 的關鍵字是判決書用語，抓不到。
+# 這組只用來讀使用者的答辯；判決的抗辯（建檢索資料時算好的）仍用 DEFENSES，兩邊的 key 相同。
+_USER_DEFENSE_RE = [(k, re.compile(rx)) for k, rx in [
+    ("contributory", r"與有過失|也有(?:過失|責任|錯)|闖紅燈|自己也"),
+    ("excessive", r"過高|太高|太多|太貴|不合理|灌水|浮報|沒必要|不必要|不需要"),
+    ("paid", r"已(?:經)?(?:清償|給付|償還|支付|賠償)|(?:付|還|賠)(?:過|了|清)|和解|強制險|保險(?:已經)?(?:理賠|賠)"),
+    ("limitation", r"時效"),
+    ("causation", r"因果關係|不是(?:我|因為我).{0,4}(?:造成|害)的"),
+    ("no_fault", r"沒有過失|無過失|沒有錯|不是我的錯|(?:不用|不必|不需要?)負(?:責|任何責任)|沒有責任"),
+    ("offset", r"抵銷|也欠我"),
+    ("dispute_fact", r"否認|偽造|不實|根本沒有|沒有這回事|沒有(?:借|簽|拿|收到)|不是我簽|(?:不是|並非)(?:借|欠)|沒有(?:約定|說好|答應)要?還"),
+]]
+_USER_DEFENSE_NEGATION = re.compile(r"沒有?|未|並非")
+
+
+def user_defense_types(text: str) -> List[str]:
+    """使用者（被告）答辯裡提到哪幾類說法。前面兩個字有否定（「我沒有付過」）的不算。"""
+    found = set()
+    for sentence in _SENTENCE.split(text or ""):
+        for key, rx in _USER_DEFENSE_RE:
+            hit = rx.search(sentence)
+            if hit and not _USER_DEFENSE_NEGATION.search(sentence[max(0, hit.start() - 2):hit.start()]):
+                found.add(key)
+    return [k for k, _, _, _ in DEFENSES if k in found]
+
+
 def evidence_table(neighbor_evidence: Sequence[Iterable[str]], user_has: Iterable[str]) -> List[Dict]:
     """
     相似「勝訴」判決裡提到各項證據的比例，和使用者有沒有這項證據並列。
@@ -104,15 +140,31 @@ def evidence_table(neighbor_evidence: Sequence[Iterable[str]], user_has: Iterabl
     return sorted(rows, key=lambda r: -r["share"])
 
 
-def defense_table(neighbor_defenses: Sequence[Iterable[str]], top: int = 3) -> List[Dict]:
-    """相似判決的被告答辯中，各類抗辯出現的比例，取前 top 類。"""
+MIN_RAISED = 5     # 提出某類說法的相似判決少於這個數時，不算原告敗訴的比例
+
+
+def defense_table(neighbor_defenses: Sequence[Iterable[str]], top: int = 3,
+                  wins: Optional[Sequence[int]] = None, user_has: Iterable[str] = ()) -> List[Dict]:
+    """
+    相似判決的被告答辯中，各類抗辯出現的比例，取前 top 類。
+    wins（每件相似判決原告是否勝訴，1／0）有給時，另算提出這類說法的判決裡原告敗訴的比例；
+    user_has 是使用者（被告）自己答辯裡提到的說法，這些一定列出，即使不在前 top 類。
+    """
     n = len(neighbor_defenses)
+    mine = set(user_has)
     rows = []
     for key, label, desc, _ in DEFENSES:
-        hits = sum(key in set(d) for d in neighbor_defenses)
-        if n and hits:
-            rows.append({"key": key, "label": label, "description": desc, "share": hits / n})
-    return sorted(rows, key=lambda r: -r["share"])[:top]
+        raised = [i for i, d in enumerate(neighbor_defenses) if key in set(d)]
+        if not (n and (raised or key in mine)):
+            continue
+        row = {"key": key, "label": label, "description": desc, "share": len(raised) / n,
+               "user_has": key in mine, "n_raised": len(raised), "lose_share": None}
+        if wins is not None and len(raised) >= MIN_RAISED:
+            row["lose_share"] = sum(1 - int(wins[i]) for i in raised) / len(raised)
+        rows.append(row)
+    rows.sort(key=lambda r: -r["share"])
+    picked = rows[:top]
+    return picked + [r for r in rows[top:] if r["user_has"]]
 
 
 def outcome_counts(outcomes: Iterable[str]) -> Dict:

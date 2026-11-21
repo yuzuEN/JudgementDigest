@@ -46,6 +46,8 @@ API 文件（可以直接在網頁上試）：http://127.0.0.1:8000/docs
 - `civil_winloss_v1/`：`python -m civil.models.service train` 產生
 - `retrieval_civil_v6/`：`python -m retrieval.build` 產生
 - `civil_amount_v1/`（選用）：`python -m civil.models.amount_service train` 產生
+- `civil_defense_v1/`（選用）：被告端勝敗模型，`python -m civil.models.defense_service train` 產生。沒有時，被告（`role: defendant`）的查詢改用 `civil_winloss_v1`、只看對方的主張，結果裡加一句提醒；`/api/health` 的 `defense` 是 `fallback`
+- `retrieval_civil_defense_v1/`（選用）：被告答辯的檢索索引，`python -m retrieval.defense_index build` 從 `retrieval_civil_v6` 的 sections 表產生（約 5 分鐘、600 MB）。有的話，被告寫了答辯時，相似度是主張和答辯各占一半（`search_scope.defense_used` 是 true）；沒有、或不是用目前的 `retrieval_civil_v6` 建的（`meta.json` 的 `retrieval_built_at` 對不上），被告只用對方的主張找。重建 `retrieval_civil_v6` 之後要跟著重建。`/api/health` 的 `defense_search` 表示有沒有用到
 - `civil_winloss_v1/`、`civil_amount_v1/`、`retrieval_civil_v6/` 也可以從 Hugging Face 下載：`scripts/sync_civil_models.sh`（見根目錄 README 的「模型檔」）
 - `criminal_v1/`、`retrieval_criminal_v1/`：刑事罪名、法條模型與相似判決檢索（PR #39，`python -m criminal.models.service`、`python -m retrieval.criminal` 產生）；兩個都可以從 Hugging Face 下載：`scripts/sync_criminal_models.sh`
 - `criminal_term/`：刑度 ELECTRA（6 區間，和 SVM 相同），Kaggle `term-bucket-future-seed42-20261110` 的輸出（`best.pt`、`tokenizer/`、`encoder_config/`、`experiment_summary.json`）；沒有時刑度用 SVM。從 Hugging Face 下載：`scripts/sync_criminal_term.sh`（見根目錄 README 的「模型檔」）

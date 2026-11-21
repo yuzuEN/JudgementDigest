@@ -1,5 +1,5 @@
 import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
-import type { CaseType, CivilInput, DefendantType } from "./api/types";
+import type { CaseType, CivilInput, CivilRole, DefendantType } from "./api/types";
 import { parseAmount } from "./format";
 import { clearReportCache } from "./api/client";
 
@@ -9,7 +9,9 @@ export const STORAGE_KEY = "casey-intake-v1";
 
 export interface Intake {
   caseType: CaseType | "";   // 空字串＝還沒選（第 1 關必選）
-  text: string;
+  role: CivilRole;       // 民事：你是原告（要告對方）還是被告（被告了）；只有選「民事」時用得到
+  text: string;          // 原告：事情經過；被告：對方告你什麼
+  defenseText: string;   // 被告：你的說法（選填）
   mids: string[];        // 糾紛類型，可以多選
   court: string;
   lawyer: "yes" | "no" | "";
@@ -30,7 +32,9 @@ export interface Intake {
 
 export const EMPTY_INTAKE: Intake = {
   caseType: "",
+  role: "plaintiff",
   text: "",
+  defenseText: "",
   mids: [],
   court: "",
   lawyer: "",
@@ -57,24 +61,43 @@ export function primaryMid(intake: Intake): string | null {
   return intake.mids.length === 1 ? intake.mids[0] : null;
 }
 
+/** 後端用這一行切開對方的主張和你的答辯（civil/insights.py 的 DEFENSE_MARKER），兩邊要一樣。 */
+export const DEFENSE_MARKER = "【我的答辯】";
+
 /**
- * 「有沒有請律師」問的是誰：民事問使用者自己（原告，民事模型的「原告有律師」）；
- * 刑事問被告有沒有辯護人（使用者可能是被告，也可能是被害人）。「不確定」兩邊都查，用民事的問法。
+ * 民事這次用哪個角色：只有案件類型選「民事」時才能選被告；
+ * 「不確定」會同時查刑事，刑事 API 只收一段文字，所以一律用原告的問法。
  */
-export function lawyerQuestion(caseType: Intake["caseType"]): { label: string; hint: string; short: string } {
-  return caseType === "criminal"
-    ? { label: "被告有沒有請辯護律師", hint: "被告的律師叫辯護人。你是被害人的話，填對方的情況；不知道可以不選。", short: "被告的辯護律師" }
+export function civilRole(intake: Pick<Intake, "caseType" | "role">): CivilRole {
+  return intake.caseType === "civil" && intake.role === "defendant" ? "defendant" : "plaintiff";
+}
+
+/**
+ * 「有沒有請律師」問的是誰：民事問使用者自己（原告或被告，看選的角色）；
+ * 刑事問被告有沒有辯護人（使用者可能是被告，也可能是被害人）。「不確定」兩邊都查，用民事原告的問法。
+ */
+export function lawyerQuestion(caseType: Intake["caseType"], role: CivilRole = "plaintiff"): { label: string; hint: string; short: string } {
+  if (caseType === "criminal") {
+    return { label: "被告有沒有請辯護律師", hint: "被告的律師叫辯護人。你是被害人的話，填對方的情況；不知道可以不選。", short: "被告的辯護律師" };
+  }
+  return role === "defendant"
+    ? { label: "你（被告）有沒有請律師", hint: "問的是你這一方，不是告你的人。", short: "你（被告）的律師" }
     : { label: "你（原告）有沒有請律師", hint: "問的是你這一方，不是對方。", short: "你（原告）的律師" };
 }
 
 /**
  * 描述加上追問的回答，作為遮名與送出的全文。
  * 刑事 API 只收文字，所以刑事的律師、手上的證據也接在最後。
+ * 民事被告：對方的主張在前；你的說法和追問的回答（問的都是你這一方）接在 DEFENSE_MARKER 那一行後面。
  */
 export function fullText(intake: Intake): string {
   const extra = Object.values(intake.followupAnswers)
     .filter((a) => a.answer.trim())
     .map((a) => `追問：${a.question}\n回答：${a.answer.trim()}`);   // 後端靠這兩個開頭分辨問題和回答
+  if (civilRole(intake) === "defendant") {
+    const defense = [intake.defenseText.trim(), ...extra].filter(Boolean);
+    return [intake.text.trim(), ...(defense.length ? [DEFENSE_MARKER, ...defense] : [])].filter(Boolean).join("\n");
+  }
   const criminal = intake.caseType === "criminal";
   const lawyer = criminal && intake.lawyer ? [`${lawyerQuestion("criminal").label}：${intake.lawyer === "yes" ? "有" : "沒有"}`] : [];
   const evidence = criminal && intake.criminalEvidence.length
@@ -82,14 +105,24 @@ export function fullText(intake: Intake): string {
   return [intake.text.trim(), ...extra, ...lawyer, ...evidence].filter(Boolean).join("\n");
 }
 
+/** 遮名後的全文裡，對方的主張那一段（被告時拿掉你的答辯；原告時就是全文）：AI 整理成判決書寫法時只整理這段。 */
+export function claimPart(text: string): string {
+  const i = text.indexOf(DEFENSE_MARKER);
+  return (i < 0 ? text : text.slice(0, i)).trim();
+}
+
 /** 送給民事 API 的內容：一律用遮名後的文字。 */
 export function civilInput(intake: Intake): CivilInput {
+  const role = civilRole(intake);
+  const lawyer = intake.lawyer === "" ? null : intake.lawyer === "yes";
   return {
     text: intake.maskedText || fullText(intake),
+    role,
     search_text: intake.searchText || null,
     mid: primaryMid(intake),
     court: intake.court || null,
-    plaintiff_has_lawyer: intake.lawyer === "" ? null : intake.lawyer === "yes",
+    plaintiff_has_lawyer: role === "plaintiff" ? lawyer : null,
+    defendant_has_lawyer: role === "defendant" ? lawyer : null,
     defendant_type: intake.defendantType || null,
     claimed_amount: parseAmount(intake.claimedAmount),
     evidence: intake.evidence,

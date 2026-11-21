@@ -5,6 +5,7 @@ from pydantic import BaseModel, Field
 
 CaseType = Literal["civil", "criminal", "unsure"]
 DefendantType = Literal["person", "company", "government"]
+Role = Literal["plaintiff", "defendant"]          # 民事：使用者是原告（要告人）還是被告（被告了）
 
 
 class Health(BaseModel):
@@ -14,6 +15,9 @@ class Health(BaseModel):
     criminal_sentence: Optional[Literal["electra", "svm"]] = None   # 刑度用哪個模型（刑事是示例資料時為 null）
     followup: Literal["rules", "llm"]
     model: Optional[str] = None
+    defense: Literal["model", "fallback", "mock"] = Field(
+        default="fallback", description="民事被告端：model＝有被告端模型；fallback＝沒有，被告的查詢改用原告端模型")
+    defense_search: bool = Field(default=False, description="民事被告端：有答辯索引，被告寫的答辯也用來找相似判決")
     amount: Literal["model", "similar", "mock"] = Field(
         default="similar", description="民事金額範圍：model＝有可用的獲償比例模型（個別案件仍可能退回相似判決）；similar＝只用相似判決")
 
@@ -59,6 +63,7 @@ class MaskResponse(BaseModel):
 
 class FollowupRequest(BaseModel):
     case_type: CaseType = "civil"
+    role: Role = "plaintiff"
     mid: Optional[str] = None
     text: str = Field(default="", max_length=20000)
     allow_llm: bool = Field(default=False, description="使用者看過說明並按下按鈕才是 true；預設不傳給外部服務")
@@ -81,6 +86,7 @@ class FollowupResponse(BaseModel):
 
 class RewriteRequest(BaseModel):
     case_type: CaseType = "civil"
+    role: Role = "plaintiff"
     mid: Optional[str] = None
     text: str = Field(min_length=1, max_length=20000, description="遮名後的案情描述")
     allow_llm: bool = Field(default=False, description="使用者看過說明並按下按鈕才是 true")
@@ -94,12 +100,15 @@ class RewriteResponse(BaseModel):
 
 
 class CivilInput(BaseModel):
-    text: str = Field(min_length=1, max_length=20000, description="遮名後的案情描述")
+    text: str = Field(min_length=1, max_length=20000,
+                      description="遮名後的案情描述；被告時是對方的主張，自己的答辯接在 DEFENSE_MARKER 那一行後面")
+    role: Role = "plaintiff"
     search_text: Optional[str] = Field(default=None, max_length=20000, description="使用者確認過的改寫，只用來搜尋相似判決")
     mid: Optional[str] = Field(default=None, description="案由中類，例：侵權：交通事故")
     court: Optional[str] = Field(default=None, description="法院簡稱，例：臺北；不知道就留空")
     plaintiff_has_lawyer: Optional[bool] = None
-    defendant_type: Optional[DefendantType] = None
+    defendant_has_lawyer: Optional[bool] = Field(default=None, description="被告有沒有請律師（使用者是被告時問自己）")
+    defendant_type: Optional[DefendantType] = Field(default=None, description="被告是個人、公司或機關（使用者是被告時就是自己）")
     claimed_amount: Optional[int] = Field(default=None, ge=0)
     evidence: List[str] = Field(default_factory=list, description="使用者有的證據（options.evidence 的 key）")
 
@@ -147,6 +156,15 @@ class AmountRange(BaseModel):
     n_full_wins: Optional[int] = Field(default=None, description="其中全部勝訴（含確認勝訴）的件數")
 
 
+class ReasoningQuote(BaseModel):
+    """相似判決列表用的「法院怎麼認定」：不對段落，只有引文和它在判決裡的完整原文。"""
+    label: str                           # CONCL、SUB、EV、DAM、EXP⋯⋯（annotation/論點標註手冊）
+    polarity: Optional[str] = None
+    basis: Optional[str] = None
+    quote: str                           # 標註的引文（太長時是「開頭〔略〕結尾」）
+    text: str                            # 引文在判決裡的完整原文
+
+
 class SimilarCase(BaseModel):
     source: Literal["civil", "criminal"]
     case_id: int
@@ -163,6 +181,7 @@ class SimilarCase(BaseModel):
     default_judgment: bool = False      # 一造辯論：被告沒有到庭
     url: Optional[str] = None           # 司法院裁判書系統的原文網址（民事舊版檢索資料沒有時為 None）
     common: List[str] = []              # 民事：和使用者的情況相同的地方（同類糾紛、請求金額相近、都有的證據、同一法院），用結構化欄位比對
+    reasoning: Optional[List[ReasoningQuote]] = None   # 民事：有標註的判決才有「法院怎麼認定」（backend/reasoning.py）
 
 
 class EvidenceRow(BaseModel):
@@ -177,6 +196,9 @@ class DefenseRow(BaseModel):
     label: str
     description: str
     share: float
+    user_has: bool = False                  # 被告：自己的答辯裡有提到這類說法
+    lose_share: Optional[float] = None      # 提出這類說法的相似判決裡，原告敗訴的比例（件數太少時為 null）
+    n_raised: int = 0                       # 提出這類說法的相似判決件數
 
 
 class OutcomeCounts(BaseModel):
@@ -191,10 +213,12 @@ class SearchScope(BaseModel):
     n: int                              # 範圍內的判決件數
     mid: Optional[str] = None           # 民事：限定的案由（沒有限定時為 None）
     mid_inferred: bool = False          # 民事：案由是系統從描述判斷的（使用者沒選）
+    defense_used: bool = False          # 民事被告：相似判決也比對了使用者寫的答辯（有答辯索引時）
     charge: Optional[str] = None        # 刑事：限定的罪名（模型最可能的罪名；沒有限定時為 None）
 
 
 class CivilReport(BaseModel):
+    role: Role = "plaintiff"
     prediction: CivilPrediction
     outcomes: OutcomeCounts
     default_cases: int = 0     # 最相似的 30 件（含一造辯論）裡，被告未到庭的件數
@@ -283,15 +307,23 @@ class CriminalGuide(BaseModel):
     paragraphs: List[CriminalGuideParagraph]
 
 
+class ReasoningPart(BaseModel):
+    """引文在某一個導讀段落裡要標的範圍（引文跨段時有好幾個）。"""
+    paragraph: int
+    start: int
+    end: int
+
+
 class ReasoningItem(BaseModel):
     """「法院怎麼認定」的一項：標籤、引文，以及它在導讀段落裡的位置（點了跳到該段並標出引文）。"""
     label: str                           # CONCL、SUB、EV、DAM、BOP⋯⋯（annotation/論點標註手冊）
     polarity: Optional[str] = None       # EV 傾向、DAM 方向、CONCL 方向
     basis: Optional[str] = None          # EV：明示評價／依證據推論
     quote: str                           # 標註的引文（太長時是「開頭〔略〕結尾」）
-    paragraph: int                       # paragraphs 的序號
+    paragraph: int                       # paragraphs 的序號（開頭所在的那一段）
     start: int                           # 在該段 text 裡的起訖位置
     end: int
+    parts: List[ReasoningPart] = []      # 引文跨段時，每一段要標的範圍（第一個就是 paragraph/start/end）
 
 
 class Reasoning(BaseModel):

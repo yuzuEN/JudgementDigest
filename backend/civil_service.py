@@ -6,6 +6,11 @@
 
 獲償比例模型（artifacts/civil_amount_v1）是選用的：有的話金額範圍用模型推估（若為一部勝訴），
 沒有、讀不出來、或這次不適合用模型時（見 _use_amount_model），退回相似判決的分位數（和沒有這個模型之前相同）。
+
+被告端（role = defendant）：使用者被告了，描述的是對方的主張，自己的答辯接在 DEFENSE_MARKER 後面（選填）。
+勝訴機率用被告端模型（artifacts/civil_defense_v1，主張＋答辯）；沒有這個模型時改用原告端模型、只看主張，並提醒使用者。
+相似判決、金額範圍都用對方的主張找（檢索索引是原告主張建的）；證據對照改看原告敗訴的相似判決，
+常見抗辯另外列出「提出這類說法時原告敗訴的比例」和使用者自己提到的說法。
 """
 import json
 import logging
@@ -21,10 +26,12 @@ from backend import reasoning as reasoning_store
 from backend.quality import looks_like_dispute, win_signal
 from civil.dataset.text import prepare_input
 from civil.insights import (EVIDENCE, QUESTIONNAIRE_EVIDENCE, amount_fields, amount_range, outcome_counts, user_evidence, without_questions, defense_table, evidence_table,
-                            guide_paragraphs, GUIDE_LABELER)
+                            guide_paragraphs, split_defense, user_defense_types, GUIDE_LABELER)
 from civil.models import amount_service
+from civil.models import defense_service
 from civil.models import service as model_service
 from retrieval import build as retrieval_build
+from retrieval import defense_index as defense_retrieval
 from retrieval.engine import TfidfIndex
 
 logger = logging.getLogger(__name__)
@@ -40,6 +47,13 @@ MIN_SAME_MID = 10         # 同案由的判決少於這個數時，改在全部�
 MIN_AMOUNT_MODEL_CASES = 30   # 獲償比例模型在這個案由的訓練件數少於這個數就不用（16 類、共 113 件；例如債務人異議 11 件）
 AMOUNT_CLOSE = (2 / 3, 1.5)   # 判決的請求金額是使用者的這個倍數之間，算「請求金額相近」（30 萬對 60 萬不算）
 MAX_COMMON_EVIDENCE = 3       # 「都有」最多列幾種證據
+N_DEFENSES = {"plaintiff": 3, "defendant": 5}   # 常見抗辯列幾類：被告要準備答辯，多列一點
+DEFENSE_FALLBACK_NOTE = "伺服器上沒有被告端的模型，這次的機率只看對方的主張，沒有用到你的答辯。"
+# 被告有寫答辯時，相似度 = 0.5·主張 ＋ 0.5·答辯。retrieval.defense_index evaluate（3,000 件判決）：
+# 前 30 件的勝訴比例預測實際結果，AUC 只用主張 0.770、0.5 時 0.790、0.6–0.8 時最高 0.793、只用答辯 0.785。
+# 不取最高點：評估用的是判決書文字，使用者的答辯是口語、比較短，權重太重容易被一兩句話帶偏
+DEFENSE_SEARCH_WEIGHT = 0.5
+MIN_DEFENSE_QUERY = 10        # 答辯少於這個字數（處理後）時不拿來搜尋
 EVIDENCE_LABELS = {key: label for key, label, _ in EVIDENCE}
 
 
@@ -83,6 +97,8 @@ class CivilService:
     def __init__(self, artifacts_dir: Path, force_mock: bool = False):
         self.model = self.meta = self.index = None
         self.amount_model = self.amount_meta = None
+        self.defense_model = self.defense_meta = None
+        self.defense_index: Optional[TfidfIndex] = None     # 被告答辯的檢索索引（選用）
         self.db_path: Optional[Path] = None
         self.reasoning_db = reasoning_store.db_path(artifacts_dir)   # 判決導讀「法院怎麼認定」，選用
         if force_mock:
@@ -105,6 +121,30 @@ class CivilService:
             self.default = np.array([bool(r[6]) for r in rows])
             self.outcomes = [r[7] for r in rows]
             self._load_amount_model(artifacts_dir)
+            self._load_defense_model(artifacts_dir)
+            self._load_defense_index(artifacts_dir, retrieval_dir)
+
+    def _load_defense_index(self, artifacts_dir: Path, retrieval_dir: Path) -> None:
+        """
+        被告答辯的檢索索引是選用的：有的話，被告寫的答辯也會影響相似判決；沒有時只用對方的主張搜尋。
+        一定要是用同一份檢索資料建的（列順序相同），對不上就不用，不然相似度會加到別件判決上。
+        """
+        path = defense_retrieval.artifact_dir(artifacts_dir)
+        if not (path / "index.joblib").exists():
+            return
+        try:
+            meta = json.loads((path / "meta.json").read_text(encoding="utf-8"))
+            if not defense_retrieval.matches(meta, retrieval_dir, len(self.index)):
+                logger.warning("答辯索引 %s 不是用目前的檢索資料建的，被告只用對方的主張搜尋；"
+                               "請重新執行 python -m retrieval.defense_index build", path)
+                return
+            index = TfidfIndex.load(path / "index.joblib")
+            if len(index) != len(self.index):
+                logger.warning("答辯索引 %s 的件數和檢索資料不同，被告只用對方的主張搜尋", path)
+                return
+            self.defense_index = index
+        except Exception:
+            logger.warning("答辯索引 %s 讀取失敗，被告只用對方的主張搜尋", path, exc_info=True)
 
     def _load_amount_model(self, artifacts_dir: Path) -> None:
         """獲償比例模型是選用的：沒有、或讀不出來（例如 scikit-learn 版本不同）都退回相似判決，不影響其他功能。"""
@@ -119,6 +159,24 @@ class CivilService:
         except Exception:
             logger.warning("獲償比例模型 %s 讀取失敗，金額範圍改用相似判決的分位數", path, exc_info=True)
             self.amount_model = self.amount_meta = None
+
+    def _load_defense_model(self, artifacts_dir: Path) -> None:
+        """被告端模型也是選用的：沒有或讀不出來時，被告的查詢改用原告端模型（只看對方的主張）。"""
+        path = defense_service.artifact_dir(artifacts_dir)
+        if not (path / "model.joblib").exists():
+            return
+        try:
+            self.defense_model, self.defense_meta = defense_service.load(path)
+        except Exception:
+            logger.warning("被告端模型 %s 讀取失敗，被告的查詢改用原告端模型", path, exc_info=True)
+            self.defense_model = self.defense_meta = None
+
+    @property
+    def defense_source(self) -> str:
+        """/health 用：被告端用專用模型，還是退回原告端模型。"""
+        if self.mock:
+            return "mock"
+        return "model" if self.defense_model is not None else "fallback"
 
     @property
     def amount_source(self) -> str:
@@ -145,18 +203,30 @@ class CivilService:
                                        if k in QUESTIONNAIRE_EVIDENCE], "mock": self.mock}
 
     # ── 勝訴機率 ──
-    def _model_info(self) -> Dict:
+    def _uses_defense_model(self, req) -> bool:
+        return getattr(req, "role", "plaintiff") == "defendant" and self.defense_model is not None
+
+    def _model_info(self, req=None) -> Dict:
         if self.mock:
             return {"name": "mock", "description": "示例資料（伺服器上沒有模型檔）"}
-        m = self.meta.get("metrics", {}).get("原告主張＋特徵", {})
-        return {"name": self.meta["name"], "description": self.meta["description"], "ece": m.get("ece"),
+        meta, key = ((self.defense_meta, defense_service.MAIN) if req is not None and self._uses_defense_model(req)
+                     else (self.meta, "原告主張＋特徵"))
+        m = meta.get("metrics", {}).get(key, {})
+        return {"name": meta["name"], "description": meta["description"], "ece": m.get("ece"),
                 **{k: m.get(k) for k in ("win_precision", "win_recall", "lose_precision", "lose_recall")}}
 
     @staticmethod
     def answers(req) -> Dict:
         corp = None if req.defendant_type is None else req.defendant_type in ("company", "government")
         return {"mid": req.mid, "court": req.court, "plaintiff_has_lawyer": req.plaintiff_has_lawyer,
-                "defendant_is_corp": corp}
+                "defendant_has_lawyer": getattr(req, "defendant_has_lawyer", None), "defendant_is_corp": corp}
+
+    @staticmethod
+    def parts(req) -> Tuple[str, str]:
+        """（主張, 答辯）：原告時整段都是主張；被告時切開對方的主張和自己的答辯。"""
+        if getattr(req, "role", "plaintiff") == "defendant":
+            return split_defense(req.text)
+        return req.text, ""
 
     def _infer_mid(self, sim: np.ndarray) -> Tuple[Optional[str], List[str]]:
         """使用者沒選糾紛類型時，用最相似的對審判決投票。回傳（有把握的案由, 可能的案由）。"""
@@ -175,7 +245,7 @@ class CivilService:
         """回傳（要用的案由, 給使用者的提醒）。"""
         if req.mid:
             return req.mid, None
-        if not looks_like_dispute(req.text):
+        if not looks_like_dispute(self.parts(req)[0]):
             return None, "未選擇或選擇多個糾紛類型時，相似判決會在全部案件中找。"
         mid, likely = self._infer_mid(sim)
         if mid:
@@ -187,28 +257,55 @@ class CivilService:
         out = []
         if not looks_like_dispute(req.text):
             out.append("這段描述看起來不像法律糾紛，下面的結果可能沒有參考價值。請寫下發生了什麼事、你想要對方做什麼。")
-        if len(prepare_input(req.text)) < SHORT_TEXT:
-            out.append(f"描述少於 {SHORT_TEXT} 字，結果可能比較不準；補充經過、損害與對方的說法會更可靠。")
+        defendant = getattr(req, "role", "plaintiff") == "defendant"
+        if len(prepare_input(self.parts(req)[0])) < SHORT_TEXT:
+            out.append(f"描述少於 {SHORT_TEXT} 字，結果可能比較不準；"
+                       + ("補充對方主張的經過、請求的項目與金額會更可靠。" if defendant
+                          else "補充經過、損害與對方的說法會更可靠。"))
         if mid_note:
             out.append(mid_note)
+        if defendant and not self.mock and self.defense_model is None:
+            out.append(DEFENSE_FALLBACK_NOTE)
         return out
 
-    @staticmethod
-    def _search_text(req) -> str:
-        """使用者確認過的改寫只用來搜尋；勝訴機率仍用原本的描述（口語測試中改寫沒有提高判斷力）。"""
-        return prepare_input(without_questions(req.search_text or req.text))
+    @classmethod
+    def _search_text(cls, req) -> str:
+        """
+        使用者確認過的改寫只用來搜尋；勝訴機率仍用原本的描述（口語測試中改寫沒有提高判斷力）。
+        被告時只用對方的主張搜尋：檢索索引是判決的原告主張建的。
+        """
+        return prepare_input(without_questions(req.search_text or cls.parts(req)[0]))
+
+    def _defense_query(self, req) -> str:
+        """被告寫的答辯（處理成和答辯索引相同的樣子）；不是被告、沒有答辯索引或答辯太短時是空字串。"""
+        if self.defense_index is None or getattr(req, "role", "plaintiff") != "defendant":
+            return ""
+        query = defense_retrieval.clean_defense(without_questions(self.parts(req)[1]))
+        return query if len(query) >= MIN_DEFENSE_QUERY else ""
 
     def _similarity(self, req) -> np.ndarray:
+        """只看主張的相似度：推斷案由用（答辯常看不出是哪一類糾紛）。"""
         return self.index.scores(self._search_text(req))
+
+    def _case_similarity(self, req, claim_sim: np.ndarray) -> np.ndarray:
+        """找相似判決用的相似度：被告有寫答辯時，加上答辯相似度（retrieval/defense_index.py）。"""
+        query = self._defense_query(req)
+        if not query:
+            return claim_sim
+        return (1 - DEFENSE_SEARCH_WEIGHT) * claim_sim + DEFENSE_SEARCH_WEIGHT * self.defense_index.scores(query)
 
     def predict(self, req) -> Dict:
         if self.mock:
             return mock.civil_report(req.text, req.claimed_amount, req.evidence)["prediction"]
-        text = without_questions(req.text)
+        claim, defense = (without_questions(t) for t in self.parts(req))
         sim = self._similarity(req)
         mid, note = self._resolve_mid(req, sim)
-        p = self.model.predict_one(text, {**self.answers(req), "mid": mid})
-        return {"win_probability": round(p, 4), "signal": win_signal(p, text), "model": self._model_info(),
+        answers = {**self.answers(req), "mid": mid}
+        if self._uses_defense_model(req):
+            p = self.defense_model.predict_one(claim, defense, answers)
+        else:
+            p = self.model.predict_one(claim, answers)
+        return {"win_probability": round(p, 4), "signal": win_signal(p, claim), "model": self._model_info(req),
                 "warnings": self.warnings(req, note),
                 "mock": False}
 
@@ -239,7 +336,19 @@ class CivilService:
             case["common"] = common_points(case, self.case_evidence[row], mine,
                                            mid if allowed is None else None,
                                            getattr(req, "claimed_amount", None), getattr(req, "court", None))
+        self._attach_reasoning(picked)
         return picked
+
+    def _court_text(self, case_id: int) -> str:
+        found = self._query("SELECT court FROM sections WHERE id = ?", (case_id,))
+        return (found[0]["court"] or "") if found else ""
+
+    def _attach_reasoning(self, cases: List[Dict]) -> None:
+        """有標註的判決附上「法院怎麼認定」（列表摘要與「可能的金額」分頁用）；沒有 guide.sqlite 時什麼都不做。"""
+        found = reasoning_store.briefs(self.reasoning_db, [c["case_id"] for c in cases], self._court_text)
+        for case in cases:
+            if case["case_id"] in found:
+                case["reasoning"] = found[case["case_id"]]
 
     def _shortlist(self, rows, sims, n: int) -> List[Dict]:
         """
@@ -286,12 +395,14 @@ class CivilService:
 
     # ── 完整的參考結果 ──
     def report(self, req) -> Dict:
+        role = getattr(req, "role", "plaintiff")
         if self.mock:
-            return mock.civil_report(req.text, req.claimed_amount, req.evidence)
+            return {**mock.civil_report(req.text, req.claimed_amount, req.evidence), "role": role}
         prediction = self.predict(req)
-        sim = self._similarity(req)
+        claim_sim = self._similarity(req)
         # 統計只用對審、有被告答辯的案件；一造辯論只出現在列表（見 retrieval/civil.py）
-        mid, _ = self._resolve_mid(req, sim)
+        mid, _ = self._resolve_mid(req, claim_sim)
+        sim = self._case_similarity(req, claim_sim)
         rows, _ = self.index.top(sim, N_NEIGHBORS, self._allowed(mid, self.in_stats))
         winners = [r for r in rows if self.y[r] == 1]
         similar_range = amount_range(self.grant_ratio[winners], req.claimed_amount)
@@ -300,14 +411,20 @@ class CivilService:
         # 相似的勝訴判決裡有幾件是全部勝訴：模型只回答「若為一部勝訴」，全勝多的案由要讓使用者知道
         full_wins = {"n_wins": len(winners), "n_full_wins": sum(self.outcomes[r] in ("勝訴", "確認勝訴") for r in winners)}
         amount = self._amount_range(req, mid, similar_range)
+        # 被告：證據對照看原告敗訴的相似判決（被告贏的那些提到哪些證據）
+        compared = winners if role == "plaintiff" else [r for r in rows if self.y[r] == 0]
         return {
+            "role": role,
             "prediction": prediction,
             "amount_range": {**amount, **full_wins} if amount else None,
             "similar": self._listed(sim, mid, N_SHOWN, req),
             "n_corpus": len(self.index),
-            "search_scope": {**self._scope(mid), "mid_inferred": bool(mid) and not req.mid},
-            "evidence": evidence_table([self.case_evidence[r] for r in winners], user_evidence(req.text, req.evidence)),
-            "defenses": defense_table([self.case_defenses[r] for r in rows]),
+            "search_scope": {**self._scope(mid), "mid_inferred": bool(mid) and not req.mid,
+                             "defense_used": bool(self._defense_query(req))},
+            "evidence": evidence_table([self.case_evidence[r] for r in compared], user_evidence(req.text, req.evidence)),
+            "defenses": defense_table([self.case_defenses[r] for r in rows], N_DEFENSES[role],
+                                      wins=[int(self.y[r]) for r in rows],
+                                      user_has=user_defense_types(without_questions(self.parts(req)[1]))),
             "outcomes": outcome_counts([self.outcomes[r] for r in rows]),
             # 被告未到庭的判決不算進比例，但要讓使用者知道有多少：看不分層的前 N_NEIGHBORS 件
             "default_cases": int(self.default[self.index.top(sim, N_NEIGHBORS, self._allowed(mid))[0]].sum()),
@@ -330,12 +447,13 @@ class CivilService:
         用模型時：範圍是「若為一部勝訴」的模型推估；相似判決的分布（件數與 buckets）留著當佐證，但不是範圍的依據。
         不用模型時：就是相似的勝訴判決的分位數。描述看不出是糾紛時兩種都不給（空白描述也會算出一個範圍，沒有意義）。
         """
-        if not looks_like_dispute(req.text):
+        claim = self.parts(req)[0]
+        if not looks_like_dispute(claim):
             return None
         if not self._use_amount_model(req):
             return similar
         try:
-            r = self.amount_model.predict_one(without_questions(req.text), {**self.answers(req), "mid": mid},
+            r = self.amount_model.predict_one(without_questions(claim), {**self.answers(req), "mid": mid},
                                               req.claimed_amount)
         except Exception:
             # 金額模型出錯不能拖垮整個結果頁（勝訴機率、相似判決都還要顯示）

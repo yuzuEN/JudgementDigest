@@ -47,7 +47,8 @@ def create_app(settings: Optional[Settings] = None) -> FastAPI:
         return {"status": "ok", "civil": "mock" if civil.mock else "model", "criminal": "mock" if criminal.mock else "model",
                 "criminal_sentence": None if criminal.mock else ("electra" if criminal.term.available else "svm"),
                 "followup": "llm" if llm_client else "rules", "model": None if civil.mock else civil.meta["name"],
-                "amount": civil.amount_source}
+                "amount": civil.amount_source, "defense": civil.defense_source,
+                "defense_search": civil.defense_index is not None}
 
     @api.get("/meta/options", response_model=schemas.Options)
     def options():
@@ -75,12 +76,13 @@ def create_app(settings: Optional[Settings] = None) -> FastAPI:
             fallback = "limited"
         elif req.allow_llm and available:
             try:
-                return {"questions": followup_questions(llm_client, req.case_type, req.mid, req.text), "source": "llm",
+                return {"questions": followup_questions(llm_client, req.case_type, req.mid, req.text, role=req.role),
+                        "source": "llm",
                         "llm_available": True, "llm_vendor": llm_client.vendor}
             except llm.LLMError as e:
                 logger.warning("LLM 追問失敗，改用固定題庫：%s", e)
                 fallback = "error"
-        return {"questions": followup.questions(req.case_type, req.mid, req.text), "source": "rules",
+        return {"questions": followup.questions(req.case_type, req.mid, req.text, role=req.role), "source": "rules",
                 "llm_available": available, "llm_vendor": llm_client.vendor if available else None, "fallback": fallback}
 
     @api.post("/intake/rewrite", response_model=schemas.RewriteResponse)
@@ -96,7 +98,7 @@ def create_app(settings: Optional[Settings] = None) -> FastAPI:
         if not llm_limit.allow(client_ip(request)):
             return {"source": "none", "fallback": "limited"}
         try:
-            return {**rewrite_claim(llm_client, req.mid, req.text, req.case_type), "source": "llm"}
+            return {**rewrite_claim(llm_client, req.mid, req.text, req.case_type, role=req.role), "source": "llm"}
         except llm.LLMError as e:
             logger.warning("LLM 改寫失敗，改用原本的描述：%s", e)
             return {"source": "none", "fallback": "error"}
