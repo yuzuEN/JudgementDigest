@@ -115,6 +115,44 @@ class TestParties(unittest.TestCase):
             self.assertNotIn(True, [n in ("何人", "高雄市", "連帶保", "董事長", "曾匯款", "陳述", "連帶債", "施作工", "施作")
                                     for n in third_party_names(text)], text)
 
+    def test_common_words_after_a_title_are_not_names(self):
+        """遮名不要多遮：稱謂後面接姓氏開頭的一般詞，不當人名（否則整件判決的「陳述」都會被遮）。"""
+        for text in ("證人陳述稱", "證人陳述其內容", "訴外人陳報", "配偶陳明：", "證人方才說", "配偶任職於", "訴外人高雄市政府",
+                     "證人曾經", "證人陸續", "證人高中畢業", "訴外人歐凱資產管理公司", "訴外人陳達投資公司", "證人陳先生"):
+            self.assertEqual(third_party_names(text), [], text)
+        self.assertEqual(mask_parties("證人陳述稱其不知情，原告陳述如下", "", "", [], third_party_names("證人陳述稱")),
+                         "證人陳述稱其不知情，原告陳述如下")
+
+    def test_names_after_a_title_are_still_found(self):
+        for text, name in {"配偶陳明輝到庭": "陳明輝", "訴外人陳建宏投資": "陳建宏", "訴外人張其元到庭": "張其元",
+                           "證人曾俞涓": "曾俞涓", "證人黃金龍": "黃金龍"}.items():
+            self.assertEqual(third_party_names(text), [name], text)
+        for text in ("證人曾傳送訊息", "訴外人高達新臺幣", "證人陳明將所有"):
+            self.assertEqual(third_party_names(text), [], text)
+        # 第一個名字以「陳明」開頭時，後面的列舉也要接著找
+        self.assertEqual(third_party_names("經證人陳明駿、鄧國清、林辰帆，"), ["林辰帆", "鄧國清", "陳明駿"])
+
+    def test_names_starting_with_common_words_need_ner(self):
+        """「曾承博」「方若蓁」開頭是一般詞（曾承、方若），人名辨識也找到才遮；「曾經」「曾任職」不管怎樣都不遮。"""
+        cases = {"訴外人曾承博收款": "曾承博", "證人方若蓁到庭": "方若蓁", "被告配偶曾傳章偽造": "曾傳章",
+                 "證人高達明": "高達明", "訴外人許可傑": "許可傑", "被繼承人即訴外人陳明人死亡": "陳明人",
+                 "訴外人陳明（後改名）": "陳明", "訴外人方得原陳稱": "方得原", "負責人即訴外人康復華共同": "康復華",
+                 "前所有權人為高鐵樹": "高鐵樹", "緣訴外人連江雨將坐落": "連江雨"}
+        for text, name in cases.items():
+            self.assertEqual(third_party_names(text), [], text + "：沒有人名辨識時寧可不遮")
+            self.assertEqual(third_party_names(text, [name]), [name], text)
+        for text, ner in {"證人曾經表示": ["曾經"], "配偶曾任職於": ["曾任職"], "原告要求伊張貼系爭": ["張貼系"],
+                          "被告聯合報公司雖陳稱渠等": ["陳稱渠"]}.items():
+            self.assertEqual(third_party_names(text, ner), [], text + "：一定不是名字的詞，人名辨識找到也不遮")
+        # 列舉裡開頭是一般詞、人名辨識沒找到的名字：停止往後找
+        self.assertEqual(third_party_names("訴外人王大明、曾經、林辰帆，"), ["王大明"])
+        self.assertEqual(third_party_names("訴外人王大明、曾承博、林辰帆，", ["曾承博"]), sorted(["王大明", "曾承博", "林辰帆"]))
+
+    def test_ner_names_starting_with_weak_common_words_are_kept(self):
+        """人名辨識的篩選只擋一定不是名字的詞：「曾承博」「方若蓁」留著，「張貼系」「陳稱渠」「周轉金」擋掉。"""
+        self.assertEqual(usable_person_names(["曾承博", "方若蓁", "尤其亮"]), ["尤其亮", "方若蓁", "曾承博"])
+        self.assertEqual(usable_person_names(["張貼系", "陳稱渠", "周轉金", "陳情人", "方才庭", "曾自陳"]), [])
+
     def test_role_words_are_not_names(self):
         for text in ("訴外人即原告", "以證人身分到庭", "法定代理人之配偶", "配偶贈與為由", "證人方面表示", "訴外人公司"):
             self.assertEqual(third_party_names(text), [], text)

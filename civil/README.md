@@ -33,10 +33,10 @@
 
 平台模型的 `meta.json` 會記錄訓練時的 git commit 與 scikit-learn 版本，見 [backend/README.md](../backend/README.md) 的「模型與資料」。
 
-訓練好的兩個平台模型和民事相似判決檢索（`retrieval_civil_v6`）放在 Hugging Face 的私人 repo `JudgementDigest/judgementdigest-artifacts`（要先加入組織並 `hf auth login`）：
+訓練好的兩個平台模型和民事相似判決檢索（`retrieval_civil_v7`）放在 Hugging Face 的私人 repo `JudgementDigest/judgementdigest-artifacts`（要先加入組織並 `hf auth login`）：
 
 ```bash
-bash scripts/sync_civil_models.sh                          # 下載到 artifacts/civil_winloss_v1、civil_amount_v1、retrieval_civil_v6（共約 3.1 GB）
+bash scripts/sync_civil_models.sh                          # 下載到 artifacts/civil_winloss_v1、civil_amount_v1、retrieval_civil_v7（共約 3.1 GB）
 JD_HF_REVISION=<commit> bash scripts/sync_civil_models.sh  # 部署時固定某一版
 ```
 
