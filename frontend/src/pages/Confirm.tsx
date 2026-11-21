@@ -9,7 +9,6 @@ import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
 import { api } from "../api/client";
 import type { Question } from "../api/types";
@@ -19,14 +18,16 @@ import { Layout, PAGE } from "../components/Layout";
 import { LinkButton } from "../components/LinkButton";
 import { parseAmount, sensitiveKinds } from "../format";
 import { maskText } from "../mask";
+import { MidLabels } from "../components/casey/MidLabels";
+import { Segmented } from "../components/casey/Segmented";
 import { fullText, lawyerQuestion, primaryMid, useIntake, type Intake } from "../state";
 
 const MAX_QUESTIONS = 4;
 
-const SCENE_LINES: Record<number, string> = {
+const SCENE_LINES: Record<number, ReactNode> = {
   4: "請檢查預覽中的個資。若有未遮蔽的姓名或公司名稱，可以在下方加入。",
   5: "你可以回答固定題目，或請 AI 根據案情提問。不想補充也可以略過。",
-  6: "你可以請 AI 將描述整理成判決書的寫法。整理後請檢查內容，尤其是新增的數字。",
+  6: <>你可以請 AI 將描述整理成判決書的寫法。<br />整理後請檢查內容，尤其是新增的數字。</>,
 };
 
 const NO_LLM_LINE = "請確認資料是否正確，再按「看參考結果」。";
@@ -139,8 +140,8 @@ export default function Confirm() {
                 intake={intake} update={update} kinds={kinds} llm={llmAvailable} />
             )}
             {stage === 5 && (
-              <DetailStage heading={<h1 ref={heading} tabIndex={-1} className={titleClass}>第 5 關　補充細節<span className="text-[15px] font-medium text-muted-foreground">　可以略過</span></h1>}
-                llm={llmAvailable} vendor={vendor} mode={mode} setMode={setMode} aiState={aiState} askAi={askAi}
+              <DetailStage heading={<div className="flex flex-wrap items-center gap-3"><h1 ref={heading} tabIndex={-1} className={titleClass}>第 5 關　補充細節</h1><StageChip>可以略過</StageChip></div>}
+                llm={llmAvailable} mode={mode} setMode={setMode} aiState={aiState} askAi={askAi}
                 consent={consent} aiAllowed={aiAllowed}
                 questions={mode === "ai" && aiState === "done" ? aiQuestions : questions}
                 answers={intake.followupAnswers}
@@ -148,7 +149,7 @@ export default function Confirm() {
             )}
             {stage === 6 && (
               <RewriteStage heading={<h1 ref={heading} tabIndex={-1} className={titleClass}>{llmAvailable ? "第 6 關　整理成判決書的寫法" : "第 6 關　最後確認"}</h1>}
-                llm={llmAvailable} vendor={vendor} intake={intake} update={update} state={rewriteState} onStart={startRewrite}
+                llm={llmAvailable} intake={intake} update={update} state={rewriteState} onStart={startRewrite}
                 consent={consent} aiAllowed={aiAllowed} />
             )}
 
@@ -172,6 +173,11 @@ export default function Confirm() {
       </div>
     </Layout>
   );
+}
+
+/** 關卡標題旁的小標籤（建議、可以略過）。 */
+function StageChip({ children }: { children: ReactNode }) {
+  return <span className="rounded-full border-[1.5px] border-outcome-part bg-outcome-part-bg px-3 text-sm leading-[1.9] font-bold text-outcome-part-fg">{children}</span>;
 }
 
 function StageCard({ children }: { children: ReactNode }) {
@@ -217,8 +223,8 @@ function MaskStage({ heading, intake, update, kinds, llm }: {
       </div>
 
       <div className="flex flex-col gap-2">
-        <label htmlFor="mask-name" className="font-bold">還有要遮的名字嗎？</label>
-        <p id="mask-name-hint" className="text-[15px] text-muted-foreground">輸入後按「加入」。文字裡所有相同的字都會被遮掉。</p>
+        <label htmlFor="mask-name" className="font-bold">有沒遮到的名稱嗎？</label>
+        <p id="mask-name-hint" className="text-[15px] text-muted-foreground">你可以自行新增尚未完整遮蓋的名稱，相同的字會以【姓名】遮蓋掉。</p>
         <div className="flex flex-wrap gap-2.5">
           <Input id="mask-name" value={name} placeholder="例如：對方的姓名、公司名稱" aria-describedby="mask-name-hint"
             className="min-w-0 flex-[1_1_240px]" onChange={(e) => setName(e.target.value)}
@@ -257,7 +263,7 @@ function MaskStage({ heading, intake, update, kinds, llm }: {
 
 type Consent = { kinds: string[]; given: boolean; declined: boolean; onChange: (yes: boolean) => void };
 
-function AiConsent({ consent, vendor, use, fallback }: { consent: Consent; vendor: string; use: string; fallback: string }) {
+function AiConsent({ consent, use }: { consent: Consent; use: string }) {
   if (consent.kinds.length === 0) return null;
   const value = consent.given ? "yes" : consent.declined ? "no" : "";
   return (
@@ -266,11 +272,11 @@ function AiConsent({ consent, vendor, use, fallback }: { consent: Consent; vendo
         <ShieldCheckIcon className="size-6 text-secondary-foreground" aria-hidden="true" />傳給 AI 前，需要你同意
       </h2>
       <p className="text-[15px]">
-        你的描述裡有法律特別保護的資料（偵測到：{consent.kinds.join("、")}）。按下按鈕後，遮名後的內容會傳給 {vendor}，{use}。若不同意，可以{fallback}。
+        你的描述裡有法律特別保護的資料（偵測到：{consent.kinds.join("、")}）。
       </p>
       <RadioCards label="傳給 AI 的同意" value={value}
         options={[
-          { value: "yes", title: "我同意傳給 AI", hint: `只用於這次的${use.replace(/^用來/, "")}，不會被用來訓練它的模型。` },
+          { value: "yes", title: "我同意傳給 AI", hint: `僅用遮蓋後內容來${use}，不做其他用途。` },
           { value: "no", title: "不同意，不用 AI" },
         ]}
         onChange={(v) => consent.onChange(v === "yes")} />
@@ -290,7 +296,7 @@ function QuestionList({ questions, answers, onAnswer }: {
       {questions.map((q) => (
         <div key={q.id} className="flex flex-col gap-2 border-t pt-4">
           <label htmlFor={`q-${q.id}`} className="font-bold">{q.text}</label>
-          <p className="text-[15px] text-muted-foreground">為什麼要問：{q.why}</p>
+          <p className="text-[15px] text-muted-foreground">{q.why}</p>
           <Input id={`q-${q.id}`} placeholder="你的回答（可留空）" value={answers[q.id]?.answer ?? ""} onChange={(e) => onAnswer(q, e.target.value)} />
         </div>
       ))}
@@ -298,12 +304,11 @@ function QuestionList({ questions, answers, onAnswer }: {
   );
 }
 
-function DetailStage({ heading, llm, vendor, mode, setMode, aiState, askAi, consent, aiAllowed, questions, answers, onAnswer }: {
+function DetailStage({ heading, llm, mode, setMode, aiState, askAi, consent, aiAllowed, questions, answers, onAnswer }: {
   heading: ReactNode;
   consent: Consent;
   aiAllowed: boolean;
   llm: boolean;
-  vendor: string;
   mode: "fixed" | "ai";
   setMode: (m: "fixed" | "ai") => void;
   aiState: AiState;
@@ -324,44 +329,36 @@ function DetailStage({ heading, llm, vendor, mode, setMode, aiState, askAi, cons
         <p className="text-[15px] text-muted-foreground">補充細節有助於比對。回答會和案情一起送出，切換補充方式時也會保留。</p>
       </div>
       {!llm ? (
-        <>
-          <p className="text-[15px]">以下是這類案件常需要補充的資料。</p>
-          {fixed}
-        </>
+        fixed
       ) : (
-        <Tabs value={mode} onValueChange={(v) => setMode(v as "fixed" | "ai")} className="gap-5">
-          <TabsList aria-label="補充方式" className="h-auto w-full rounded-[12px] border-2 border-input bg-card p-0">
-            <TabsTrigger value="fixed" className="min-h-[50px] rounded-none text-base font-bold whitespace-normal text-foreground data-active:bg-primary data-active:text-primary-foreground">
-              固定題目（不用 AI）
-            </TabsTrigger>
-            <TabsTrigger value="ai" className="min-h-[50px] rounded-none border-l-2 border-l-input text-base font-bold whitespace-normal text-foreground data-active:bg-primary data-active:text-primary-foreground">
-              <SparklesIcon aria-hidden="true" />請 AI 幫我看還缺什麼
-            </TabsTrigger>
-          </TabsList>
-          <TabsContent value="fixed" className="flex flex-col gap-4 text-base">
-            <p className="text-[15px]">以下是這類案件常需要補充的資料。</p>
+        <div className="flex flex-col gap-5">
+          <span id="detail-mode-label" className="sr-only">補充方式</span>
+          <Segmented labelledBy="detail-mode-label" value={mode} required onChange={(v) => setMode(v as "fixed" | "ai")}
+            items={[{ value: "fixed", label: "固定題目（不用 AI）" }, { value: "ai", label: <><SparklesIcon className="size-4" aria-hidden="true" />請 AI 幫我看還缺什麼</> }]} />
+          {mode === "fixed" && <div className="flex flex-col gap-4 text-base">
             {fixed}
-          </TabsContent>
-          <TabsContent value="ai" className="flex flex-col gap-4 text-base">
-            {aiState === "idle" && (
+          </div>}
+          {mode === "ai" && <div className="flex flex-col gap-4 text-base">
+            {(aiState === "idle" || aiState === "asking") && (
               <>
-                <AiConsent consent={consent} vendor={vendor} use="用來產生補充問題" fallback="改用固定題目就好" />
-                {consent.declined ? (
+                {aiState === "idle" && <AiConsent consent={consent} use="產生補充問題" />}
+                {aiState === "idle" && consent.declined ? (
                   <Note><p className="text-[15px]">已選擇不使用 AI，可以改答固定題目。</p>{backToFixed}</Note>
                 ) : (
-                  <Note>
-                    <p className="text-[15px]">按下按鈕後，上一關遮名後的內容會傳給 {vendor}，由 AI 依你的案情提問。不按就不會傳。</p>
-                    <Button type="button" className="w-fit" disabled={!aiAllowed} onClick={askAi}><SparklesIcon data-icon="inline-start" />傳給 AI，開始提問</Button>
-                  </Note>
+                  // 按鈕置中在藍色卡片裡；按下後同一顆按鈕變成載入中
+                  <div className="flex justify-center rounded-[14px] border border-info-line bg-info px-4 py-5">
+                    <Button type="button" disabled={aiState === "asking" || !aiAllowed} aria-busy={aiState === "asking"} onClick={askAi}>
+                      {aiState === "asking"
+                        ? <><LoaderCircleIcon data-icon="inline-start" className="animate-spin motion-reduce:animate-none" />AI 正在產生補充問題…</>
+                        : <><SparklesIcon data-icon="inline-start" />傳給 AI，開始提問</>}
+                    </Button>
+                  </div>
                 )}
               </>
             )}
             {aiState === "asking" && (
               <>
-                <Note icon={LoaderCircleIcon} role="status">
-                  <p className="font-bold">AI 正在產生補充問題…</p>
-                  <p className="text-[15px] text-muted-foreground">大約需要幾秒。你也可以先略過，回頭再補。</p>
-                </Note>
+                <p role="status" className="sr-only">AI 正在產生補充問題，大約需要幾秒。</p>
                 <div className="flex flex-col gap-2" aria-hidden="true">
                   <Skeleton className="h-5 w-3/5" /><Skeleton className="h-12" /><Skeleton className="h-5 w-1/2" /><Skeleton className="h-12" />
                 </div>
@@ -401,8 +398,8 @@ function DetailStage({ heading, llm, vendor, mode, setMode, aiState, askAi, cons
                 </div>
               </Note>
             )}
-          </TabsContent>
-        </Tabs>
+          </div>}
+        </div>
       )}
     </StageCard>
   );
@@ -416,13 +413,13 @@ const CASE_LABEL = { civil: "民事", criminal: "刑事", unsure: "不確定（�
 function FinalSummary({ intake }: { intake: Intake }) {
   const civil = intake.caseType !== "criminal";
   const amount = parseAmount(intake.claimedAmount);
-  const rows: [string, string][] = [
+  const rows: [string, ReactNode][] = [
     ["案件類型", intake.caseType ? CASE_LABEL[intake.caseType] : "還沒選"],
     ...(civil ? [
-      ["糾紛類型", intake.mids.length ? intake.mids.join("、") : "未選"],
+      ["糾紛類型", intake.mids.length ? <MidLabels mids={intake.mids} className="justify-end" /> : "未選"],
       ["請求金額", amount !== null ? `${amount.toLocaleString("en-US")} 元` : "未填"],
       ["對方", intake.defendantType ? DEFENDANT_LABEL[intake.defendantType] : "未選"],
-    ] as [string, string][] : []),
+    ] as [string, ReactNode][] : []),
     [lawyerQuestion(intake.caseType).short, intake.lawyer === "yes" ? "有" : intake.lawyer === "no" ? "沒有" : "未選"],
     ["證物", `${civil ? intake.evidence.length : intake.criminalEvidence.length} 項`],
   ];
@@ -447,12 +444,11 @@ const REWRITE_NOTICE: Partial<Record<RewriteState, string>> = {
   unrelated: "這段描述看起來不像法律糾紛，所以沒有傳給 AI，會改用你原本的描述。",
 };
 
-function RewriteStage({ heading, llm, vendor, intake, update, state, onStart, consent, aiAllowed }: {
+function RewriteStage({ heading, llm, intake, update, state, onStart, consent, aiAllowed }: {
   heading: ReactNode;
   consent: Consent;
   aiAllowed: boolean;
   llm: boolean;
-  vendor: string;
   intake: Intake;
   update: (patch: Partial<Intake>) => void;
   state: RewriteState;
@@ -480,10 +476,10 @@ function RewriteStage({ heading, llm, vendor, intake, update, state, onStart, co
       <div className="flex flex-col gap-2">
         <div className="flex flex-wrap items-center gap-3">
           {heading}
-          <span className="rounded-full border-[1.5px] border-outcome-part bg-outcome-part-bg px-3 text-sm leading-[1.9] font-bold text-outcome-part-fg">建議</span>
+          <StageChip>建議</StageChip>
         </div>
         <p className="text-[15px] text-muted-foreground">
-          判決書的用詞和口語不一樣。AI 把你的描述改成判決書的寫法，{criminal ? "罪名和刑期模型是讀判決書的「犯罪事實」學的，整理後估得比較準" : "比對會更準"}。你可以直接改、直接用，或改用原文。
+          由於法律用詞與口語描述不盡相同，若能接受 AI 幫忙整理描述成專業法律用詞，後續的判決比對會有更佳的結果。
         </p>
       </div>
 
@@ -498,14 +494,11 @@ function RewriteStage({ heading, llm, vendor, intake, update, state, onStart, co
 
       {state !== "loading" && !reviewed && (
         <>
-          <AiConsent consent={consent} vendor={vendor} use="用來整理成判決書的寫法" fallback={`直接用你原本的描述${usedFor}就好`} />
+          <AiConsent consent={consent} use="整理成法律描述" />
           {consent.declined ? (
             <Note><p className="text-[15px]">這次不用 AI，會用你原本的描述{usedFor}。</p></Note>
           ) : (
-            <Note>
-              <p className="text-[15px]">按下按鈕後，第 4 關遮名後的內容會傳給 {vendor}；不按就用你原本的描述{usedFor}。</p>
-              <Button type="button" variant="outline" className="w-fit" disabled={!aiAllowed} onClick={onStart}><SparklesIcon data-icon="inline-start" />請 AI 整理敘述</Button>
-            </Note>
+            <Button type="button" size="lg" className="w-full" disabled={!aiAllowed} onClick={onStart}><SparklesIcon data-icon="inline-start" />請 AI 整理敘述</Button>
           )}
         </>
       )}
@@ -513,8 +506,8 @@ function RewriteStage({ heading, llm, vendor, intake, update, state, onStart, co
       {state !== "loading" && reviewed && (
         <>
           {intake.rewriteAdded.length > 0 ? (
-            <div role="alert" className="flex items-start gap-3 rounded-[14px] border-2 border-primary bg-card px-4 py-3.5">
-              <TriangleAlertIcon className="mt-1 size-5 flex-none text-secondary-foreground" aria-hidden="true" />
+            <div role="alert" className="flex items-start gap-3 rounded-[14px] border-2 border-warn-line bg-warn px-4 py-3.5 text-warn-fg">
+              <TriangleAlertIcon className="mt-1 size-5 flex-none" aria-hidden="true" />
               <div className="flex flex-col gap-1.5">
                 <p className="font-bold">整理後出現了原文沒有的數字：{intake.rewriteAdded.map((n) => `「${n}」`).join("、")}</p>
                 <p className="text-[15px]">請逐一確認這些數字是否正確。若有錯誤，可以直接修改，或改用原文。</p>
@@ -527,7 +520,7 @@ function RewriteStage({ heading, llm, vendor, intake, update, state, onStart, co
             <label htmlFor="rewrite-draft" className="font-bold">整理後的寫法（可以直接修改）</label>
             <p id="rewrite-hint" className="text-[15px] text-muted-foreground">
               {criminal && "請先確認被告、被害人與「敘述者」是否對應正確；稱謂是本次分析的角色，不代表已起訴或有罪。"}
-              請檢查有沒有多出你沒說過的事，例如{criminal ? "日期、傷勢、前科、和解" : "日期、金額、簽約或書面文件"}。這段只用來{usedFor}，不是法律文件。
+              請檢查有沒有多出你<b className="text-foreground">沒說過</b>的事，例如{criminal ? "日期、傷勢、前科、和解" : "日期、金額、簽約或書面文件"}。
             </p>
             <Textarea id="rewrite-draft" value={draft} aria-describedby="rewrite-hint" className="min-h-[200px] resize-y"
               onChange={(e) => choose(intake.useRewrite, e.target.value)} />
@@ -568,7 +561,7 @@ function Checklist({ stage, vendor }: { stage: number; vendor: string | null }) 
           })}
         </ol>
         <p className="text-sm text-muted-foreground">
-          送去比對的是遮名後的內容（包含你補充的回答）。{vendor ? `只有你按下「傳給 AI」或「請 AI 整理敘述」時，這些內容才會傳給 ${vendor}。` : "不會傳給 AI 服務。"}
+          我們會以遮蓋版本來比對您的判決結果{vendor ? "；也只會使用遮蓋版本來傳給 AI 整理與改寫。" : "。"}
         </p>
         <details className="group rounded-[12px] border bg-card">
           <summary className="flex min-h-11 cursor-pointer list-none items-center gap-2 px-3 font-bold [&::-webkit-details-marker]:hidden">
@@ -576,11 +569,12 @@ function Checklist({ stage, vendor }: { stage: number; vendor: string | null }) 
             <ChevronDownIcon className="ml-auto size-5 transition-transform group-open:rotate-180 motion-reduce:transition-none" aria-hidden="true" />
           </summary>
           <ul className="m-0 flex list-disc flex-col gap-2 px-3 pb-3 pl-8 text-sm">
-            <li>蒐集者：JudgementDigest 專題團隊；目的：產生類案判決參考結果。</li>
-            <li>遮名在你的瀏覽器裡完成，原文和你加入的姓名不會傳到我們的伺服器。送出的是遮名後的內容；本平台的伺服器不保存你的描述。</li>
-            <li>你填的內容只暫存在這個瀏覽器分頁：重新整理還在，關掉分頁就清除；不會存在電腦上，也不會存到我們的伺服器。</li>
-            {vendor && <li>只有在你按下「傳給 AI，開始提問」或「請 AI 整理敘述」時，遮名後的內容才會傳給 {vendor} 的付費 API，不會被用來訓練或改善它的模型。</li>}
-            <li>病歷、醫療、健康檢查、基因、性生活、犯罪前科是法律特別保護的資料。描述裡有這些內容時，平台只用來產生這次的參考結果、不保存{vendor && "；要傳給 AI 服務前，會另外請你同意"}。不想提供的話，回上一步刪掉這些描述就好，只是參考結果可能比較不準。</li>
+            <li>蒐集者：本專題團隊</li>
+            <li>只用來產生參考結果</li>
+            <li>遮名在瀏覽器完成</li>
+            <li>關掉分頁就清除</li>
+            {vendor && <li>AI 不拿來訓練模型</li>}
+            <li>敏感資料不保存</li>
           </ul>
         </details>
       </Card>

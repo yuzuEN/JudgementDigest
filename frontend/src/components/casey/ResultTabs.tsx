@@ -12,23 +12,28 @@ export interface ResultTab<K extends string> {
   content: ReactNode;
 }
 
-/** 目前的分頁：網址的 ?tab=，不認得就用第一個。 */
-export function useResultTab<K extends string>(keys: readonly K[]): [K, (k: K) => void] {
+/**
+ * 目前的分頁：網址的 ?tab=（param 可以換，民事、刑事放在同一頁時各用一個），不認得就用第一個。
+ * 換分頁只改自己的參數，其他參數保留。
+ */
+export function useResultTab<K extends string>(keys: readonly K[], param = "tab"): [K, (k: K) => void] {
   const [params, setParams] = useSearchParams();
-  const raw = params.get("tab");
+  const raw = params.get(param);
   const tab = keys.includes(raw as K) ? (raw as K) : keys[0];
-  return [tab, (k) => setParams({ tab: k }, { replace: true })];
+  return [tab, (k) => setParams((prev) => { const next = new URLSearchParams(prev); next.set(param, k); return next; }, { replace: true })];
 }
 
 /**
  * 結果頁的資料夾式分頁。用 Base UI 的分頁元件自己排（shadcn 的兩種樣式和設計稿不合）。
  * 沒在看的分頁也留在頁面上（keepMounted），列印時全部印出來（index.css）。
  */
-export function ResultTabs<K extends string>({ tabs, value, onChange, mock }: {
+export function ResultTabs<K extends string>({ tabs, value, onChange, mock, action }: {
   tabs: ResultTab<K>[];
   value: K;
   onChange: (k: K) => void;
   mock: boolean;
+  /** 放在頁籤同一列最右邊（下載 PDF），和面板右邊界對齊 */
+  action?: ReactNode;
 }) {
   return (
     <Tabs.Root value={value} onValueChange={(v) => onChange(v as K)} className="flex flex-col">
@@ -36,7 +41,8 @@ export function ResultTabs<K extends string>({ tabs, value, onChange, mock }: {
         資料夾式頁籤：整列往下壓 2px（面板框線的粗細）。沒選的頁籤留 2px 底距，停在框線上方，
         框線從它們底下連續通過；選中的頁籤往下延伸 2px、用面板的底色蓋住框線，和面板接成一體。
       */}
-      <Tabs.List aria-label="結果分頁" className="no-print relative z-10 -mb-0.5 flex items-end gap-1.5 overflow-x-auto">
+      <div className="relative z-10 -mb-0.5 flex items-end gap-3">
+      <Tabs.List aria-label="結果分頁" className="no-print flex min-w-0 flex-1 items-end gap-1.5 overflow-x-auto">
         {tabs.map((t) => (
           <Tabs.Tab key={t.key} value={t.key}
             className={cn(
@@ -48,6 +54,8 @@ export function ResultTabs<K extends string>({ tabs, value, onChange, mock }: {
           </Tabs.Tab>
         ))}
       </Tabs.List>
+      {action && <div className="no-print mb-2 flex-none">{action}</div>}
+      </div>
       {/* 左上角永遠是直角：第一個頁籤的左邊框和面板的左邊框接成一直線，不管選哪一頁 */}
       {tabs.map((t) => (
         <Tabs.Panel key={t.key} value={t.key} keepMounted data-slot="tabs-content"

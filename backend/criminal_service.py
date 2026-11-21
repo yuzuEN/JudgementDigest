@@ -162,12 +162,14 @@ class CriminalService:
             found = self._query("SELECT text FROM full_text WHERE row = ?", (r["row"],))
             if found:
                 full_text = found[0]["text"] or ""
-        verdict = "\n".join(p["text"] for p in criminal_guides.segment(full_text)
-                            if p["function"] == "verdict" and not p["part"])
+        paragraphs = criminal_guides.segment(full_text)
+        verdict = "\n".join(p["text"] for p in paragraphs if p["function"] == "verdict" and not p["part"])
         summary = "主文：" + verdict if verdict else "未收錄主文，請查看判決原文。"
+        # 應執行刑：從主文抽；只有一罪時就是那一罪的宣告刑；抽不到時（數罪但主文沒定應執行刑）留空。沒有主文時用資料集整理的刑。
+        sentence = criminal_guides.executed_or_single(criminal_guides.sentences(paragraphs)) if verdict else r["sentence"]
         return {"source": "criminal", "case_id": r["id"], "case_number": r["case_number"], "court": r["court"],
                 "year": r["year"], "mid": "、".join(json.loads(r["charges"])), "outcome": "有罪",
-                "similarity": round(similarity, 3), "summary": summary, "sentence": r["sentence"],
+                "similarity": round(similarity, 3), "summary": summary, "sentence": sentence,
                 "url": r["url"] or None}
 
     def guide(self, case_id: int) -> Optional[Dict]:

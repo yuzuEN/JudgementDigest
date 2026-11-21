@@ -44,7 +44,7 @@ export function StageMap({ at }: { at: number }) {
             <span aria-hidden="true" className={cn(
               "relative z-10 grid size-[38px] place-items-center rounded-full border-3 bg-card text-[15px] font-bold sm:size-11",
               done && "border-primary bg-primary text-primary-foreground",
-              now && "border-foreground bg-secondary text-secondary-foreground ring-4 ring-secondary",
+              now && "border-card bg-secondary text-secondary-foreground ring-4 ring-secondary",
               !done && !now && "border-input text-muted-foreground",
             )}>
               {done ? <CheckIcon className="size-5" strokeWidth={2.6} /> : n}

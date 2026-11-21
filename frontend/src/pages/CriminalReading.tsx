@@ -1,12 +1,15 @@
-import { ArrowLeftIcon, CheckIcon, ExternalLinkIcon } from "lucide-react";
+import { ArrowLeftIcon, CheckIcon } from "lucide-react";
 import { Fragment, useState } from "react";
 import { cn } from "@/lib/utils";
 import { Card } from "@/components/ui/card";
 import type { CriminalGuideFunction, Guide } from "../api/types";
-import { InfoNote, LoadingPanel } from "../components/casey/ResultTabs";
+import { MidLabels } from "../components/casey/MidLabels";
+import { InfoRow, OriginalLink } from "../components/casey/ReadingParts";
+import { LoadingPanel } from "../components/casey/ResultTabs";
+import { InfoLink } from "../components/Common";
 import { SampleTag } from "../components/casey/Sample";
 import { ErrorBox } from "../components/Common";
-import { JUDICIAL_URL, Layout, PAGE } from "../components/Layout";
+import { Layout, PAGE } from "../components/Layout";
 import { LinkButton } from "../components/LinkButton";
 
 type Marked = Exclude<CriminalGuideFunction, "info" | "other">;
@@ -32,14 +35,18 @@ export default function CriminalReading({ guide, error, onRetry }: {
   const shown = FUNCTIONS.filter((f) => counts[f.id]);
 
   return (
-    <Layout stage={7} scene={{ who: "explainer", line: "全文已標出主文、犯罪事實、證據、論罪科刑與法條。你可以選擇要上色的類別，方便找出相關段落。" }}>
+    <Layout stage={7} scene={{ who: "explainer", line: "在導讀中，判決書會根據不同功能段落做顏色區分。" }}>
       <main className={cn(PAGE, "flex flex-col gap-7 pt-7 pb-14")}>
         <div className="flex flex-col gap-3">
           <LinkButton variant="outline" to="/result/criminal?tab=cases" className="no-print w-fit border-input text-foreground">
             <ArrowLeftIcon data-icon="inline-start" />回結果
           </LinkButton>
-          <p className="text-[15px] font-bold tracking-[.04em] text-secondary-foreground">刑事判決導讀</p>
-          {guide && <h1 className="text-[26px] leading-[1.4] font-extrabold text-balance sm:text-[32px]">{guide.case.case_number}</h1>}
+          {guide && (
+            <div className="flex items-start justify-between gap-4">
+              <h1 className="text-[26px] leading-[1.4] font-extrabold text-balance sm:text-[32px]">{guide.case.case_number}</h1>
+              <OriginalLink url={guide.case.url} caseNumber={guide.case.case_number} />
+            </div>
+          )}
         </div>
 
         {error && <ErrorBox message={error} onRetry={onRetry} hint="請重新載入判決，或返回結果頁查看其他判決。" />}
@@ -49,18 +56,16 @@ export default function CriminalReading({ guide, error, onRetry }: {
             <aside className="flex w-full min-w-0 flex-[1_1_280px] flex-col gap-4 sm:max-w-[360px]">
               <Card className="gap-4 px-6.5" aria-labelledby="criminal-basic-title">
                 <h2 id="criminal-basic-title" className="text-xl font-bold">判決資料</h2>
+                {/* 和「你填的資料」一樣：名稱在左、內容在右；罪名一個一個標籤直排 */}
                 <dl className="m-0 flex flex-col gap-2.5 text-[15px]">
-                  {[
-                    ["法院", guide.case.court || "未提供"],
-                    ["裁判日期", detail?.judgment_date || "未提供"],
-                    ["罪名", guide.case.mid || "未提供"],
-                    ["宣告刑", guide.case.sentence || "請看主文"],
-                  ].map(([label, text]) => <div key={label}><dt className="text-muted-foreground">{label}</dt><dd className="m-0 font-bold">{text}</dd></div>)}
+                  <InfoRow label="法院">{guide.case.court || "未提供"}</InfoRow>
+                  <InfoRow label="裁判日期">{detail?.judgment_date || "未提供"}</InfoRow>
+                  <InfoRow label="罪名">{guide.case.mid ? <MidLabels mids={guide.case.mid.split("、")} vertical /> : "未提供"}</InfoRow>
+                  {/* 應執行刑：數罪併罰時法院合併定的刑；只有一罪時就是那一罪的宣告刑；抽不到時留空 */}
+                  <InfoRow label={<span className="inline-flex items-center gap-0.5">應執行刑<InfoLink to="應執行刑" label="應執行刑說明" /></span>}>
+                    {guide.case.sentence || <span className="font-medium text-muted-foreground">—</span>}
+                  </InfoRow>
                 </dl>
-                <p className="text-sm text-muted-foreground">宣告刑是系統整理的結果；數罪、緩刑、易科罰金等細節以主文為準。</p>
-                {guide.case.url && <a href={guide.case.url} target="_blank" rel="noreferrer" className="inline-flex min-h-11 w-fit items-center gap-1 font-semibold">
-                  司法院判決原文<ExternalLinkIcon className="size-4" aria-hidden="true" />
-                </a>}
               </Card>
 
               {shown.length > 0 && (
@@ -126,7 +131,6 @@ export default function CriminalReading({ guide, error, onRetry }: {
                   </Fragment>
                 );
               })}
-              <InfoNote>正式的判決請到<a href={guide.case.url ?? JUDICIAL_URL} target="_blank" rel="noreferrer">司法院裁判書查詢系統</a>查詢。本頁不是法律意見，也不代表你的案件結果。</InfoNote>
             </Card>
           </div>
         )}

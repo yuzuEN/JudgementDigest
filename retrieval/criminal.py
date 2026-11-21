@@ -96,13 +96,13 @@ def load_corpus(path: Path, per_charge: int = PER_CHARGE) -> pd.DataFrame:
             r = json.loads(line)
             m = r["meta"]
             text = masked(r["fact"], m.get("criminals") or [])[:INDEX_CHARS]
-            rows.append({"id": i, "case_number": m.get("case_number") or "", "court": m.get("court") or "",
+            rows.append({"id": m.get("retrieval_source_line", i), "case_number": m.get("case_number") or "", "court": m.get("court") or "",
                          "year": str(m.get("year") or ""), "charges": m["accusation"], "sentence": sentence_text(m),
                          "url": m.get("source_url") or "", "text": text, "summary": text[:SUMMARY_LEN]})
     return pd.DataFrame(rows)
 
 
-def write_artifacts(corpus: pd.DataFrame, out: Path, source: str = "") -> Path:
+def write_artifacts(corpus: pd.DataFrame, out: Path, source: str = "", per_charge: int = PER_CHARGE) -> Path:
     corpus = corpus.reset_index(drop=True)
     out.mkdir(parents=True, exist_ok=True)
     params = {} if len(corpus) >= 50 else {"min_df": 1, "max_features": None}   # 測試用的小語料
@@ -121,7 +121,7 @@ def write_artifacts(corpus: pd.DataFrame, out: Path, source: str = "") -> Path:
     finally:
         con.close()
     meta = {"name": NAME, "built_at": datetime.now(timezone.utc).isoformat(timespec="seconds"), "source": source,
-            "n_cases": int(len(corpus)), "per_charge": PER_CHARGE,
+            "n_cases": int(len(corpus)), "per_charge": per_charge,
             "index": f"犯罪事實前 {INDEX_CHARS} 字，字元 1–3 gram TF-IDF", "masking": "被告姓名換成「被告」；罪名、法條沿用資料集的遮蔽"}
     (out / "meta.json").write_text(json.dumps(meta, ensure_ascii=False, indent=2), encoding="utf-8")
     return out
@@ -131,10 +131,13 @@ def main():
     ap = argparse.ArgumentParser(description="建立上線用的刑事檢索資料")
     ap.add_argument("--data", required=True, type=Path)
     ap.add_argument("--out", type=Path, default=None)
+    ap.add_argument("--per-charge", type=int, default=PER_CHARGE)
     a = ap.parse_args()
-    corpus = load_corpus(a.data)
+    if a.per_charge < 1:
+        ap.error("--per-charge 必須大於 0")
+    corpus = load_corpus(a.data, per_charge=a.per_charge)
     print(f"語料 {len(corpus):,} 件（{corpus.charges.str[0].nunique()} 個主要罪名）", flush=True)
-    print(f"已存到 {write_artifacts(corpus, a.out or artifact_dir(), a.data.name)}")
+    print(f"已存到 {write_artifacts(corpus, a.out or artifact_dir(), a.data.name, a.per_charge)}")
 
 
 if __name__ == "__main__":

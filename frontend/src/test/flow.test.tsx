@@ -21,7 +21,7 @@ describe("完整流程", () => {
     await user.type(screen.getByLabelText("事情經過"), "去年三月朋友向我借了五十萬，說好半年就還，到現在一直不還，他的電話0912345678");
     await user.click(await screen.findByRole("button", { name: "民間借貸" }));
     await user.click(screen.getByRole("button", { name: "下一關" }));
-    await user.type(screen.getByLabelText("想請求的金額"), "50萬");
+    await user.click(screen.getByRole("button", { name: "50萬" }));
     await user.click(screen.getByRole("button", { name: "沒有" }));
     await user.click(screen.getByRole("button", { name: "下一章：確認內容" }));
 
@@ -35,21 +35,20 @@ describe("完整流程", () => {
     await waitFor(() => expect(go).toBeEnabled());
     await user.click(go);
 
-    expect(await screen.findByText("62%")).toBeInTheDocument();
+    // 不確定：同一頁上面民事、下面刑事
+    expect(await screen.findByRole("heading", { level: 2, name: /^民事參考結果/ })).toBeInTheDocument();
     const report = calls.find((c) => c.key === "POST /civil/report")!.body;
     expect(report).toMatchObject({ mid: "民間借貸", claimed_amount: 500000, plaintiff_has_lawyer: false });
     expect(JSON.stringify(report)).not.toContain("0912345678");
 
-    await user.click(screen.getByRole("link", { name: "刑事" }));
     expect(await screen.findByRole("heading", { name: "可能的罪名" })).toBeInTheDocument();
     expect(calls.find((c) => c.key === "POST /criminal/predict")!.body).toEqual({ text: expect.stringContaining("【電話】") });
 
-    await user.click(screen.getByRole("link", { name: "民事" }));
-    await user.click(await screen.findByRole("tab", { name: "相似判決" }));
+    await user.click((await screen.findAllByRole("tab", { name: "相似判決" }))[0]);
     await user.click((await screen.findAllByRole("link", { name: "判決導讀" }))[0]);
     expect(await screen.findByText("本件爭點為被告有無過失。")).toBeInTheDocument();
     await user.click(screen.getByRole("link", { name: "回結果" }));
-    await screen.findByRole("tab", { name: "相似判決" });
+    await screen.findAllByRole("tab", { name: "相似判決" });
     expect(calls.filter((c) => c.key === "POST /civil/report")).toHaveLength(1);
     expect(calls.filter((c) => c.key === "POST /criminal/predict")).toHaveLength(1);
   });

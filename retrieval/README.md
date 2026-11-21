@@ -1,5 +1,46 @@
 # retrieval/：相似判決檢索
 
+## 本機抽取刑事單一刑期資料
+
+在專案根目錄執行（僅需 Python 標準函式庫）：
+
+```bash
+python3 -m retrieval.sample_criminal \
+  --data ../cail_v2_national_2016-2025/cail_v2.jsonl \
+  --out ../criminal_sample_2000/cases.jsonl \
+  --per-charge 2000
+```
+
+每個主要罪名（`accusation` 第一項）最多 2,000 件，判決日期較新者優先，不足則全收；
+不是保證每個案件包含的罪名都各有 2,000 件，也不保證總數達到 10～20 萬。
+輸出保留完整 CAIL 記錄，另加 `meta.retrieval_source_line` 以追溯原始行號。
+同目錄的 `cases.report.json` 記錄排除原因、各罪名符合條件件數與選取件數。
+輸出檔存在時拒絕覆寫，不會更動網站資料庫或建立索引。
+
+條件：犯罪事實非空、`criminals` 恰有一個非空姓名、罪名與法條非空，且罪名與法條的
+`task_validity` 均為 true；刑期條件滿足下列其一：
+
+- 有效單一刑期：`imprisonment` 有效，並有 `single_prison_sentence` 或
+  `single_special_sentence` 標記及對應有效值（包含死刑／無期徒刑）。
+- 有效單一拘役：`sentence_kind=拘役`、`term_reason=detention_not_prison`，且拘役天數為正整數，
+  有期徒刑月數為零，沒有死刑／無期徒刑標記；此分支不要求 `imprisonment=true`。
+
+若有新版 `reextraction`，以其刑期標記為準，並要求被告狀態為單被告、選取刑期只有一個。
+多個無法確定單一刑期的案件、有期徒刑混合拘役、僅罰金案件不會入選。
+舊版資料只能依既有標記判定，沒有重新核對全文，也不能由此確認刑期來源是應執行刑或宣告刑。
+
+日後建立索引時，要同樣指定 2,000，避免建索引程式預設再縮減為每罪名 1,500 件：
+
+```bash
+python3 -m retrieval.criminal \
+  --data ../criminal_sample_2000/cases.jsonl \
+  --per-charge 2000 \
+  --out artifacts/retrieval_criminal_2000
+```
+
+此步需安裝專案依賴；輸出到獨立目錄。建立的資料庫尚未包含全文，需按案件識別資料
+另行匯入原文；新案件清單的 row 已變，不能直接複製舊 `full_text` 表。
+
 描述案情，找出最相似的真實判決。民事、刑事共用同一套檢索核心，各自設定建索引的文字、
 篩選條件與顯示內容。
 

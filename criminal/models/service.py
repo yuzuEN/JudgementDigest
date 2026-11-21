@@ -40,8 +40,8 @@ from retrieval.engine import sort_vocabulary
 MODEL_NAME = "criminal_v1"
 BUCKETS = ["拘役、罰金", "1～6 個月", "7～12 個月", "1～3 年", "3～10 年", "10 年以上"]
 BUCKET_UPPER = [6, 12, 36, 120]          # 有期徒刑月數上限 → 區間 1–4；超過 120 個月 → 區間 5
-MIN_SHOWN = 0.1                           # 機率達到這個值的罪名才列出（最多 MAX_SHOWN 個，至少列最高的一個）
-MAX_SHOWN = 3
+MIN_SHOWN = 3                             # 結果頁至少列機率最高的 3 個罪名（機率低的也列，讓使用者看到其他可能）
+SHOWN_THRESHOLD = 0.5                     # 機率到模型的判定門檻（50%）的罪名全部都列
 MAX_SHOWN_PROBABILITY = 0.99             # 校正後常到 1.0；畫面上不顯示 100%，避免讓人以為確定
 LAW_CANDIDATES = 3                        # 每個罪名考慮的常見法條數
 C_LR = 4.0
@@ -260,7 +260,7 @@ class CriminalModel:
         pc = self.charge_scores([text])[0]
         pa = dict(zip(self.article_mlb.classes_, self.article_scores([text])[0]))
         dist = self.term_dist([text])[0]
-        order = [i for i in np.argsort(-pc)[:MAX_SHOWN] if pc[i] >= MIN_SHOWN] or [int(np.argmax(pc))]
+        order = [int(i) for i in np.argsort(-pc)[:max(MIN_SHOWN, int((pc >= SHOWN_THRESHOLD).sum()))]]
         sentence = [{"label": b, "share": float(s)} for b, s in zip(BUCKETS, dist)]
         return [{"name": self.charge_mlb.classes_[i], **self.law_info(self.charge_mlb.classes_[i], pa),
                  "probability": min(float(pc[i]), MAX_SHOWN_PROBABILITY), "sentence": sentence} for i in order]

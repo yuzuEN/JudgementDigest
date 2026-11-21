@@ -1,4 +1,4 @@
-import { ArrowLeftIcon, CheckIcon, ExternalLinkIcon } from "lucide-react";
+import { ArrowLeftIcon, CheckIcon } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 import { useParams } from "react-router-dom";
 import { cn } from "@/lib/utils";
@@ -8,10 +8,12 @@ import type { Guide, GuideFunction } from "../api/types";
 import { Bar } from "../components/casey/Bars";
 import { OutcomeChip } from "../components/casey/OutcomeChip";
 import { MarkedText, ReasoningCard } from "../components/casey/Reasoning";
-import { InfoNote, LoadingPanel } from "../components/casey/ResultTabs";
+import { MidLabels } from "../components/casey/MidLabels";
+import { InfoRow, OriginalLink } from "../components/casey/ReadingParts";
+import { LoadingPanel } from "../components/casey/ResultTabs";
 import { SampleTag } from "../components/casey/Sample";
 import { ErrorBox } from "../components/Common";
-import { JUDICIAL_URL, Layout, PAGE } from "../components/Layout";
+import { Layout, PAGE } from "../components/Layout";
 import { LinkButton } from "../components/LinkButton";
 import CriminalReading from "./CriminalReading";
 import { outcomeLabel, outcomeTone, percent } from "../format";
@@ -52,12 +54,16 @@ export default function Reading() {
   if (source === "criminal") return <CriminalReading guide={guide} error={error} onRetry={load} />;
 
   return (
-    <Layout stage={7} scene={{ who: "explainer", line: "全文已標出主張、抗辯、爭點、證據與法院判斷。你可以選擇要上色的類別，方便找出相關段落。" }}>
+    <Layout stage={7} scene={{ who: "explainer", line: "在導讀中，判決書會根據不同功能段落做顏色區分。" }}>
       <main className={cn(PAGE, "flex flex-col gap-7 pt-7 pb-14")}>
         <div className="flex flex-col gap-3">
           <LinkButton variant="outline" to={resultPath} className="no-print w-fit border-input text-foreground"><ArrowLeftIcon data-icon="inline-start" />回結果</LinkButton>
-          <p className="text-[15px] font-bold tracking-[.04em] text-secondary-foreground">判決導讀</p>
-          {guide && <h1 className="text-[26px] leading-[1.4] font-extrabold text-balance sm:text-[32px]">{guide.case.case_number}</h1>}
+          {guide && (
+            <div className="flex items-start justify-between gap-4">
+              <h1 className="text-[26px] leading-[1.4] font-extrabold text-balance sm:text-[32px]">{guide.case.case_number}</h1>
+              <OriginalLink url={guide.case.url} caseNumber={guide.case.case_number} />
+            </div>
+          )}
         </div>
 
         {error && <ErrorBox message={error} onRetry={load} hint="請重新載入判決，或返回結果頁查看其他判決。" />}
@@ -67,18 +73,18 @@ export default function Reading() {
             <aside className="flex w-full min-w-0 flex-[1_1_280px] flex-col gap-4 sm:max-w-[360px]">
               <Card className="gap-4 px-6.5" aria-labelledby="basic-title">
                 <h2 id="basic-title" className="text-xl font-bold">判決資料</h2>
+                {/* 和「你填的資料」一樣：名稱在左、內容在右；金額的長條和說明在下面各自一列 */}
                 <dl className="m-0 flex flex-col gap-2.5 text-[15px]">
-                  <div><dt className="text-muted-foreground">{source === "criminal" ? "罪名" : "案由"}</dt><dd className="m-0 font-bold">{guide.case.mid}</dd></div>
-                  <div className="flex flex-col gap-1"><dt className="text-muted-foreground">結果</dt>
-                    <dd className="m-0"><OutcomeChip tone={outcomeTone(guide.case.outcome)}>{outcomeLabel(guide.case.outcome)}</OutcomeChip></dd></div>
+                  <InfoRow label="案由"><MidLabels mids={[guide.case.mid]} vertical /></InfoRow>
+                  <InfoRow label="結果"><OutcomeChip tone={outcomeTone(guide.case.outcome)}>{outcomeLabel(guide.case.outcome)}</OutcomeChip></InfoRow>
                   {guide.case.claimed_amount ? (
-                    <div><dt className="text-muted-foreground">判准／請求</dt>
-                      <dd className="m-0 tabular-nums"><b>{yuan(guide.case.awarded_amount ?? 0)}</b> ／ {yuan(guide.case.claimed_amount)} 元</dd></div>
+                    <InfoRow label="判准／請求" nowrap><span className="font-normal tabular-nums"><b>{yuan(guide.case.awarded_amount ?? 0)}</b> ／ {yuan(guide.case.claimed_amount)} 元</span></InfoRow>
                   ) : guide.case.awarded_amount ? (
                     // 請求金額沒抽到時（例如小額判決只寫「共計…等語」，沒有聲明），判准金額照樣顯示
-                    <div><dt className="text-muted-foreground">判准</dt>
-                      <dd className="m-0 tabular-nums"><b>{yuan(guide.case.awarded_amount)}</b> 元</dd>
-                      <dd className="m-0 text-sm text-muted-foreground">這件判決的請求金額沒有抽取到，無法算出判准的比例。</dd></div>
+                    <>
+                      <InfoRow label="判准" nowrap><span className="tabular-nums">{yuan(guide.case.awarded_amount)} 元</span></InfoRow>
+                      <p className="text-sm text-muted-foreground">這件判決的請求金額沒有抽取到，無法算出判准的比例。</p>
+                    </>
                   ) : null}
                 </dl>
                 {guide.case.claimed_amount ? (() => {
@@ -121,9 +127,6 @@ export default function Reading() {
                   {guide.labeler === "rule-v0" ? "目前依文字規則標示。" : "段落功能依標註手冊，由 LLM 輔助標註、法律系學生抽查驗證。"}
                 </p>
                 <p className="text-sm text-muted-foreground">判決中的當事人姓名已換成【原告】【被告】，證人、訴外人與其他人名換成【關係人】，車牌、地址等也已遮蔽；同一角色有多人時加上編號（【被告1】【被告2】），同一件判決裡同一個編號是同一個人。這是自動處理，可能有遺漏。</p>
-                <a href={guide.case.url || JUDICIAL_URL} target="_blank" rel="noreferrer" className="inline-flex w-fit items-center gap-1 text-[15px] font-semibold">
-                  {guide.case.url ? "在司法院網站看這件判決的原文" : "司法院裁判書查詢系統"}<ExternalLinkIcon className="size-4" aria-hidden="true" />
-                </a>
               </Card>
             </aside>
 
@@ -144,12 +147,6 @@ export default function Reading() {
                   </section>
                 );
               })}
-              <InfoNote>
-                {guide.case.url
-                  ? <>想看完整、正式的判決，請看<a href={guide.case.url} target="_blank" rel="noreferrer">司法院網站上的原文</a>。</>
-                  : <>想看完整、正式的判決，請到<a href={JUDICIAL_URL} target="_blank" rel="noreferrer">司法院裁判書查詢系統</a>用字號查詢。</>}
-                本頁不是法律意見。
-              </InfoNote>
             </Card>
           </div>
         )}

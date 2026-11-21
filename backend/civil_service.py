@@ -176,12 +176,12 @@ class CivilService:
         if req.mid:
             return req.mid, None
         if not looks_like_dispute(req.text):
-            return None, "沒有選擇糾紛類型，相似判決會在全部案件中找。"
+            return None, "未選擇或選擇多個糾紛類型時，相似判決會在全部案件中找。"
         mid, likely = self._infer_mid(sim)
         if mid:
-            return mid, f"沒有選擇糾紛類型，系統判斷比較接近「{mid}」。如果不對，請回上一步選擇。"
+            return mid, f"未選擇或選擇多個糾紛類型時，系統判斷比較接近 {mid}。若你認為有誤，請手動選擇最接近的糾紛類型。"
         hint = f"比較接近的有：{'、'.join(likely)}。" if likely else ""
-        return None, f"沒有選擇糾紛類型，相似判決會在全部案件中找。{hint}回上一步選擇，結果會比較準。"
+        return None, f"未選擇或選擇多個糾紛類型時，相似判決會在全部案件中找。{hint}回上一步選擇，結果會比較準。"
 
     def warnings(self, req, mid_note: Optional[str] = None) -> List[str]:
         out = []

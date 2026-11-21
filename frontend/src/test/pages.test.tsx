@@ -17,10 +17,19 @@ describe("首頁", () => {
     expect(starts.length).toBeGreaterThan(0);
     starts.forEach((a) => expect(a).toHaveAttribute("href", "/start"));
     expect(screen.getByRole("heading", { name: "結果的使用限制" })).toBeInTheDocument();
-    expect(screen.getByLabelText("結果預覽（示例）")).toHaveTextContent("示例");
-    // 角色說明只在首頁和關卡 1：不是律師或法官
-    expect(screen.getByRole("region", { name: "CasEY 角色說明" })).toHaveTextContent("不是律師或法官");
+    expect(screen.getByLabelText("民事查詢結果範例（示例）")).toHaveTextContent("一部勝訴 10 件");
+    expect(screen.getByLabelText("刑事查詢結果範例（示例）")).toHaveTextContent("示例");
+    // 首頁不放「不是律師或法官」的角色補充（只留關卡 1）
+    expect(screen.getByRole("region", { name: "CasEY 角色說明" })).not.toHaveTextContent("不是律師或法官");
     expect(screen.queryByRole("navigation", { name: "進度" })).not.toBeInTheDocument();
+  });
+
+  it("頁底的按鈕回到最上方", async () => {
+    const scrollTo = vi.fn();
+    window.scrollTo = scrollTo as unknown as typeof window.scrollTo;
+    renderApp("/");
+    await userEvent.setup().click(screen.getByRole("button", { name: "回到最上方" }));
+    expect(scrollTo).toHaveBeenCalledWith(expect.objectContaining({ top: 0 }));
   });
 });
 
@@ -61,7 +70,7 @@ describe("描述案情（關卡 1–3）", () => {
     await user.type(screen.getByLabelText("事情經過"), "今年7月在路口被汽車撞");
     expect(next).toBeDisabled();
     expect(screen.getByText("案情至少要 30 字。")).toBeInTheDocument();
-    expect(screen.getByText(/再多寫一點：至少 30 字/)).toBeInTheDocument();
+    expect(screen.getByText(`還需 ${30 - "今年7月在路口被汽車撞".length} 字`)).toBeInTheDocument();
     expect(screen.getByText("時間").closest("li")).toHaveTextContent("已寫到");
     expect(screen.getByText("損失（金額或傷勢）").closest("li")).toHaveTextContent("還沒寫到");
 
@@ -77,7 +86,7 @@ describe("描述案情（關卡 1–3）", () => {
     renderApp("/start?stage=2");
     const traffic = await screen.findByRole("button", { name: "侵權：交通事故" });
     const help = screen.getByRole("complementary", { name: "已選類型的說明" });
-    expect(help).toHaveTextContent("還沒選");
+    expect(help).toHaveTextContent("尚未選擇");
     await user.click(traffic);
     expect(traffic).toHaveAttribute("aria-pressed", "true");
     expect(help).toHaveTextContent("因車禍造成受傷或財物損失");
@@ -120,19 +129,27 @@ describe("描述案情（關卡 1–3）", () => {
     mockApi({ "GET /meta/options": () => OPTIONS });
     const user = userEvent.setup();
     renderApp("/start?stage=3", { text: TRAFFIC });
-    const amount = screen.getByLabelText("想請求的金額");
+    const group = screen.getByRole("group", { name: "想請求的金額" });
     const next = screen.getByRole("button", { name: "下一章：確認內容" });
-    expect(screen.getByText(/沒填也可以/)).toBeInTheDocument();
+    expect(screen.getByText("未填入時，結果僅會顯示求償比例")).toBeInTheDocument();
+    // 「自訂」按下去變成輸入框
+    await user.click(within(group).getByRole("button", { name: "自訂" }));
+    const amount = screen.getByLabelText("自訂金額");
+    expect(amount).toHaveFocus();
     await user.type(amount, "64萬8千");
     expect(screen.getByText("我讀成：648,000 元")).toBeInTheDocument();
+    expect(group).toHaveTextContent("648,000 元");
     await user.clear(amount);
     await user.type(amount, "五十萬");
     expect(screen.getByText(/看不懂這個金額/)).toBeInTheDocument();
     expect(next).toBeDisabled();
     expect(screen.getByText("金額格式不對，請修改。")).toBeInTheDocument();
-    await user.click(screen.getByRole("button", { name: "50 萬" }));
+    await user.click(within(group).getByRole("button", { name: "50萬" }));
+    expect(within(group).getByRole("button", { name: "50萬" })).toHaveAttribute("aria-pressed", "true");
     expect(screen.getByText("我讀成：500,000 元")).toBeInTheDocument();
     expect(next).toBeEnabled();
+    await user.click(within(group).getByRole("button", { name: "不確定" }));
+    expect(screen.getByText("未填入時，結果僅會顯示求償比例")).toBeInTheDocument();
 
     // 法院可以不選，選項從 API 來
     await user.click(screen.getByLabelText(/打算在哪個法院/));
@@ -245,7 +262,7 @@ describe("第 6 關：整理成判決書的寫法", () => {
     const user = userEvent.setup();
     renderAt("/confirm", <Confirm />, at6, { text: "他打我", caseType: "criminal" });
     await user.click(await screen.findByRole("button", { name: BUTTON }));
-    expect(await screen.findByText(/這段只用來推估罪名與刑期/)).toBeInTheDocument();
+    expect(await screen.findByText(/被告、被害人與「敘述者」是否對應正確/)).toBeInTheDocument();
     expect(sent[0]).toMatchObject({ case_type: "criminal" });
   });
 
@@ -349,7 +366,7 @@ describe("第 6 關：整理成判決書的寫法", () => {
   it("結果頁送出確認過的文字", async () => {
     const { calls } = mockApi({ "POST /civil/report": () => CIVIL_REPORT });
     renderAt("/result/civil", <CivilResult />, "/result/civil", { text: "內容", maskedText: "內容", searchText: "原告主張" });
-    expect(await screen.findByText(/用你確認過的整理文字搜尋。/)).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "這次比對用的描述（整理後的寫法）" })).toBeInTheDocument();
     expect(calls[0].body).toMatchObject({ text: "內容", search_text: "原告主張" });
   });
 });
@@ -378,14 +395,23 @@ describe("結果頁的民事、刑事切換", () => {
     expect(calls.map((c) => c.key)).not.toContain("POST /civil/report");
   });
 
-  it("不確定時可以切到刑事，並說明兩邊都看", async () => {
-    mockApi({ "POST /civil/report": () => CIVIL_REPORT });
+  it("不確定時同一頁上面是民事、下面是刑事，不用切換", async () => {
+    mockApi({ "POST /civil/report": () => CIVIL_REPORT, "POST /criminal/predict": () => CRIMINAL_REPORT });
     renderAt("/result/civil", <CivilResult />, "/result/civil", { ...intake, caseType: "unsure" });
-    await screen.findByText("62%");
-    const nav = screen.getByRole("navigation", { name: "結果類型" });
-    expect(within(nav).getByRole("link", { name: "刑事" })).toHaveAttribute("href", "/result/criminal");
-    expect(within(nav).getByText("民事")).toHaveAttribute("aria-current", "page");
-    expect(nav).toHaveTextContent("你選了「不確定」，可切換查看民事與刑事結果。");
+    const civil = await screen.findByRole("heading", { level: 2, name: /^民事參考結果/ });
+    const criminal = await screen.findByRole("heading", { level: 2, name: "刑事參考結果" });
+    expect(civil.compareDocumentPosition(criminal) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(screen.queryByRole("navigation", { name: "結果類型" })).not.toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "可能的罪名" })).toBeInTheDocument();
+    // 每一區的分頁列最右邊都有下載 PDF
+    expect(screen.getAllByRole("button", { name: "下載 PDF" })).toHaveLength(2);
+  });
+
+  it("不確定時開刑事網址，會到合併頁", async () => {
+    mockApi({ "POST /civil/report": () => CIVIL_REPORT, "POST /criminal/predict": () => CRIMINAL_REPORT });
+    renderApp("/result/criminal?tab=cases", { ...intake, caseType: "unsure" });
+    expect(await screen.findByRole("heading", { level: 2, name: "刑事參考結果" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { level: 2, name: /^民事參考結果/ })).toBeInTheDocument();
   });
 
   it("選民事時，直接開刑事網址會回到民事，也不查刑事", async () => {
@@ -472,7 +498,7 @@ describe("第 4 關：確認遮名與敏感資料", () => {
     renderAt("/confirm", <Confirm />, "/confirm", { text: "王小明撞到我，他的電話0912345678" });
     expect(await screen.findByRole("heading", { name: /第 4 關/ })).toBeInTheDocument();
     expect(await screen.findByText("【電話】")).toBeInTheDocument();
-    await user.type(screen.getByLabelText("還有要遮的名字嗎？"), "王小明");
+    await user.type(screen.getByLabelText("有沒遮到的名稱嗎？"), "王小明");
     await user.click(screen.getByRole("button", { name: "加入" }));
     await waitFor(() => expect(screen.getAllByText("【姓名】").length).toBeGreaterThan(0));
     await user.click(screen.getByRole("button", { name: "不遮「王小明」" }));
@@ -484,7 +510,7 @@ describe("第 4 關：確認遮名與敏感資料", () => {
     rulesApi();
     const user = userEvent.setup();
     renderAt("/confirm", <Confirm />, "/confirm", { text: "阿明說王打他" });
-    await user.type(await screen.findByLabelText("還有要遮的名字嗎？"), "王");
+    await user.type(await screen.findByLabelText("有沒遮到的名稱嗎？"), "王");
     await user.click(screen.getByRole("button", { name: "加入" }));
     expect(await screen.findByRole("button", { name: "不遮「王」" })).toBeInTheDocument();
     expect(screen.getByText("【姓名】")).toBeInTheDocument();
@@ -494,7 +520,7 @@ describe("第 4 關：確認遮名與敏感資料", () => {
     const { calls } = rulesApi();
     const user = userEvent.setup();
     renderAt("/confirm", <Confirm />, "/confirm", { text: "王小明撞到我，他的電話0912345678" });
-    await user.type(await screen.findByLabelText("還有要遮的名字嗎？"), "王小明");
+    await user.type(await screen.findByLabelText("有沒遮到的名稱嗎？"), "王小明");
     await user.click(screen.getByRole("button", { name: "加入" }));
     await screen.findAllByText("【姓名】");
     const sent = JSON.stringify(calls);
@@ -546,14 +572,14 @@ describe("第 5 關：補充細節", () => {
   const aiReply = { questions: [{ id: "llm1", text: "對方怎麼說？", why: "爭點" }], source: "llm", llm_available: true };
   const at5 = "/confirm?stage=5";
   const openAi = async (user: ReturnType<typeof userEvent.setup>) => {
-    await user.click(await screen.findByRole("tab", { name: AI_TAB }));
+    await user.click(await screen.findByRole("button", { name: AI_TAB }));
     return screen.getByRole("button", { name: SEND });
   };
 
   it("打開頁面時不會把內容傳給 LLM", async () => {
     const sent = setup(() => rulesReply);
     renderAt("/confirm", <Confirm />, at5, { text: "王小明的電話是0912345678" });
-    await screen.findByRole("tab", { name: AI_TAB });
+    await screen.findByRole("button", { name: AI_TAB });
     expect(sent).toHaveLength(1);
     expect(sent[0]).toMatchObject({ allow_llm: false, text: "" });
   });
@@ -562,8 +588,8 @@ describe("第 5 關：補充細節", () => {
     setup(() => ({ ...rulesReply, llm_available: false }));
     renderAt("/confirm", <Confirm />, at5, { text: "內容" });
     expect(await screen.findByLabelText("什麼時候發生的？")).toBeInTheDocument();
-    expect(screen.getByText("為什麼要問：時效")).toBeInTheDocument();
-    expect(screen.queryByRole("tab", { name: AI_TAB })).not.toBeInTheDocument();
+    expect(screen.getByText("時效")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: AI_TAB })).not.toBeInTheDocument();
     expect(screen.queryByText(/付費 API/)).not.toBeInTheDocument();
   });
 
@@ -608,9 +634,9 @@ describe("第 5 關：補充細節", () => {
     renderAt("/confirm", <Confirm />, at5, { text: "內容" });
     await user.click(await openAi(user));
     await user.type(await screen.findByLabelText("對方怎麼說？"), "他不承認");
-    await user.click(screen.getByRole("tab", { name: "固定題目（不用 AI）" }));
+    await user.click(screen.getByRole("button", { name: "固定題目（不用 AI）" }));
     expect(screen.getByLabelText("什麼時候發生的？")).toBeInTheDocument();
-    await user.click(screen.getByRole("tab", { name: AI_TAB }));
+    await user.click(screen.getByRole("button", { name: AI_TAB }));
     expect(screen.getByLabelText("對方怎麼說？")).toHaveValue("他不承認");
     expect(sent.filter((b) => b.allow_llm)).toHaveLength(1);
   });
@@ -685,13 +711,15 @@ describe("第 5 關：補充細節", () => {
     expect(send).toBeEnabled();
   });
 
-  it("資料使用說明寫出會傳給哪一家 AI", async () => {
+  it("同意說明只寫偵測到的資料與用途", async () => {
     setup(() => ({ ...rulesReply, llm_vendor: "OpenAI" }));
     const user = userEvent.setup();
     renderAt("/confirm", <Confirm />, at5, { text: "我骨折住院" });
     await openAi(user);
-    expect(screen.getAllByText(/遮名後的內容會傳給 OpenAI/).length).toBeGreaterThan(0);
-    expect(screen.getByText(/才會傳給 OpenAI 的付費 API/)).toBeInTheDocument();
+    expect(screen.getByText(/^你的描述裡有法律特別保護的資料（偵測到：.+）。$/)).toBeInTheDocument();
+    expect(screen.getByText("僅用遮蓋後內容來產生補充問題，不做其他用途。")).toBeInTheDocument();
+    expect(screen.queryByText(/遮名後的內容會傳給/)).toBeNull();
+    expect(screen.getByText("AI 不拿來訓練模型")).toBeInTheDocument();
   });
 });
 
@@ -713,15 +741,14 @@ describe("民事結果", () => {
   const prediction = (signal: "strong" | "weak" | "insufficient") => ({ ...CIVIL_REPORT.prediction, signal });
 
   describe("分頁", () => {
-    it("五個分頁，預設整體結果；換分頁時解說員的話也換", async () => {
+    it("五個分頁，預設整體結果；解說員的話每個分頁都一樣", async () => {
       const { calls } = await show();
       expect(screen.getAllByRole("tab").map((t) => t.textContent)).toEqual(["整體結果", "可能的金額", "證據對照", "對方的說法", "相似判決"]);
       expect(screen.getByRole("tab", { name: "整體結果" })).toHaveAttribute("aria-selected", "true");
       const scene = screen.getByRole("region", { name: "CasEY 角色說明" });
-      expect(scene).toHaveTextContent("解說員");
-      expect(scene).toHaveTextContent("相似判決的結果");
+      expect(scene).toHaveTextContent("我是解說員。你可以參考模型給出的結果，也可以在相似判決中查找前10件最相似的判決書資訊，並參考導讀內容。");
       await openTab("對方的說法");
-      expect(scene).toHaveTextContent("展開各項說法");
+      expect(scene).toHaveTextContent("我是解說員。你可以參考模型給出的結果，也可以在相似判決中查找前10件最相似的判決書資訊，並參考導讀內容。");
       expect(screen.getByText(/比對了 30 件案由相同的真實判決/)).toBeInTheDocument();
       expect(calls[0].body).toMatchObject({ text: TRAFFIC, mid: "侵權：交通事故", claimed_amount: 500000, evidence: ["medical"] });
     });
@@ -740,32 +767,36 @@ describe("民事結果", () => {
   });
 
   describe("整體結果", () => {
-    it("最上面是模型判定：機率、模型與測試成績，並說明不是你會贏的機率；相似判決在後面當對照", async () => {
+    it("最上面是模型判定：機率，並說明只是參考；模型怎麼算放在說明頁；相似判決在後面當對照", async () => {
       await show();
       const verdict = screen.getByRole("region", { name: "模型判定" });
       expect(within(verdict).getByText("62%")).toBeInTheDocument();
-      expect(verdict).toHaveTextContent("不是你會贏的機率");
-      expect(verdict).toHaveTextContent("口語描述算出來的機率常常偏低");
-      expect(verdict).toHaveTextContent("勝敗模型");
-      expect(verdict).toHaveTextContent("測試成績");
+      expect(verdict).toHaveTextContent("這是模型以過去判決來預估的數值，請當作參考；通常來說口語描述會降低模型判定的準確性，因此會比較分不出輸贏。");
+      expect(verdict).toHaveTextContent("對模型如何處理感到好奇？點擊可以參考");
+      expect(within(verdict).getByRole("link", { name: /勝敗模型怎麼算的說明/, hidden: true })).toHaveAttribute("href", `/guide#${encodeURIComponent("勝敗模型怎麼算")}`);
+      expect(verdict).not.toHaveTextContent("測試成績");
+      expect(verdict).not.toHaveTextContent("金額模型");
       expect(screen.getByText("62%").closest("details")).toBeNull();
       const outcome = screen.getByRole("img", { name: "全部勝訴 8 件、一部勝訴 13 件、敗訴 9 件" });
       expect(verdict.compareDocumentPosition(outcome) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     });
 
-    it("金額模型有用時，模型判定寫出範圍", async () => {
-      await show({ amount_range: { ...CIVIL_REPORT.amount_range!, source: "model", scope: "partial_win" } });
-      expect(screen.getByRole("region", { name: "模型判定" })).toHaveTextContent("如果判決是一部勝訴，可能判准 180,000 ～ 420,000 元（中位數 300,000 元）");
+    it("系統代選糾紛類型的提醒只把類型加粗", async () => {
+      const warning = "未選擇或選擇多個糾紛類型時，系統判斷比較接近 侵權：交通事故。若你認為有誤，請手動選擇最接近的糾紛類型。";
+      await show({ prediction: { ...CIVIL_REPORT.prediction, warnings: [warning] }, search_scope: { n: 9156, mid: "侵權：交通事故", mid_inferred: true } });
+      const verdict = screen.getByRole("region", { name: "模型判定" });
+      expect(verdict).toHaveTextContent(warning);
+      expect(within(verdict).getByText("侵權：交通事故").tagName).toBe("B");
     });
 
-    it("沒用金額模型時，模型判定說明為什麼改用相似判決", async () => {
-      await show();
-      expect(screen.getByRole("region", { name: "模型判定" })).toHaveTextContent("要選一個糾紛類型，並填法院或請求金額才會使用");
+    it("相似的勝訴判決裡有幾件是全部勝訴，列在整體結果", async () => {
+      await show({ amount_range: { ...CIVIL_REPORT.amount_range!, n_wins: 21, n_full_wins: 17 } });
+      expect(screen.getByText(/相似的勝訴判決 21 件中，/).closest("li")).toHaveTextContent("相似的勝訴判決 21 件中，17 件是全部勝訴");
     });
 
     it.each([
-      ["strong", "參考訊號：較強", "勝訴訊號較強"],
-      ["weak", "參考訊號：較弱", "勝訴訊號較弱"],
+      ["strong", "參考訊號：較強", "勝訴機會較高"],
+      ["weak", "參考訊號：較弱", "勝訴機會較低"],
       ["insufficient", "參考訊號：資訊不足", "描述太短"],
     ] as const)("參考訊號 %s 用固定文字", async (signal, title, text) => {
       await show({ prediction: prediction(signal) });
@@ -775,7 +806,7 @@ describe("民事結果", () => {
 
     it("資訊不足時不說強弱", async () => {
       await show({ prediction: prediction("insufficient") });
-      expect(screen.queryByText(/勝訴訊號較(強|弱)/)).not.toBeInTheDocument();
+      expect(screen.queryByText(/勝訴機會較(高|低)/)).not.toBeInTheDocument();
     });
 
     it("相似判決太少時不畫比例，說明原因", async () => {
@@ -810,18 +841,6 @@ describe("民事結果", () => {
       expect(screen.queryByText(/件被告沒有到庭/)).not.toBeInTheDocument();
     });
 
-    it("模型表現用 precision、recall 說明，不顯示 AUC", async () => {
-      await show();
-      expect(screen.getByText(/判勝訴的案件有 73% 真的勝訴/)).toBeInTheDocument();
-      expect(screen.getByRole("link", { name: /Precision、Recall 說明/, hidden: true })).toBeInTheDocument();
-      expect(screen.queryByText(/AUC/)).not.toBeInTheDocument();
-    });
-
-    it("舊的模型檔沒有這些數字時不顯示", async () => {
-      const { win_precision: _, ...model } = CIVIL_REPORT.prediction.model;
-      await show({ prediction: { ...CIVIL_REPORT.prediction, model } });
-      expect(screen.queryByText(/真的勝訴/)).not.toBeInTheDocument();
-    });
   });
 
   describe("可能的金額", () => {
@@ -872,14 +891,15 @@ describe("民事結果", () => {
       expect(panel).toHaveTextContent("上面的範圍是模型推估的");
     });
 
-    it("說明相似的勝訴判決裡有幾件是全部勝訴", async () => {
-      const panel = await amount({ ...model, n_wins: 21, n_full_wins: 17 });
-      expect(panel).toHaveTextContent("相似的勝訴判決 21 件中，17 件是全部勝訴");
+    it("全部勝訴的件數移到整體結果；金額模型沒用時在這裡說明", async () => {
+      const panel = await amount({ ...CIVIL_REPORT.amount_range!, n_wins: 21, n_full_wins: 17 });
+      expect(panel).not.toHaveTextContent("件是全部勝訴");
+      expect(panel).toHaveTextContent("金額模型：要選一個糾紛類型，並填法院或請求金額才會使用；這次改用相似判決的判准比例。");
     });
 
-    it("舊版後端沒有全勝件數時不顯示那一行", async () => {
+    it("用了金額模型時不再說明金額模型的條件", async () => {
       const panel = await amount(model);
-      expect(panel).not.toHaveTextContent("件是全部勝訴");
+      expect(panel).not.toHaveTextContent("才會使用");
     });
 
     it("模型：相似的勝訴判決不夠時仍給範圍，只是沒有分布可看", async () => {
@@ -894,7 +914,9 @@ describe("民事結果", () => {
     await show();
     const panel = await openTab("證據對照");
     expect(within(panel).getByText("你有提到")).toBeInTheDocument();
-    expect(within(panel).getByText("你沒有提到")).toBeInTheDocument();
+    expect(within(panel).getByText("你沒有提到").closest("span")).toHaveClass("text-ink-faint");
+    expect(panel).toHaveTextContent("以相似的勝訴判決中，統計了這項證據出現的案件比例。");
+    expect(panel).not.toHaveTextContent("沒提到不代表會輸");
     expect(within(panel).getByRole("img", { name: "診斷證明、病歷：82% 的相似勝訴判決有提到" })).toBeInTheDocument();
   });
 
@@ -929,21 +951,20 @@ describe("民事結果", () => {
       expect(table).not.toHaveTextContent(String(CIVIL_REPORT.similar[0].similarity));
     });
 
-    it("沒有限定類型時，說明是從全部判決裡找的，並提醒選糾紛類型", async () => {
+    it("沒有限定類型時：標題不帶類型，旁邊寫檢索範圍共幾件", async () => {
       await show({ n_corpus: 188334, search_scope: { n: 188334, mid: null } });
       const panel = await openTab("相似判決");
-      expect(panel).toHaveTextContent("從 188,334 件判決中，找出和你的描述用字最接近的 2 件");
-      expect(panel).toHaveTextContent("越上面越接近");
-      expect(panel).toHaveTextContent("選了糾紛類型，找到的判決會更貼近");
+      expect(within(panel).getByRole("heading", { level: 2, name: "相似的真實判決" })).toBeInTheDocument();
+      expect(panel).toHaveTextContent("共 188,334 件");
+      expect(panel).not.toHaveTextContent("越上面越接近");
       expect(panel).not.toHaveTextContent("%");
     });
 
-    it("限定類型時，說明是從同類判決裡找的；系統判斷的類型要講清楚", async () => {
+    it("限定類型時：標題帶系統判斷的糾紛類型", async () => {
       await show({ search_scope: { n: 9156, mid: "侵權：交通事故", mid_inferred: true } });
       const panel = await openTab("相似判決");
-      expect(panel).toHaveTextContent("從 9,156 件「侵權：交通事故」判決中，找出");
-      expect(panel).toHaveTextContent("「侵權：交通事故」是系統依你的描述判斷的類型");
-      expect(panel).not.toHaveTextContent("選了糾紛類型");
+      expect(within(panel).getByRole("heading", { level: 2, name: "相似的真實判決——侵權：交通事故" })).toBeInTheDocument();
+      expect(panel).toHaveTextContent("共 9,156 件");
     });
 
     it("每件判決下面列出相同點；沒有就不顯示", async () => {
@@ -951,8 +972,10 @@ describe("民事結果", () => {
       await show({ similar: [{ ...first, common: ["請求金額相近（你 30 萬／這件 28 萬）", "同一法院"] }, { ...second, common: [] }] });
       const table = within(await openTab("相似判決")).getByRole("table");
       const rows = within(table).getAllByRole("row").slice(1);
-      expect(rows[0]).toHaveTextContent("相同點請求金額相近（你 30 萬／這件 28 萬）同一法院");
-      expect(rows[1]).not.toHaveTextContent("相同點");
+      // 相同的地方直接列標籤，不加「相同點」前綴
+      expect(rows[0]).toHaveTextContent("請求金額相近（你 30 萬／這件 28 萬）同一法院");
+      expect(rows[0]).not.toHaveTextContent("相同點");
+      expect(rows[1]).not.toHaveTextContent("同一法院");
     });
 
     it("相似判決沒有請求金額時，判准金額照樣顯示", async () => {
@@ -994,7 +1017,10 @@ describe("民事結果", () => {
       await show({ similar: [{ ...first, default_judgment: true }, ...rest] });
       const panel = await openTab("相似判決");
       expect(within(within(panel).getAllByRole("row")[1]).getByText("被告未到庭")).toBeInTheDocument();
-      expect(within(panel).getByText(/統計不包含這些判決/)).toBeInTheDocument();
+      const note = within(panel).getByText(/統計不包含這些判決/);
+      expect(note).toHaveTextContent("「被告未到庭」的判決沒有經過雙方攻防，原告幾乎都會贏（僅作參考）。金額範圍、證據與抗辯的統計不包含這些判決。");
+      // 最左邊是說明連結
+      expect(note.parentElement!.firstElementChild).toHaveAttribute("href", `/guide#${encodeURIComponent("被告未到庭（一造辯論）")}`);
     });
 
     it("沒有一造辯論的判決就不顯示說明", async () => {
@@ -1021,9 +1047,9 @@ describe("民事結果", () => {
     expect(screen.queryByText(/示例資料/)).not.toBeInTheDocument();
   });
 
-  it("頁尾有「請注意」，列印時直接印出條列", async () => {
+  it("頁尾沒有「請注意」，列印時直接印出條列", async () => {
     await show();
-    expect(screen.getByRole("button", { name: "請注意" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "請注意" })).not.toBeInTheDocument();
     const printed = screen.getByRole("heading", { name: "請注意" }).closest(".print-only")!;
     expect(printed).toHaveTextContent("不是法律意見");
     expect(printed).toHaveTextContent("和解、撤回");
@@ -1063,23 +1089,35 @@ describe("刑事結果", () => {
     return screen.getByRole("tabpanel");
   };
 
-  it("三個分頁；換分頁時解說員的話也換", async () => {
+  it("三個分頁；解說員的話和民事一樣；刑期範圍也可以切換罪名", async () => {
     await show({ mock: false });
     expect(screen.getAllByRole("tab").map((t) => t.textContent)).toEqual(["可能的罪名", "刑期範圍", "相似判決"]);
     const scene = screen.getByRole("region", { name: "CasEY 角色說明" });
-    expect(scene).toHaveTextContent("選擇罪名後");
-    await openTab("刑期範圍");
-    expect(scene).toHaveTextContent("方便比較");
+    expect(scene).toHaveTextContent("我是解說員。你可以參考模型給出的結果，也可以在相似判決中查找前10件最相似的判決書資訊，並參考導讀內容。");
+    const panel = await openTab("刑期範圍");
+    const [, second] = CRIMINAL_REPORT.charges;
+    await userEvent.setup().click(within(panel).getByRole("button", { name: second.name }));
+    expect(within(panel).getByRole("heading", { name: `刑期範圍：${second.name}` }).closest("section")).not.toHaveClass("screen-hidden");
+    expect(panel).toHaveTextContent("模型推估的是整個案件的刑度，切換罪名時這一組不會變；實際刑期還是會依其他因素而不同。");
     expect(screen.getAllByRole("tabpanel", { hidden: true })).toHaveLength(3);
   });
 
-  it("選罪名後，刑期範圍分頁跟著切換；列印時每個罪名都印", async () => {
+  it("可能的罪名：模型判定整個框起來，罪名直接列名稱、法條和機率條（50% 畫線），不用選", async () => {
+    await show();
+    const verdict = screen.getByRole("region", { name: "模型判定" });
+    expect(within(verdict).getByRole("heading", { name: "可能的罪名" })).toBeInTheDocument();
+    expect(within(verdict).queryByRole("radio")).not.toBeInTheDocument();
+    for (const c of CRIMINAL_REPORT.charges) {
+      expect(within(verdict).getByText(c.name)).toBeInTheDocument();
+      expect(within(verdict).getByRole("img", { name: new RegExp(`^${c.name}：.*門檻是 50%`) })).toBeInTheDocument();
+    }
+  });
+
+  it("刑期範圍分頁可以切換罪名；列印時每個罪名都印", async () => {
     await show();
     const user = userEvent.setup();
-    expect(screen.getByRole("radio", { name: /過失傷害罪/ })).toBeChecked();
-    await user.click(screen.getByRole("radio", { name: /肇事逃逸罪/ }));
-    expect(screen.getByRole("radio", { name: /肇事逃逸罪/ })).toBeChecked();
     const panel = await openTab("刑期範圍");
+    await user.click(within(panel).getByRole("button", { name: "肇事逃逸罪" }));
     const section = (name: string) => within(panel).getByText(name).closest("section");
     expect(section("刑期範圍：肇事逃逸罪")).not.toHaveClass("screen-hidden");
     expect(section("刑期範圍：過失傷害罪")).toHaveClass("screen-hidden");
@@ -1110,12 +1148,7 @@ describe("刑事結果", () => {
     expect(screen.getAllByText("示例資料").length).toBeGreaterThanOrEqual(3);
   });
 
-  it("有兩個以上的罪名才提示可以點罪名切換刑期", async () => {
-    await show({ mock: false });
-    expect(screen.getByText("點一個罪名，「刑期範圍」和「相似判決」分頁會跟著切換。")).toBeInTheDocument();
-  });
-
-  it("每個罪名各一組相似判決：罪名分頁選的罪名帶到相似判決，也可以在相似判決分頁切換", async () => {
+  it("每個罪名各一組相似判決，在相似判決分頁切換", async () => {
     const [hurt, flee] = CRIMINAL_REPORT.charges;
     const base = CRIMINAL_REPORT.similar[0];
     const charges = [
@@ -1124,19 +1157,20 @@ describe("刑事結果", () => {
     ];
     await show({ mock: false, charges, similar: charges[0].similar, search_scope: charges[0].search_scope });
     const user = userEvent.setup();
-    await user.click(screen.getByRole("radio", { name: /肇事逃逸罪/ }));
     const panel = await openTab("相似判決");
+    await user.click(within(panel).getByRole("button", { name: "肇事逃逸罪" }));
     const fleeSection = within(panel).getByRole("region", { name: "肇事逃逸罪的相似判決" });
     const hurtSection = within(panel).getByRole("region", { name: "過失傷害罪的相似判決" });
     expect(fleeSection).not.toHaveClass("screen-hidden");
     expect(hurtSection).toHaveClass("screen-hidden");
-    expect(fleeSection).toHaveTextContent("從 410 件「肇事逃逸罪」判決中");
+    // 只放這個罪名檢索範圍的總數（在罪名切換同一列最右邊）
+    expect(panel).toHaveTextContent("共 410 件");
     expect(fleeSection).toHaveTextContent("肇事逃逸的判決");
     expect(within(panel).getByRole("button", { name: "肇事逃逸罪" })).toHaveAttribute("aria-pressed", "true");
     await user.click(within(panel).getByRole("button", { name: "過失傷害罪" }));
     expect(hurtSection).not.toHaveClass("screen-hidden");
     expect(fleeSection).toHaveClass("screen-hidden");
-    expect(hurtSection).toHaveTextContent("從 3,200 件「過失傷害罪」判決中");
+    expect(panel).toHaveTextContent("共 3,200 件");
   });
 
   it("後端沒有分罪名的相似判決時，不顯示切換，用頂層的那組", async () => {
@@ -1163,20 +1197,13 @@ describe("刑事結果", () => {
         similar_sentence: [{ label: "拘役、罰金", share: 0.2 }, { label: "1～6 個月", share: 0.8 }] }, ...rest],
       model: { name: "criminal_v1", description: "TF-IDF ＋ SVM", n_test: 10000, charge_top1: 0.93, bucket_accuracy: 0.7, bucket_within_one: 0.95 } });
     expect(screen.getByText("修法前為洗錢防制法第 14 條")).toBeInTheDocument();
-    expect(screen.getByText(/第一個罪名猜中 93%/)).toBeInTheDocument();
+    // 模型與測試成績不在結果頁顯示
+    expect(screen.queryByText(/第一個罪名猜中/)).not.toBeInTheDocument();
     const panel = await openTab("刑期範圍");
     expect(panel).toHaveTextContent("最相似的 50 件「過失傷害罪」有罪判決，實際宣告刑多數落在「1～6 個月」");
     expect(within(panel).getByText("最相似 50 件的實際宣告刑")).toBeInTheDocument();
     expect(within(panel).getByText("實際 80%")).toBeInTheDocument();
     expect(within(panel).getByRole("img", { name: "1～6 個月：模型推估 62%，最相似 50 件實際宣告刑 80%" })).toBeInTheDocument();
-  });
-
-  it("刑期用 ELECTRA 時，罪名和刑期的測試成績分開寫", async () => {
-    await show({ mock: false,
-      model: { name: "criminal_v1", description: "TF-IDF ＋ SVM", n_test: 10000, charge_top1: 0.93, bucket_accuracy: 0.76, bucket_within_one: 0.97,
-        sentence_description: "法律 ELECTRA", sentence_n_test: 15369, sentence_test: "2025 年判決" } });
-    expect(screen.getByText(/罪名模型：TF-IDF ＋ SVM，用 10,000 件沒參與訓練的判決測試時，第一個罪名猜中 93%/)).toBeInTheDocument();
-    expect(screen.getByText(/刑期模型：法律 ELECTRA，用 15,369 件 2025 年判決測試時，\s*刑期區間猜中 76%，差一格以內 97%/)).toBeInTheDocument();
   });
 
   it("真模型沒有相似判決時說明，不出現表格", async () => {
@@ -1190,7 +1217,9 @@ describe("刑事結果", () => {
     const url = "https://judgment.judicial.gov.tw/FJUD/data.aspx?ty=JD&id=TPDM";
     await show({ mock: false, similar: [{ ...CRIMINAL_REPORT.similar[0], url }] });
     const panel = await openTab("相似判決");
-    expect(within(panel).getByRole("link", { name: "判決原文" })).toHaveAttribute("href", url);
+    // 整個字號就是原文連結
+    expect(within(panel).getByRole("link", { name: /司法院判決原文/ })).toHaveAttribute("href", url);
+    expect(within(panel).queryByRole("link", { name: "判決原文" })).not.toBeInTheDocument();
     expect(within(panel).getByRole("link", { name: "判決導讀" })).toHaveAttribute("href", `/judgment/criminal/${CRIMINAL_REPORT.similar[0].case_id}`);
     expect(within(panel).queryByRole("columnheader", { name: /相似度/ })).not.toBeInTheDocument();
     expect(within(panel).getByRole("link", { name: /相似判決怎麼找的說明/ })).toBeInTheDocument();
@@ -1199,7 +1228,8 @@ describe("刑事結果", () => {
   it("刑事相似判決說明是從含哪個罪名的判決裡找的", async () => {
     await show({ mock: false, n_corpus: 88376, search_scope: { n: 12034, charge: "詐欺罪" }, similar: [CRIMINAL_REPORT.similar[0]] });
     const panel = await openTab("相似判決");
-    expect(panel).toHaveTextContent("從 12,034 件「詐欺罪」判決中，找出和你的描述用字最接近的 1 件");
+    expect(panel).toHaveTextContent("共 12,034 件");
+    expect(panel).not.toHaveTextContent("找出和你的描述用字最接近");
     expect(panel).not.toHaveTextContent("相同點");
     expect(panel).not.toHaveTextContent("選了糾紛類型");
   });
@@ -1260,7 +1290,7 @@ describe("判決導讀", () => {
     renderAt("/judgment/:source/:caseId", <Reading />, "/judgment/civil/11");
     await screen.findByRole("heading", { name: "判決資料" });
     expect(screen.getByText("判准")).toBeInTheDocument();
-    expect(screen.getByText("14,540")).toBeInTheDocument();
+    expect(screen.getByText("14,540 元")).toBeInTheDocument();
     expect(screen.getByText(/請求金額沒有抽取到/)).toBeInTheDocument();
     expect(screen.queryByRole("img", { name: /判准金額約占請求金額/ })).not.toBeInTheDocument();
   });
@@ -1269,8 +1299,9 @@ describe("判決導讀", () => {
     const url = "https://judgment.judicial.gov.tw/FJUD/data.aspx?ty=JD&id=TPDV";
     mockApi({ "GET /judgments/civil/11/guide": () => ({ ...GUIDE, case: { ...GUIDE.case, url } }) });
     renderAt("/judgment/:source/:caseId", <Reading />, "/judgment/civil/11");
-    expect(await screen.findByRole("link", { name: /在司法院網站看這件判決的原文/ })).toHaveAttribute("href", url);
-    expect(screen.getByRole("link", { name: "司法院網站上的原文" })).toHaveAttribute("href", url);
+    // 原文連結是標題旁的圖示，頁面最下面不再另寫一行
+    expect(await screen.findByRole("link", { name: /司法院判決原文/ })).toHaveAttribute("href", url);
+    expect(screen.queryByText(/想看完整、正式的判決/)).not.toBeInTheDocument();
   });
 
   it("找不到判決", async () => {
@@ -1336,6 +1367,23 @@ describe("刑事判決導讀", () => {
       para("facts", "犯罪事實", "一、被告駕車未注意車前狀況，致被害人受傷。", { part: "附件：起訴書" }),
       para("evidence", "證據", "一、證據清單及待證事實：被告之自白。", { part: "附件：起訴書" }),
     ] } };
+  it("判決資料只列應執行刑（一罪時就是那一罪的刑），抽不到時留空", async () => {
+    const one = { ...guide, case: { ...guide.case, sentence: "有期徒刑 7 月" } };
+    mockApi({ "GET /judgments/criminal/11/guide": () => one });
+    const { unmount } = renderAt("/judgment/:source/:caseId", <Reading />, "/judgment/criminal/11");
+    const card = (await screen.findByRole("heading", { name: "判決資料" })).closest("[data-slot=card]") as HTMLElement;
+    expect(within(card).getByText("有期徒刑 7 月")).toBeInTheDocument();
+    expect(within(card).getByRole("link", { name: /應執行刑說明/ })).toBeInTheDocument();
+    expect(within(card).queryByText("宣告刑")).not.toBeInTheDocument();
+    unmount();
+
+    const none = { ...guide, case: { ...guide.case, sentence: null } };
+    mockApi({ "GET /judgments/criminal/11/guide": () => none });
+    renderAt("/judgment/:source/:caseId", <Reading />, "/judgment/criminal/11");
+    const card2 = (await screen.findByRole("heading", { name: "判決資料" })).closest("[data-slot=card]") as HTMLElement;
+    expect(within(card2).getByText("—")).toBeInTheDocument();
+  });
+
   it("依原文順序顯示全文分段，標出段落功能，附件另起標題", async () => {
     mockApi({ "GET /judgments/criminal/11/guide": () => guide });
     renderAt("/judgment/:source/:caseId", <Reading />, "/judgment/criminal/11");
@@ -1348,7 +1396,9 @@ describe("刑事判決導讀", () => {
     expect(screen.queryByRole("button", { name: /附表/ })).not.toBeInTheDocument();   // 沒有附表就不列
     expect(screen.queryByRole("button", { name: /原告主張/ })).not.toBeInTheDocument();
     expect(screen.getByText("2024-05-01")).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: "司法院判決原文" })).toHaveAttribute("href", url);
+    expect(screen.getByRole("link", { name: /司法院判決原文/ })).toHaveAttribute("href", url);
+    expect(screen.getByRole("link", { name: /應執行刑說明/ })).toHaveAttribute("href", "/guide#%E6%87%89%E5%9F%B7%E8%A1%8C%E5%88%91");
+    expect(screen.queryByText(/宣告刑是系統整理的結果/)).not.toBeInTheDocument();
     expect(screen.getByRole("link", { name: "回結果" })).toHaveAttribute("href", "/result/criminal?tab=cases");
   });
   it("取消上色後保留文字標籤", async () => {

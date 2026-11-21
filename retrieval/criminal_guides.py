@@ -243,6 +243,106 @@ def segment(full_text: str, defendants: Iterable[str] = ()) -> List[Dict]:
     return out
 
 
+# ── 主文裡的宣告刑與應執行刑 ─────────────────────────────────────────────
+# 主文的寫法很固定：「犯…罪，處有期徒刑肆月」「共肆罪，各處有期徒刑參月」「又犯…罪，處…」「應執行有期徒刑拾月」。
+_DIGIT = {"零": 0, "〇": 0, "一": 1, "壹": 1, "二": 2, "貳": 2, "貮": 2, "兩": 2, "三": 3, "參": 3, "叁": 3, "叄": 3, "参": 3, "四": 4, "肆": 4,
+          "五": 5, "伍": 5, "六": 6, "陸": 6, "七": 7, "柒": 7, "八": 8, "捌": 8, "九": 9, "玖": 9}
+_UNIT = {"十": 10, "拾": 10, "百": 100, "佰": 100, "千": 1000, "仟": 1000}
+_CN_NUM = "[零〇一壹二貳貮兩三參叁叄参四肆五伍六陸七柒八捌九玖十拾百佰千仟萬]+"
+# 數字可能混寫（「６千」「1萬2千」）：阿拉伯數字（含全形）也當成個位數字讀
+_NUM_TOKEN = "[0-9０-９](?:[0-9０-９]|[,，](?=[0-9０-９]))*(?![0-9０-９" + _CN_NUM[1:-2] + "])|(?:[0-9０-９]|" + _CN_NUM[:-1] + ")+"
+_PENALTY = r"(?:有期徒刑|拘役|罰金|無期徒刑|死刑)"
+# 罰金常寫「科罰金」；免刑另外處理
+_STOP = "，。；;："
+_DECLARED_RE = re.compile(r"(各)?(?:(?<!所)處|(?<!易)科)(" + _PENALTY + r"[^" + _STOP + r"]*?(?:，併科罰金[^" + _STOP + r"]*)?)(?=[" + _STOP + r"]|$)")
+_DECLARED_TABLE_RE = re.compile(r"各處如(附表[^，。；]*?所示之刑)")
+_EXECUTED_RE = re.compile(r"(?:定)?應執行(?:刑)?(?:為)?(" + _PENALTY + r"[^" + _STOP + r"]*?(?:，併科罰金[^" + _STOP + r"]*)?)(?=[" + _STOP + r"]|$)")
+# 整理後像一個刑的寫法（「有期徒刑 2 月」「無期徒刑」）；「有期徒刑部分」「拘役之刑」這類是在指涉，不是宣告
+_VALID_RE = re.compile(r"^(?:(?:有期徒刑|拘役|罰金) \d|無期徒刑|死刑)")
+_COUNT_RE = re.compile(r"共(" + _CN_NUM + r"|\d+)罪")
+
+
+def cn_number(text: str) -> int:
+    """壹佰貳拾 → 120、拾貳 → 12、兩萬伍仟 → 25000。"""
+    total, section, digit = 0, 0, 0
+    if text.isdigit():
+        return int(text)
+    for ch in text:
+        if ch.isdigit():
+            digit = digit * 10 + int(ch)
+        elif ch in _DIGIT:
+            digit = _DIGIT[ch]
+        elif ch in _UNIT:
+            section += (digit or 1) * _UNIT[ch]
+            digit = 0
+        elif ch == "萬":
+            total += (section + digit) * 10000
+            section, digit = 0, 0
+    return total + section + digit
+
+
+def _penalty_text(text: str) -> str:
+    """「有期徒刑壹年貳月，併科罰金新臺幣壹萬元」→「有期徒刑 1 年 2 月，併科罰金 10,000 元」（和資料集的寫法一樣）。"""
+    def num(m):
+        token = m.group(0)
+        n = int(re.sub(r"[,，]", "", token)) if re.fullmatch(r"[0-9０-９,，]+", token) else cn_number(token)
+        return f" {n:,} "
+    text = re.split(r"未?扣案|沒收|緩刑|如易[科服]|確定", text)[0]            # 主文沒加標點就接著寫沒收、緩刑
+    text = re.sub(r"新[臺台]幣?|[（(][^）)]*[）)]", "", text)            # 「（下同）」「（事實一㈠部分）」
+    text = re.sub(r"(有期徒刑|拘役|罰金)\1", r"\1", text)             # 原文重複打字
+    text = re.sub(r"(?<=[年月])又(?=\S)", "", text)                    # 「貳月又拾伍日」
+    out = re.sub(_NUM_TOKEN, num, text)
+    out = re.sub(r"\s+", " ", out).replace(" ，", "，").replace(" 、", "、").strip()
+    return re.sub(r"(?<!，)\s*併科", "，併科", out)
+
+
+def _split_listed(text: str) -> List[str]:
+    """「分別處有期徒刑壹年肆月、壹年貳月」→ 每罪一筆，沒寫刑種的沿用前一個。"""
+    out, kind = [], ""
+    for part in re.split(r"[、及]", text):
+        part = part.strip()
+        m = re.match(_PENALTY, part)
+        kind = m.group(0) if m else kind
+        out.append(part if m else f"{kind} {part}")
+    return out
+
+
+def sentences(paragraphs: List[Dict]) -> Dict:
+    """判決本身（不含附件）的主文 → {"declared": [宣告刑…], "executed": 應執行刑 或 None}。
+    數罪時宣告刑有好幾個；「共肆罪，各處…」併成一筆並標「共 4 罪，各」。只有一罪時沒有應執行刑。"""
+    verdict = "".join(p["text"] for p in paragraphs if p["function"] == "verdict" and not p.get("part"))
+    declared: List[str] = []
+    executed = None
+    for clause in re.split(r"(?<=[。；;])", verdict):
+        m = _EXECUTED_RE.search(clause)
+        if m:
+            text = _penalty_text(m.group(1))
+            executed = executed or (text if _VALID_RE.match(text) else None)
+            clause = clause[:m.start()]
+        count = _COUNT_RE.search(clause)
+        n = None if not count else (int(count.group(1)) if count.group(1).isdigit() else cn_number(count.group(1)))
+        for t in _DECLARED_TABLE_RE.finditer(clause):
+            declared.append(f"如{t.group(1)}" + (f"（共 {n} 罪）" if n else ""))
+        for d in _DECLARED_RE.finditer(clause):
+            for text in _split_listed(_penalty_text(d.group(2))):
+                if _VALID_RE.match(text):
+                    declared.append(f"{text}（共 {n} 罪，各）" if d.group(1) and n else text)
+        if re.search(r"[，、]免刑[。；，]?", clause) and not _DECLARED_RE.search(clause):
+            declared.append("免刑")
+    return {"declared": declared, "executed": executed}
+
+
+def executed_or_single(found: Dict) -> Optional[str]:
+    """要顯示的「應執行刑」：主文有定應執行刑就用它；只有一罪時就是那一罪的宣告刑；
+    數罪卻沒定應執行刑（或刑寫在附表裡）時是 None。"""
+    if found["executed"]:
+        return found["executed"]
+    declared = found["declared"]
+    if len(declared) == 1 and "共" not in declared[0] and not declared[0].startswith("如"):
+        return declared[0]
+    return None
+
+
 def judgment_guide(row) -> Dict:
     return {"source": "judgment", "judgment_date": row["judgment_date"] or "",
             "paragraphs": segment(row["full_text"], party_names(row["defendant"]))}

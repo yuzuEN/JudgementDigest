@@ -309,7 +309,7 @@ class TestMidInference(unittest.TestCase):
         svc = self.service(["甲", "甲"], [0.5, 0.4])
         mid, note = svc._resolve_mid(mock.Mock(mid=None, text=TRAFFIC), None)
         self.assertEqual(mid, "甲")
-        self.assertIn("「甲」", note)
+        self.assertEqual(note, "未選擇或選擇多個糾紛類型時，系統判斷比較接近 甲。若你認為有誤，請手動選擇最接近的糾紛類型。")
 
     def test_candidates_listed_when_unsure(self):
         svc = self.service(["甲", "乙", "丙", "丁"], [0.3, 0.3, 0.2, 0.2])
