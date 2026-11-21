@@ -70,15 +70,15 @@ class SampleTests(unittest.TestCase):
         records.append(bad)
         with tempfile.TemporaryDirectory() as d:
             src, out = Path(d) / 'source.jsonl', Path(d) / 'sample.jsonl'
-            src.write_text(''.join(json.dumps(r) + '\n' for r in records))
+            src.write_text(''.join(json.dumps(r) + '\n' for r in records), encoding='utf-8')
             report = sample(src, out, 2)
-            selected = [json.loads(x) for x in out.read_text().splitlines()]
+            selected = [json.loads(x) for x in out.read_text(encoding='utf-8').splitlines()]
             self.assertEqual([r['meta']['retrieval_source_line'] for r in selected], [2, 3, 4])
             self.assertEqual(report['selected_by_charge'], {'傷害罪': 1, '竊盜罪': 2})
             self.assertEqual(report['counts']['not_single_defendant'], 1)
             with self.assertRaises(FileExistsError):
                 sample(src, out, 2)
-            self.assertEqual(len(out.read_text().splitlines()), 3)
+            self.assertEqual(len(out.read_text(encoding='utf-8').splitlines()), 3)
             with self.assertRaises(ValueError):
                 sample(src, Path(d) / 'zero.jsonl', 0)
 
