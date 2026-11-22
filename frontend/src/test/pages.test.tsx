@@ -56,6 +56,7 @@ describe("描述案情（關卡 1–3）", () => {
     expect(screen.queryByRole("heading", { name: /第 1 關/ })).not.toBeInTheDocument();
     expect(current()).toHaveTextContent("案情");
     // 刑事不選糾紛類型，改顯示怎麼寫
+    expect(screen.getByText(/辯解先不用寫/)).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "刑事案件怎麼寫" })).toBeInTheDocument();
     expect(screen.queryByRole("heading", { name: /糾紛類型/ })).not.toBeInTheDocument();
     // 角色說明只在關卡 1
