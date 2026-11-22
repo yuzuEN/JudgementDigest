@@ -84,8 +84,10 @@ function CivilSection({ state, tab, setTab, level = 1 }: {
   const mid = intake.mids.length === 1 ? intake.mids[0] : "";
   // 角色以回應為準（舊版後端沒有 role，視為原告）；還沒拿到結果時看自己填的
   const defendant = (report ? report.role ?? "plaintiff" : civilRole(intake)) === "defendant";
+  // 「不確定」沒有問原告或被告，民事一律以原告角度算：要寫清楚，不然被告會以為是自己的勝率
+  const unsure = intake.caseType === "unsure";
   const tabs = tabsFor(defendant);
-  const title = `民事參考結果${defendant ? "（你是被告）" : ""}${intake.mids.length ? `：${intake.mids.map(midName).join("、")}` : ""}`;
+  const title = `民事參考結果${defendant ? "（你是被告）" : unsure ? "（以原告角度）" : ""}${intake.mids.length ? `：${intake.mids.map(midName).join("、")}` : ""}`;
   const lead = report ? `比對了 ${report.n_compared} 件${mid ? "案由相同的" : ""}真實判決。` : "正在比對相似的真實判決……";
   const mock = report?.mock ?? false;
   return (
@@ -102,7 +104,7 @@ function CivilSection({ state, tab, setTab, level = 1 }: {
           key: t.key,
           label: t.label,
           content: {
-            overview: <Overview report={report} defendant={defendant} />,
+            overview: <Overview report={report} defendant={defendant} unsure={unsure} />,
             amount: <AmountPanel range={report.amount_range} mock={mock} cases={report.similar} defendant={defendant} />,
             evidence: <EvidencePanel report={report} defendant={defendant} />,
             defense: <DefensePanel report={report} defendant={defendant} />,
@@ -154,6 +156,13 @@ const SIGNAL: Record<CivilReport["prediction"]["signal"], { label: string; text:
   insufficient: { label: "資訊不足", text: "描述太短，或看不出是哪一種糾紛，模型的參考訊號不可靠。建議回上一步補充細節，或直接看相似判決。" },
 };
 
+/** 「不確定」的參考訊號：沒問使用者是哪一方，用原告、不用「你」。 */
+const UNSURE_SIGNAL: typeof SIGNAL = {
+  strong: { label: "原告較強", text: "以過去的案件來說，模型估計這類案件原告的勝訴機會較高。" },
+  weak: { label: "原告較弱", text: "以過去的案件來說，模型估計這類案件原告的勝訴機會較低。可能是案件對原告較不利，也可能是資訊還不夠；補充證據和經過後再看一次。" },
+  insufficient: SIGNAL.insufficient,
+};
+
 /**
  * 整體結果：最上面是模型判定（勝訴機率；模型怎麼算的放在說明頁），下面才是相似判決的勝敗當對照。
  * 模型是這個專案的技術重點，所以放在第一眼看到的位置；機率旁邊一定附「不是你會贏的機率」的說明。
@@ -165,7 +174,7 @@ const DEFENDANT_SIGNAL: Record<CivilReport["prediction"]["signal"], { label: str
   insufficient: { label: "資訊不足", text: "對方主張的描述太短，或看不出是哪一種糾紛，模型的參考訊號不可靠。建議回上一步補充起訴狀的內容，或直接看相似判決。" },
 };
 
-function Overview({ report, defendant = false }: { report: CivilReport; defendant?: boolean }) {
+function Overview({ report, defendant = false, unsure = false }: { report: CivilReport; defendant?: boolean; unsure?: boolean }) {
   const { total, win, partial, lose } = report.outcomes;
   const { signal } = report.prediction;
   const enough = total >= MIN_OUTCOME_CASES;
@@ -173,7 +182,7 @@ function Overview({ report, defendant = false }: { report: CivilReport; defendan
   const mixed = enough && ((signal === "strong" && share < 0.4) || (signal === "weak" && share >= 0.7));
   return (
     <>
-      <ModelVerdict report={report} defendant={defendant} />
+      <ModelVerdict report={report} defendant={defendant} unsure={unsure} />
       <h3 className="mt-2 text-lg font-bold">對照：相似判決的結果</h3>
       {enough && defendant && <p className="text-muted-foreground">「敗訴」是原告輸，也就是被告不用賠，共 {lose} 件。</p>}
       {enough ? <OutcomeBar counts={{ win, partial, lose }} /> : (
@@ -196,10 +205,10 @@ function Overview({ report, defendant = false }: { report: CivilReport; defendan
   );
 }
 
-function ModelVerdict({ report, defendant = false }: { report: CivilReport; defendant?: boolean }) {
+function ModelVerdict({ report, defendant = false, unsure = false }: { report: CivilReport; defendant?: boolean; unsure?: boolean }) {
   const { win_probability: p, signal, warnings } = report.prediction;
-  const signals = defendant ? DEFENDANT_SIGNAL : SIGNAL;
-  const probLabel = defendant ? "對方（原告）勝訴的機率（勝訴或一部勝訴）" : "勝訴機率（勝訴或一部勝訴）";
+  const signals = defendant ? DEFENDANT_SIGNAL : unsure ? UNSURE_SIGNAL : SIGNAL;
+  const probLabel = defendant ? "對方（原告）勝訴的機率（勝訴或一部勝訴）" : unsure ? "原告（提告的一方）勝訴的機率（勝訴或一部勝訴）" : "勝訴機率（勝訴或一部勝訴）";
   // 系統代選的糾紛類型在提醒裡加粗
   const inferred = report.search_scope?.mid_inferred ? report.search_scope.mid ?? null : null;
   return (
@@ -214,7 +223,7 @@ function ModelVerdict({ report, defendant = false }: { report: CivilReport; defe
       </div>
       <div className="flex flex-col gap-1">
         <div className="relative">
-          <Bar value={p} className="h-3.5" label={`${probLabel} ${percent(p)}，判${defendant ? "原告" : ""}勝訴的界線是 50%`} />
+          <Bar value={p} className="h-3.5" label={`${probLabel} ${percent(p)}，判${defendant || unsure ? "原告" : ""}勝訴的界線是 50%`} />
           {/* 50% 是判勝訴的界線：在長條上畫一條直線 */}
           <span aria-hidden="true" className="absolute -top-1 -bottom-1 left-1/2 w-0.5 -translate-x-1/2 rounded-full bg-foreground" />
         </div>
@@ -226,6 +235,7 @@ function ModelVerdict({ report, defendant = false }: { report: CivilReport; defe
       </div>
       <ul className="m-0 flex list-disc flex-col gap-1.5 pl-5 text-[15px]">
         {defendant && <li>換成你的角度：模型估計原告<b>敗訴（你不用賠）</b>的機率約 <b className="tabular-nums">{percent(1 - p)}</b>。</li>}
+        {unsure && <li>這裡以<b>原告（提告的一方）</b>的角度估計。如果你是被告，這是<b>對方贏</b>的機率；請回<Link to="/start?stage=1">第 1 關</Link>改選「民事」的「被告」。</li>}
         <li>{signals[signal].text}</li>
         <li className="text-muted-foreground">{defendant
           ? "這是模型以過去判決來預估的數值，請當作參考；模型根據對方的主張和你的說法來估，口語描述會降低模型判定的準確性。"
