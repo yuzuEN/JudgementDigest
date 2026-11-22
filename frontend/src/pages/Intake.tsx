@@ -23,7 +23,7 @@ import { ErrorBox } from "../components/Common";
 import { Layout, PAGE } from "../components/Layout";
 import { parseAmount } from "../format";
 import { DISPUTE_GROUPS } from "../knowledge";
-import { civilRole, lawyerQuestion, useIntake, type Intake as IntakeState } from "../state";
+import { civilRole, lawyerQuestion, REWRITE_RESET, useIntake, type Intake as IntakeState } from "../state";
 
 export const MIN_STORY = 30;
 export const MAX_STORY = 3000;
@@ -174,11 +174,12 @@ export default function Intake() {
             {stage === 1 && (
               <StageCard>
                 <h1 {...titleProps}>第 1 關　選擇案件類型</h1>
-                <RadioCards label="案件類型" value={intake.caseType} options={CASE_TYPES} onChange={(caseType) => update({ caseType })} />
+                <RadioCards label="案件類型" value={intake.caseType} options={CASE_TYPES}
+                  onChange={(caseType) => update(caseType === intake.caseType ? { caseType } : { caseType, ...REWRITE_RESET })} />
                 {(intake.caseType === "civil" || intake.caseType === "unsure") && (
                   <FieldBlock label={<span id="role-label">你是原告還是被告？</span>} hint={ROLE_HINT[intake.caseType]}>
                     <Segmented labelledBy="role-label" value={intake.role} items={ROLES} className="max-w-[520px]" required
-                      onChange={(v) => update({ role: v as CivilRole })} />
+                      onChange={(v) => update(v === intake.role ? { role: v as CivilRole } : { role: v as CivilRole, ...REWRITE_RESET })} />
                   </FieldBlock>
                 )}
                 {intake.caseType && intake.caseType !== "unsure" && (

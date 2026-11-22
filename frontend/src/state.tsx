@@ -76,8 +76,17 @@ export const DEFENSE_MARKER = "【我的答辯】";
  * 「不確定」選被告時，民事照被告的方式送（對方的主張＋你的答辯），刑事只送對方的主張（見 criminalText）。
  */
 export function civilRole(intake: Pick<Intake, "caseType" | "role">): CivilRole {
-  return intake.caseType !== "criminal" && intake.role === "defendant" ? "defendant" : "plaintiff";
+  return (intake.caseType === "civil" || intake.caseType === "unsure") && intake.role === "defendant" ? "defendant" : "plaintiff";
 }
+
+/**
+ * 清掉 AI 整理的結果。描述或姓名改了要清；案件類型、角色改了也要清：
+ * 整理的寫法跟著它們變（民事原告、民事被告、刑事各一種），留著舊的會用錯寫法去比對。
+ */
+export const REWRITE_RESET: Partial<Intake> = {
+  searchText: "", rewriteFor: "", rewriteDraft: "", rewriteAdded: [], useRewrite: "rewrite",
+  criminalDraft: "", criminalAdded: [], criminalSearchText: "",
+};
 
 /**
  * 送給刑事 API 的文字。

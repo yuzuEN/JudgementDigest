@@ -20,7 +20,7 @@ import { parseAmount, sensitiveKinds } from "../format";
 import { maskText } from "../mask";
 import { MidLabels } from "../components/casey/MidLabels";
 import { Segmented } from "../components/casey/Segmented";
-import { civilRole, claimPart, DEFENSE_MARKER, fullText, lawyerQuestion, primaryMid, useIntake, type Intake } from "../state";
+import { civilRole, claimPart, DEFENSE_MARKER, fullText, lawyerQuestion, primaryMid, REWRITE_RESET, useIntake, type Intake } from "../state";
 
 const MAX_QUESTIONS = 4;
 
@@ -81,8 +81,7 @@ export default function Confirm() {
     const maskedText = maskText(text, intake.names);
     // 描述或姓名改了，之前的整理就對不上了
     const stale = intake.rewriteFor && intake.rewriteFor !== (role === "defendant" ? claimPart(maskedText) : maskedText);
-    update(stale ? { maskedText, searchText: "", rewriteFor: "", rewriteDraft: "", rewriteAdded: [], useRewrite: "rewrite",
-      criminalDraft: "", criminalAdded: [], criminalSearchText: "" } : { maskedText });
+    update(stale ? { maskedText, ...REWRITE_RESET } : { maskedText });
     // 不把 update 放進依賴：它會隨 intake 變動，放進去會一直重跑
   }, [text, intake.names]);
 

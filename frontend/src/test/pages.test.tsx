@@ -1635,6 +1635,46 @@ describe("民事被告端", () => {
     expect(screen.getByText("刑事推估用的描述")).toBeInTheDocument();
   });
 
+  it("整理過後回第 1 關改角色或案件類型，舊的整理會清掉（寫法跟著角色、類型變）", async () => {
+    mockApi({ "GET /meta/options": () => OPTIONS });
+    const user = userEvent.setup();
+    const saved = () => JSON.parse(window.sessionStorage.getItem(STORAGE_KEY)!);
+    const rewritten = { rewriteFor: "x", rewriteDraft: "原告主張", searchText: "原告主張", criminalDraft: "被告甲", criminalSearchText: "被告甲" };
+    renderApp("/start", { caseType: "unsure", text: "x", maskedText: "x", ...rewritten });
+    await user.click(screen.getByRole("button", { name: "原告：我要告對方" }));   // 點已選的：不變
+    expect(saved()).toMatchObject(rewritten);
+    await user.click(screen.getByRole("button", { name: "被告：我被告了" }));
+    expect(saved()).toMatchObject({ role: "defendant", rewriteFor: "", searchText: "", criminalSearchText: "", criminalDraft: "" });
+  });
+
+  it("整理過後改案件類型，舊的整理也會清掉", async () => {
+    mockApi({ "GET /meta/options": () => OPTIONS });
+    const user = userEvent.setup();
+    renderApp("/start", { caseType: "criminal", text: "x", maskedText: "x", rewriteFor: "x", rewriteDraft: "被告甲毆打被害人乙", searchText: "被告甲毆打被害人乙" });
+    await user.click(screen.getByRole("radio", { name: "不確定" }));
+    expect(JSON.parse(window.sessionStorage.getItem(STORAGE_KEY)!)).toMatchObject({ caseType: "unsure", rewriteFor: "", searchText: "", rewriteDraft: "" });
+  });
+
+  it("不確定：刑事那份整理失敗時民事照用，刑事留空；選「改用我的原文」兩份都不用", async () => {
+    mockApi({
+      "POST /intake/followup": () => ({ questions: [], source: "rules", llm_available: true }),
+      "POST /intake/rewrite": (b: { case_type: string }) => (b.case_type === "criminal"
+        ? { source: "none", fallback: "limited", added_numbers: [] }
+        : { text: "原告主張被告未還款。", source: "llm", added_numbers: [] }),
+    });
+    const user = userEvent.setup();
+    const saved = () => JSON.parse(window.sessionStorage.getItem(STORAGE_KEY)!);
+    renderAt("/confirm", <Confirm />, "/confirm?stage=6", { caseType: "unsure", text: "他欠我錢" });
+    await user.click(await screen.findByRole("button", { name: "請 AI 整理敘述" }));
+    expect(await screen.findByLabelText("民事用的寫法（可以直接修改）")).toHaveValue("原告主張被告未還款。");
+    expect(screen.getByLabelText("刑事用的寫法（可以直接修改）")).toHaveValue("");
+    expect(saved()).toMatchObject({ searchText: "原告主張被告未還款。", criminalSearchText: "" });
+    await user.type(screen.getByLabelText("刑事用的寫法（可以直接修改）"), "被告甲未還款");
+    expect(saved()).toMatchObject({ criminalSearchText: "被告甲未還款" });
+    await user.click(screen.getByRole("radio", { name: "改用我的原文" }));
+    expect(saved()).toMatchObject({ useRewrite: "original", searchText: "", criminalSearchText: "" });
+  });
+
   it("被告的主張太短只提醒、不擋；空白才不能下一關", async () => {
     mockApi({ "GET /meta/options": () => OPTIONS });
     const user = userEvent.setup();
