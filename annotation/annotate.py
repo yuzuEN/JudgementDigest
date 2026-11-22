@@ -1,5 +1,6 @@
 """
-以 Claude API 標註 sample.py 抽出的論點單位（手冊 v0.6、prompt p6.0，民事），寫入 annotations 表。
+以 Claude API 標註 sample.py（民事）或 sample_criminal.py（刑事）抽出的段落（手冊 v0.6、prompt p6.0），寫入 annotations 表。
+刑民自動判斷：資料庫的 batch 全部以 criminal 開頭就用刑事的 prompt 與標籤，否則用民事；也可用 --domain 指定。
 
 改寫自階段一、二的 annotate.py，保留：
   - 可中斷續跑：同一段、同一個 run_no、同一個 prompt 版本已標過就跳過，不會重複付費
@@ -46,8 +47,23 @@ import config  # noqa: E402
 from annotation.sample import OUT_NAME  # noqa: E402
 from annotation.quotes import (MARK, MAX_SPAN, MAX_SPAN_BY_LABEL, MIN_HEAD, MIN_TAIL,  # noqa: E402,F401
                                resolve_quote)
-from annotation.prompts_v6 import (EV_BASIS, LABELS_CIVIL, MANUAL_VERSION, POLARITY_BY_LABEL_CIVIL,  # noqa: E402
-                                   POLARITY_CIVIL, PROMPT_VERSION, SYSTEM_CIVIL, USER_TEMPLATE)
+from annotation.prompts_v6 import (EV_BASIS, LABELS_CIVIL, LABELS_CRIMINAL, MANUAL_VERSION,  # noqa: E402
+                                   POLARITY_BY_LABEL_CIVIL, POLARITY_CIVIL, POLARITY_CRIMINAL, PROMPT_VERSION,
+                                   SYSTEM_CIVIL, SYSTEM_CRIMINAL, USER_TEMPLATE)
+
+# 刑民各自的 prompt、標籤與 polarity 清單；刑事只有 EV 有傾向，其他標籤都填 null
+DOMAINS = {
+    "civil": {"system": SYSTEM_CIVIL, "labels": LABELS_CIVIL, "polarity": POLARITY_CIVIL,
+              "by_label": POLARITY_BY_LABEL_CIVIL},
+    "criminal": {"system": SYSTEM_CRIMINAL, "labels": LABELS_CRIMINAL, "polarity": POLARITY_CRIMINAL,
+                 "by_label": {"EV": ["有利被告", "不利被告", "中性"]}},
+}
+
+
+def detect_domain(con: sqlite3.Connection) -> str:
+    """paragraphs 的 batch 全部以 criminal 開頭（sample_criminal.py 寫的）→ 刑事，否則民事。"""
+    batches = [r[0] or "" for r in con.execute("SELECT DISTINCT batch FROM paragraphs")]
+    return "criminal" if batches and all(b.startswith("criminal") for b in batches) else "civil"
 
 
 
@@ -105,12 +121,17 @@ def check_polarity(code: str, polarity, valid_polarity=POLARITY_CIVIL, by_label=
     return polarity
 
 
-def parse_response(raw: str, para: str, valid_labels=LABELS_CIVIL, valid_polarity=POLARITY_CIVIL) -> list:
+def parse_response(raw: str, para: str, valid_labels=LABELS_CIVIL, valid_polarity=POLARITY_CIVIL,
+                   domain: str = None) -> list:
     """
     模型回應 → 要寫入的標籤列 [(label, polarity, quote, confidence, quote_valid, subtype), ...]。
     subtype：EV 的 basis（明示評價／依證據推論），其他標籤為 None。
-    找不到可用的 JSON 回傳 [PARSE_ERROR]。
+    找不到可用的 JSON 回傳 [PARSE_ERROR]。domain 給了（civil／criminal）就用該領域的標籤與 polarity 清單。
     """
+    by_label = POLARITY_BY_LABEL_CIVIL
+    if domain is not None:
+        d = DOMAINS[domain]
+        valid_labels, valid_polarity, by_label = d["labels"], d["polarity"], d["by_label"]
     obj = last_labels_json(raw)
     if obj is None or not isinstance(obj.get("labels"), list):
         return [PARSE_ERROR]
@@ -121,7 +142,7 @@ def parse_response(raw: str, para: str, valid_labels=LABELS_CIVIL, valid_polarit
         code = item.get("code", "")
         quote = item.get("quote") or ""
         valid = 1 if code == "NONE" else int(resolve_quote(quote, para, code) is not None)
-        polarity = check_polarity(code, item.get("polarity"), valid_polarity)
+        polarity = check_polarity(code, item.get("polarity"), valid_polarity, by_label)
         subtype = None
         if code == "EV":
             basis = item.get("basis")
@@ -154,13 +175,14 @@ def reparse(db: Path) -> tuple:
     """
     with closing(sqlite3.connect(db)) as con:
         ensure_subtype(con)
+        domain = detect_domain(con)
         failed = con.execute(
             "SELECT DISTINCT a.sample_id, a.annotator, a.run_no, a.manual_version, a.prompt_version, "
             "a.raw_response, a.created_at, p.para_text FROM annotations a JOIN paragraphs p USING (sample_id) "
             "WHERE a.label = 'PARSE_ERROR'").fetchall()
         fixed = 0
         for sid, annotator, run, manual, prompt, raw, created, para in failed:
-            rows = parse_response(raw, para)
+            rows = parse_response(raw, para, domain=domain)
             if rows[0][0] == "PARSE_ERROR":
                 continue
             con.execute("DELETE FROM annotations WHERE sample_id = ? AND annotator = ? AND run_no = ? "
@@ -203,6 +225,8 @@ def main():
     ap.add_argument("--dry-run", action="store_true", help="只印出第一段的 prompt，不呼叫 API")
     ap.add_argument("--budget", type=float, default=4.0, help="本次估算花費超過此金額（美元）就停止")
     ap.add_argument("--max-tokens", type=int, default=4000, help="thinking 區塊也算輸出 token，要留足夠空間")
+    ap.add_argument("--domain", choices=sorted(DOMAINS), default=None,
+                    help="civil／criminal；不給就依資料庫自動判斷（sample_criminal.py 抽的是刑事）")
     ap.add_argument("--reparse", action="store_true",
                     help="不呼叫 API：用已存的原始回應重新解析之前的 PARSE_ERROR，並依目前規則重新判定所有引文")
     args = ap.parse_args()
@@ -214,6 +238,9 @@ def main():
 
     con = sqlite3.connect(args.db)
     ensure_subtype(con)
+    domain = args.domain or detect_domain(con)
+    system = DOMAINS[domain]["system"]
+    print(f"領域：{'刑事' if domain == 'criminal' else '民事'}（prompt {PROMPT_VERSION}）")
     done = {r[0] for r in con.execute(
         "SELECT DISTINCT sample_id FROM annotations WHERE annotator = ? AND run_no = ? AND prompt_version = ?",
         (MODEL, args.run_no, PROMPT_VERSION))}
@@ -230,7 +257,7 @@ def main():
         if todo:
             sid, prev, para, nxt = todo[0]
             print(f"\n===== sample_id {sid} =====")
-            print(SYSTEM_CIVIL[:300], "⋯\n-----")
+            print(system[:300], "⋯\n-----")
             print(USER_TEMPLATE.format(prev=prev, target=para, next=nxt))
         return
     if not todo:
@@ -250,7 +277,7 @@ def main():
             try:
                 resp = client.messages.create(
                     model=MODEL, max_tokens=args.max_tokens,
-                    system=[{"type": "text", "text": SYSTEM_CIVIL, "cache_control": {"type": "ephemeral"}}],
+                    system=[{"type": "text", "text": system, "cache_control": {"type": "ephemeral"}}],
                     messages=[{"role": "user", "content": USER_TEMPLATE.format(prev=prev, target=para, next=nxt)}],
                 )
                 break
@@ -268,7 +295,7 @@ def main():
                  + u.output_tokens * PRICE["output"]) / 1e6
 
         raw = "".join(b.text for b in resp.content if b.type == "text").strip()
-        rows = parse_response(raw, para)
+        rows = parse_response(raw, para, domain=domain)
         now = datetime.now().isoformat()
         con.executemany(INSERT, [(sid, MODEL, args.run_no, lab, pol, q, conf, v, sub, MANUAL_VERSION,
                                   PROMPT_VERSION, raw, now) for lab, pol, q, conf, v, sub in rows])

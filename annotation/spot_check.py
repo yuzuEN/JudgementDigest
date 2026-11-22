@@ -33,13 +33,15 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 import config  # noqa: E402
 from annotation.cues import CUES, INTEREST_SERVICE, quote_anchored  # noqa: E402
-from annotation.annotate import resolve_quote  # noqa: E402
+from annotation.annotate import detect_domain, resolve_quote  # noqa: E402
 from annotation.prompts_v6 import MANUAL_VERSION, PROMPT_VERSION  # noqa: E402
 from annotation.sample import OUT_NAME  # noqa: E402
 
 OUT_DIR = config.ARTIFACTS_DIR / OUT_NAME
 SHEET_NAME = f"抽查表_{MANUAL_VERSION}.xlsx"
 CHECK_LABELS = ("RULE", "SUB", "CONCL", "EV", "PROC", "DAM", "EXP")
+# 刑事（sample_criminal.py 抽的）：量刑 SENT 和證據能力 ADM 取代 CONCL、DAM；第一次抽查，每類都完整抽 --n 個
+CHECK_LABELS_CRIMINAL = ("RULE", "SUB", "SENT", "EV", "PROC", "ADM", "EXP")
 # 每個標籤優先從哪一批抽：稀有的從加抽批，常見的從隨機批
 PREFER_BATCH = {"RULE": "random", "SUB": "enriched:SUB", "CONCL": "random", "EV": "random", "PROC": "random",
                 "DAM": "enriched:DAM", "EXP": "enriched:EXP"}
@@ -129,6 +131,7 @@ def export(db: Path, out: Path, n_per_label: int, seed: int) -> None:
     from openpyxl.worksheet.datavalidation import DataValidation
 
     with closing(sqlite3.connect(db)) as con:   # Windows 不能刪除還開著的資料庫檔
+        criminal = detect_domain(con) == "criminal"
         runs = load_runs(con)
         concl = concl_directions(con)
         paras = {r[0]: r[1:3] for r in con.execute("SELECT sample_id, batch, para_text FROM paragraphs")}
@@ -141,6 +144,11 @@ def export(db: Path, out: Path, n_per_label: int, seed: int) -> None:
     if not runs:
         print("還沒有任何標註結果。")
         return
+    labels = CHECK_LABELS_CRIMINAL if criminal else CHECK_LABELS
+    regression = {} if criminal else REGRESSION
+    sample_batch = "criminal-random" if criminal else "random"
+    if criminal:
+        print("== 刑事（判決導讀的證據、論罪科刑段落）==")
 
     # 1. 模型自身一致性
     run_ids = sorted({r for rr in runs.values() for r in rr})
@@ -152,7 +160,7 @@ def export(db: Path, out: Path, n_per_label: int, seed: int) -> None:
 
     # 2. 隨機樣本中的比例
     maj = {s: majority(rr) for s, rr in runs.items()}
-    rand = [s for s in maj if paras.get(s, ("",))[0] == "random"]
+    rand = [s for s in maj if paras.get(s, ("",))[0] == sample_batch]
     print(f"\n== 隨機樣本（{len(rand)} 段）中各標籤的比例（多數決）==")
     cnt = collections.Counter(l for s in rand for l in maj[s])
     for label, k in cnt.most_common():
@@ -161,7 +169,7 @@ def export(db: Path, out: Path, n_per_label: int, seed: int) -> None:
 
     # 3. 引文錨定率（全部樣本、多數決標籤）
     print("\n== 引文錨定率：引文含該標籤的動作用語（規則 10，程式自動檢查）==")
-    for label in CHECK_LABELS:
+    for label in labels:
         checks = [quote_anchored(label, first_quote(runs[s], label)[1]) for s in maj if label in maj[s]]
         checks = [c for c in checks if c is not None]
         if checks:
@@ -171,10 +179,11 @@ def export(db: Path, out: Path, n_per_label: int, seed: int) -> None:
     # 4. CONCL 方向和判決結果比對（全部樣本）
     flags = {s: outcome_flag(outcomes.get(s), concl.get(s, set())) for s in maj if "CONCL" in maj[s]}
     fc = collections.Counter(f for f in flags.values())
-    print(f"\n== CONCL 方向和判決結果比對（{len(flags)} 個單位）==")
-    print(f"  一致 {fc['一致']}　注意 {fc['注意']}　衝突 {fc['衝突']}　無法比對 {fc['']}")
-    for s in sorted(k for k, f in flags.items() if f == "衝突"):
-        print(f"  衝突 sample_id {s}：判決 {outcomes.get(s)}，CONCL 方向 {sorted(concl.get(s, set()))}")
+    if not criminal:   # 刑事沒有 CONCL
+        print(f"\n== CONCL 方向和判決結果比對（{len(flags)} 個單位）==")
+        print(f"  一致 {fc['一致']}　注意 {fc['注意']}　衝突 {fc['衝突']}　無法比對 {fc['']}")
+        for s in sorted(k for k, f in flags.items() if f == "衝突"):
+            print(f"  衝突 sample_id {s}：判決 {outcomes.get(s)}，CONCL 方向 {sorted(concl.get(s, set()))}")
 
     # 5. 抽查表
     rng = random.Random(seed)
@@ -193,7 +202,9 @@ def export(db: Path, out: Path, n_per_label: int, seed: int) -> None:
         "「判決結果比對」只在 CONCL 頁有值：衝突＝判決敗訴卻標有理由；注意＝判決勝訴卻標無理由。可能是反訴或抗辯，請看原文。",
         "v0.6：引文超過 100 字時寫成「開頭〔略〕結尾」，「完整範圍」欄是程式還原的整段。引文判定請看完整範圍：結尾有沒有完成動作的用語。",
         "v0.6：EXP 改成看功能（以一般經驗、常情、社會通念為判斷依據），不限特定用語；只有明顯不是在講經驗法則的才判不符合。",
-        "RULE、CONCL 規則沒改，只抽 10 個做回歸檢查。",
+        ("刑事：SENT＝量刑審酌（刑法§57 各款、犯後態度、累犯、自白減刑、緩刑、沒收）；ADM＝證據能力（傳聞法則、同意作為證據），"
+         "和「可不可信」的 EV 分開。EV 的傾向是有利被告／不利被告／中性。刑事第一次抽查，每類都抽 25 個。")
+        if criminal else "RULE、CONCL 規則沒改，只抽 10 個做回歸檢查。",
         "EV 的「傾向／方向」後面括號是 basis（明示評價／依證據推論）。",
         "只判斷「標出來的對不對」，不用找漏標的。",
     ], start=1):
@@ -202,7 +213,7 @@ def export(db: Path, out: Path, n_per_label: int, seed: int) -> None:
 
     widths = [10, 16, 8, 16, 36, 60, 80, 8, 12, 12, 10, 10, 30]
     fill = PatternFill("solid", fgColor="FFDDDDDD")
-    for label in CHECK_LABELS:
+    for label in labels:
         ws = wb.create_sheet(label)
         for j, (h, w) in enumerate(zip(HEADERS, widths), start=1):
             c = ws.cell(1, j, h)
@@ -210,11 +221,12 @@ def export(db: Path, out: Path, n_per_label: int, seed: int) -> None:
             ws.column_dimensions[get_column_letter(j)].width = w
         ws.freeze_panes = "A2"
         cand = [s for s in maj if label in maj[s]]
-        pref = [s for s in cand if paras[s][0] == PREFER_BATCH[label]]
-        rest = [s for s in cand if paras[s][0] != PREFER_BATCH[label]]
+        prefer = sample_batch if criminal else PREFER_BATCH[label]
+        pref = [s for s in cand if paras[s][0] == prefer]
+        rest = [s for s in cand if paras[s][0] != prefer]
         rng.shuffle(pref)
         rng.shuffle(rest)
-        chosen = (pref + rest)[:REGRESSION.get(label, n_per_label)]
+        chosen = (pref + rest)[:regression.get(label, n_per_label)]
         for i, s in enumerate(sorted(chosen), start=2):
             batch, text = paras[s]
             pol, quote = first_quote(runs[s], label)
@@ -260,9 +272,7 @@ def score(sheet: Path) -> None:
     wb = load_workbook(sheet, read_only=True)   # 唯讀模式會一直開著檔案，最後要 close
     print("== 精確度（模型標出來的，人工判定符合的比例；不確定與未填不計入）==")
     quote_rows = {}
-    for label in CHECK_LABELS:
-        if label not in wb.sheetnames:
-            continue
+    for label in [x for x in wb.sheetnames if x in CHECK_LABELS + CHECK_LABELS_CRIMINAL]:
         rows = [r for r in wb[label].iter_rows(min_row=2, values_only=True) if r and r[0] is not None]
         verdicts = [r[COL["判定"]] for r in rows]
         ok, bad, unsure = (sum(v == x for v in verdicts) for x in VERDICTS)

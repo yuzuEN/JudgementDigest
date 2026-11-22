@@ -108,6 +108,23 @@ artifacts/annotation_civil_v4/          （v0.3 在 annotation_civil_v1/、v0.4 
 └── 抽查表_v0.6.xlsx       人工抽查用（另有「完整範圍」欄：程式依〔略〕還原的整段引文）
 ```
 
+## 刑事（試做）
+
+刑事的標籤與 prompt 在 `prompts_v6.py` 的 `SYSTEM_CRIMINAL`（RULE、SUB、SENT 量刑、EV、CL、PROC、HI、ADM 證據能力、UNC、EXP）。
+抽樣改從刑事判決導讀取「證據」「論罪科刑」段落（和後端導讀頁同一種分段：有 `full_text` 遮名原文包就當場分段，否則讀舊版 `guides` 表），每件判決一段：
+
+```bash
+bash scripts/sync_criminal_models.sh                       # 先下載刑事檢索庫（retrieval_criminal_v1）
+python -m annotation.sample_criminal --n 300               # → artifacts/annotation_criminal_v1/annotation.sqlite
+python -m annotation.annotate --db artifacts/annotation_criminal_v1/annotation.sqlite --run-no 1 --limit 1
+python -m annotation.annotate --db artifacts/annotation_criminal_v1/annotation.sqlite --run-no 1   # 2、3 同
+python -m annotation.spot_check export --db artifacts/annotation_criminal_v1/annotation.sqlite \
+    --out artifacts/annotation_criminal_v1/抽查表_刑事_v0.6.xlsx
+```
+
+`annotate.py` 看到 batch 是 `criminal-random` 就自動改用刑事的 prompt 與標籤（也可用 `--domain criminal`）；
+抽查表的分頁換成 RULE、SUB、SENT、EV、PROC、ADM、EXP，每類抽 25 個。
+
 ## 驗證方式與目前的結果
 
 v0.3 起沒有法律專業人員參與，驗證分四層（細節見手冊第七節）：
