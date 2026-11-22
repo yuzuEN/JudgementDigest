@@ -81,7 +81,8 @@ export default function Confirm() {
     const maskedText = maskText(text, intake.names);
     // 描述或姓名改了，之前的整理就對不上了
     const stale = intake.rewriteFor && intake.rewriteFor !== (role === "defendant" ? claimPart(maskedText) : maskedText);
-    update(stale ? { maskedText, searchText: "", rewriteFor: "", rewriteDraft: "", rewriteAdded: [], useRewrite: "rewrite" } : { maskedText });
+    update(stale ? { maskedText, searchText: "", rewriteFor: "", rewriteDraft: "", rewriteAdded: [], useRewrite: "rewrite",
+      criminalDraft: "", criminalAdded: [], criminalSearchText: "" } : { maskedText });
     // 不把 update 放進依賴：它會隨 intake 變動，放進去會一直重跑
   }, [text, intake.names]);
 
@@ -119,10 +120,16 @@ export default function Confirm() {
     // 被告時只整理對方的主張：整理的結果用來搜尋判決的「原告主張」
     const source = role === "defendant" ? claimPart(intake.maskedText) : intake.maskedText;
     setRewriteState("loading");
-    api.rewrite(caseType, mid, source, role)
-      .then((r) => {
+    // 不確定：民事、刑事各整理一份（民事是原告主張的寫法，刑事是犯罪事實的寫法），一起送出；
+    // 刑事那份失敗不影響民事，刑事就用遮名後的原文（被告時只用對方的主張）
+    const criminal = caseType === "unsure"
+      ? api.rewrite("criminal", mid, source, role).catch(() => null) : Promise.resolve(null);
+    Promise.all([api.rewrite(caseType, mid, source, role), criminal])
+      .then(([r, c]) => {
         if (r.source === "llm" && r.text) {
-          update({ rewriteDraft: r.text, rewriteAdded: r.added_numbers, rewriteFor: source, useRewrite: "rewrite", searchText: maskText(r.text.trim(), intake.names) });
+          const ctext = c?.source === "llm" && c.text ? c.text : "";
+          update({ rewriteDraft: r.text, rewriteAdded: r.added_numbers, rewriteFor: source, useRewrite: "rewrite", searchText: maskText(r.text.trim(), intake.names),
+            criminalDraft: ctext, criminalAdded: ctext ? c!.added_numbers : [], criminalSearchText: ctext ? maskText(ctext.trim(), intake.names) : "" });
           setRewriteState("idle");
         } else {
           setRewriteState(r.fallback === "limited" ? "limited" : r.fallback === "not_dispute" ? "unrelated" : "failed");
@@ -422,7 +429,7 @@ function FinalSummary({ intake }: { intake: Intake }) {
   const amount = parseAmount(intake.claimedAmount);
   const rows: [string, ReactNode][] = [
     ["案件類型", intake.caseType ? CASE_LABEL[intake.caseType] : "還沒選"],
-    ...(intake.caseType === "civil" ? [["你是", defendant ? "被告" : "原告"]] as [string, string][] : []),
+    ...(civil && intake.caseType ? [["你是", defendant ? "被告" : "原告"]] as [string, string][] : []),
     ...(civil ? [
       ["糾紛類型", intake.mids.length ? <MidLabels mids={intake.mids} className="justify-end" /> : "未選"],
       [defendant ? "對方請求的金額" : "請求金額", amount !== null ? `${amount.toLocaleString("en-US")} 元` : "未填"],
@@ -463,11 +470,15 @@ function RewriteStage({ heading, llm, intake, update, state, onStart, consent, a
   onStart: () => void;
 }) {
   const criminal = intake.caseType === "criminal";
-  const usedFor = criminal ? "推估罪名與刑期" : "搜尋相似判決";
+  const unsure = intake.caseType === "unsure";
+  const usedFor = criminal ? "推估罪名與刑期" : unsure ? "搜尋相似判決、推估罪名與刑期" : "搜尋相似判決";
   const draft = intake.rewriteDraft;
   const reviewed = intake.rewriteFor !== "";   // 整理過了（草稿清空也還在編輯，不能讓文字框消失）
-  const choose = (useRewrite: Intake["useRewrite"], text = draft) =>
-    update({ useRewrite, rewriteDraft: text, searchText: useRewrite === "rewrite" && text.trim() ? maskText(text.trim(), intake.names) : "" });
+  const masked = (useRewrite: Intake["useRewrite"], text: string) => (useRewrite === "rewrite" && text.trim() ? maskText(text.trim(), intake.names) : "");
+  // 「使用整理後的寫法／改用原文」民事、刑事兩份一起切換
+  const choose = (useRewrite: Intake["useRewrite"], text = draft, ctext = intake.criminalDraft) =>
+    update({ useRewrite, rewriteDraft: text, searchText: masked(useRewrite, text), criminalDraft: ctext, criminalSearchText: unsure ? masked(useRewrite, ctext) : "" });
+  const added = [...new Set([...intake.rewriteAdded, ...(unsure ? intake.criminalAdded : [])])];
 
   if (!llm) {
     return (
@@ -513,11 +524,11 @@ function RewriteStage({ heading, llm, intake, update, state, onStart, consent, a
 
       {state !== "loading" && reviewed && (
         <>
-          {intake.rewriteAdded.length > 0 ? (
+          {added.length > 0 ? (
             <div role="alert" className="flex items-start gap-3 rounded-[14px] border-2 border-warn-line bg-warn px-4 py-3.5 text-warn-fg">
               <TriangleAlertIcon className="mt-1 size-5 flex-none" aria-hidden="true" />
               <div className="flex flex-col gap-1.5">
-                <p className="font-bold">整理後出現了原文沒有的數字：{intake.rewriteAdded.map((n) => `「${n}」`).join("、")}</p>
+                <p className="font-bold">整理後出現了原文沒有的數字：{added.map((n) => `「${n}」`).join("、")}</p>
                 <p className="text-[15px]">請逐一確認這些數字是否正確。若有錯誤，可以直接修改，或改用原文。</p>
               </div>
             </div>
@@ -525,7 +536,7 @@ function RewriteStage({ heading, llm, intake, update, state, onStart, consent, a
             <p className="flex items-center gap-1.5 text-[15px] font-bold text-secondary-foreground"><CheckIcon className="size-4" aria-hidden="true" />整理後的數字，都能在原文找到。</p>
           )}
           <div className="flex flex-col gap-2">
-            <label htmlFor="rewrite-draft" className="font-bold">整理後的寫法（可以直接修改）</label>
+            <label htmlFor="rewrite-draft" className="font-bold">{unsure ? "民事用的寫法（可以直接修改）" : "整理後的寫法（可以直接修改）"}</label>
             <p id="rewrite-hint" className="text-[15px] text-muted-foreground">
               {criminal && "請先確認被告、被害人與「敘述者」是否對應正確；稱謂是本次分析的角色，不代表已起訴或有罪。"}
               請檢查有沒有多出你<b className="text-foreground">沒說過</b>的事，例如{criminal ? "日期、傷勢、前科、和解" : "日期、金額、簽約或書面文件"}。
@@ -533,6 +544,18 @@ function RewriteStage({ heading, llm, intake, update, state, onStart, consent, a
             <Textarea id="rewrite-draft" value={draft} aria-describedby="rewrite-hint" className="min-h-[200px] resize-y"
               onChange={(e) => choose(intake.useRewrite, e.target.value)} />
           </div>
+          {unsure && (
+            <div className="flex flex-col gap-2">
+              <label htmlFor="criminal-draft" className="font-bold">刑事用的寫法（可以直接修改）</label>
+              <p id="criminal-hint" className="text-[15px] text-muted-foreground">
+                刑事用判決書「犯罪事實」的寫法推估罪名與刑期{civilRole(intake) === "defendant" && "，只整理對方的主張，不含你的說法"}。
+                請先確認被告、被害人與「敘述者」是否對應正確；稱謂是本次分析的角色，不代表已起訴或有罪。
+                留空的話，刑事會用你原本的描述。
+              </p>
+              <Textarea id="criminal-draft" value={intake.criminalDraft} aria-describedby="criminal-hint" className="min-h-[160px] resize-y"
+                onChange={(e) => choose(intake.useRewrite, draft, e.target.value)} />
+            </div>
+          )}
           <RadioCards label="使用哪一種寫法" value={intake.useRewrite} onChange={(v) => choose(v)}
             options={[{ value: "rewrite", title: "使用整理後的寫法" }, { value: "original", title: "改用我的原文" }]} />
         </>

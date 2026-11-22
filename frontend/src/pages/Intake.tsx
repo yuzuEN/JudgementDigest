@@ -35,6 +35,12 @@ const ROLES: { value: CivilRole; label: string }[] = [
 ];
 const ROLE_LABEL: Record<CivilRole, string> = { plaintiff: "原告", defendant: "被告" };
 
+/** 角色的說明：「不確定」的人多半分不清楚，用收到什麼、誰要誰賠錢來判斷；刑事不分原告被告，選的是民事那邊。 */
+const ROLE_HINT = {
+  civil: "原告是提告的人，被告是被告的人。",
+  unsure: "對方要你賠錢，或你收到法院寄來的起訴狀、開庭通知、支付命令，就選被告。刑事不分原告被告，這裡選的是民事那一邊。",
+} as const;
+
 /** 選了民事被告，會得到什麼（和 YOU_GET.civil 對照）。 */
 const YOU_GET_DEFENDANT = ["相似判決裡，原告（告你的人）贏的比例", "如果輸了，可能要賠的金額範圍", "被告常見的說法，以及提出這些說法時原告輸的比例"];
 
@@ -169,8 +175,8 @@ export default function Intake() {
               <StageCard>
                 <h1 {...titleProps}>第 1 關　選擇案件類型</h1>
                 <RadioCards label="案件類型" value={intake.caseType} options={CASE_TYPES} onChange={(caseType) => update({ caseType })} />
-                {intake.caseType === "civil" && (
-                  <FieldBlock label={<span id="role-label">你是原告還是被告？</span>} hint="原告是提告的人，被告是被告的人。">
+                {(intake.caseType === "civil" || intake.caseType === "unsure") && (
+                  <FieldBlock label={<span id="role-label">你是原告還是被告？</span>} hint={ROLE_HINT[intake.caseType]}>
                     <Segmented labelledBy="role-label" value={intake.role} items={ROLES} className="max-w-[520px]" required
                       onChange={(v) => update({ role: v as CivilRole })} />
                   </FieldBlock>
@@ -489,7 +495,7 @@ function Summary({ intake }: { intake: IntakeState }) {
   const evidenceCount = civil ? intake.evidence.length : intake.criminalEvidence.length;
   const rows: [string, string][] = [
     ["案件類型", TYPE_LABEL[intake.caseType]],
-    ...(intake.caseType === "civil" ? [["你是", ROLE_LABEL[role]]] as [string, string][] : []),
+    ...(civil && intake.caseType ? [["你是", ROLE_LABEL[role]]] as [string, string][] : []),
     [defendant ? "對方的主張" : "案情", intake.text.trim() ? `${intake.text.length} 字` : "還沒寫"],
     ...(defendant ? [["你的說法", intake.defenseText.trim() ? `${intake.defenseText.length} 字` : "未填"]] as [string, string][] : []),
     ...(civil ? [

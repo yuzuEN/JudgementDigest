@@ -55,15 +55,20 @@ export const RESULT_LINE = "我是解說員。你可以參考模型給出的結�
  * 民事、刑事結果頁共用的外框：解說員、示例資料標示、回上一步、這次比對用的描述，
  * 以及只在列印時出現的報告抬頭與每頁頁尾。標題與下載 PDF 由裡面的結果區塊自己放（ResultHeading、PdfButton）。
  */
-export function ResultFrame({ label, mock, maskedText, searchText, notice, children }: {
+export function ResultFrame({ label, mock, maskedText, searchText, criminalText, notice, children }: {
   label: string;
   mock: boolean;
   maskedText: string;
   searchText?: string;
+  /** 「不確定」時刑事用的文字（刑事寫法的整理，或對方的主張）；和民事用的一樣就不另外列 */
+  criminalText?: string;
   notice: ReactNode[];
   children: ReactNode;
 }) {
   useOpenDetailsForPrint();
+  const civilText = searchText || maskedText;
+  const separate = criminalText !== undefined && criminalText.trim() !== "" && criminalText !== civilText;
+  const prefix = separate ? "民事" : "這次";
   return (
     <Layout stage={7} scene={{ who: "explainer", line: RESULT_LINE }}>
       {mock && <div className={cn(PAGE, "no-print pt-5")}><SampleBanner /></div>}
@@ -75,8 +80,12 @@ export function ResultFrame({ label, mock, maskedText, searchText, notice, child
           <h2 className="mt-3 text-base font-bold">案情描述（已遮名）</h2>
           <p className="text-sm whitespace-pre-wrap">{maskedText}</p>
           {searchText && <>
-            <h2 className="mt-3 text-base font-bold">用來比對的整理文字（已確認）</h2>
+            <h2 className="mt-3 text-base font-bold">{separate ? "民事用來比對的整理文字（已確認）" : "用來比對的整理文字（已確認）"}</h2>
             <p className="text-sm whitespace-pre-wrap">{searchText}</p>
+          </>}
+          {separate && <>
+            <h2 className="mt-3 text-base font-bold">刑事用來推估的文字</h2>
+            <p className="text-sm whitespace-pre-wrap">{criminalText}</p>
           </>}
         </div>
 
@@ -89,9 +98,15 @@ export function ResultFrame({ label, mock, maskedText, searchText, notice, child
         {/* 這次比對實際用的描述（整理後的寫法，或遮名後的原文）；列印版的抬頭已經有，這裡只在畫面上顯示 */}
         <section aria-labelledby="used-text-title" className="no-print flex flex-col gap-6">
           <div className="flex w-full flex-col gap-2 rounded-[16px] border-2 border-dashed border-primary bg-card px-5 py-4 text-left">
-            <h2 id="used-text-title" className="text-[15px] font-bold text-secondary-foreground">{searchText ? "這次比對用的描述（整理後的寫法）" : "這次比對用的描述"}</h2>
-            <p className="leading-loose whitespace-pre-wrap">{searchText || maskedText}</p>
+            <h2 id="used-text-title" className="text-[15px] font-bold text-secondary-foreground">{prefix}比對用的描述{searchText ? "（整理後的寫法）" : ""}</h2>
+            <p className="leading-loose whitespace-pre-wrap">{civilText}</p>
           </div>
+          {separate && (
+            <div className="flex w-full flex-col gap-2 rounded-[16px] border-2 border-dashed border-primary bg-card px-5 py-4 text-left">
+              <h3 className="text-[15px] font-bold text-secondary-foreground">刑事推估用的描述</h3>
+              <p className="leading-loose whitespace-pre-wrap">{criminalText}</p>
+            </div>
+          )}
           <hr className="m-0 h-px border-0 bg-border" />
         </section>
         {children}

@@ -407,21 +407,19 @@ describe("結果頁的民事、刑事切換", () => {
     expect(screen.getAllByRole("button", { name: "下載 PDF" })).toHaveLength(2);
   });
 
-  it("不確定時民事寫明是原告角度，並提醒被告", async () => {
+  it("不確定選原告（預設）時，提醒真正的被告回第 1 關改", async () => {
     mockApi({ "POST /civil/report": () => CIVIL_REPORT, "POST /criminal/predict": () => CRIMINAL_REPORT });
     renderAt("/result/civil", <CivilResult />, "/result/civil", { ...intake, caseType: "unsure" });
-    expect(await screen.findByRole("heading", { level: 2, name: /^民事參考結果（以原告角度）/ })).toBeInTheDocument();
-    expect(await screen.findByText("原告（提告的一方）勝訴的機率（勝訴或一部勝訴）")).toBeInTheDocument();
-    expect(screen.getByText(/如果你是被告，這是/)).toBeInTheDocument();
-    expect(screen.queryByText(/模型估計你的案件/)).not.toBeInTheDocument();
+    expect(await screen.findByText("勝訴機率（勝訴或一部勝訴）")).toBeInTheDocument();
+    expect(screen.getByText(/這就變成對方贏的機率/)).toBeInTheDocument();
+    expect(screen.queryByText(/這裡假設對方指控的事都成立/)).not.toBeInTheDocument();
   });
 
-  it("選民事原告時，不出現原告角度的提醒", async () => {
+  it("選民事原告時，不出現回第 1 關改被告的提醒", async () => {
     mockApi({ "POST /civil/report": () => CIVIL_REPORT });
     renderAt("/result/civil", <CivilResult />, "/result/civil", { ...intake, caseType: "civil" });
     expect(await screen.findByText("62%")).toBeInTheDocument();
-    expect(screen.queryByText(/以原告角度/)).not.toBeInTheDocument();
-    expect(screen.queryByText(/如果你是被告，這是/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/這就變成對方贏的機率/)).not.toBeInTheDocument();
   });
 
   it("不確定時開刑事網址，會到合併頁", async () => {
@@ -1589,6 +1587,52 @@ describe("民事被告端", () => {
     expect(screen.getByRole("heading", { name: /對方告你什麼/ })).toBeInTheDocument();
     expect(screen.getByLabelText("對方的主張")).toBeInTheDocument();
     expect(screen.getByLabelText(/你的說法/)).toBeInTheDocument();
+  });
+
+  it("第 1 關選不確定也可以選原告或被告；選被告，第 2 關一樣問對方告你什麼", async () => {
+    mockApi({ "GET /meta/options": () => OPTIONS });
+    const user = userEvent.setup();
+    renderApp("/start", { caseType: "" });
+    await user.click(screen.getByRole("radio", { name: "不確定" }));
+    expect(screen.getByText(/收到法院寄來的起訴狀/)).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "被告：我被告了" }));
+    await user.click(screen.getByRole("button", { name: "下一關" }));
+    expect(screen.getByRole("heading", { name: /對方告你什麼/ })).toBeInTheDocument();
+    expect(screen.getByLabelText(/你的說法/)).toBeInTheDocument();
+  });
+
+  it("不確定選被告：整理時民事、刑事各送一份，都只送對方的主張", async () => {
+    const sent: { text: string; case_type: string; role: string }[] = [];
+    mockApi({
+      "POST /intake/followup": () => ({ questions: [], source: "rules", llm_available: true }),
+      "POST /intake/rewrite": (b: { text: string; case_type: string; role: string }) => {
+        sent.push(b);
+        return { text: b.case_type === "criminal" ? "被告甲推擠被害人乙。" : "原告主張被告推擠原告。", source: "llm", added_numbers: b.case_type === "criminal" ? ["3"] : [] };
+      },
+    });
+    const user = userEvent.setup();
+    renderAt("/confirm", <Confirm />, "/confirm?stage=6", { caseType: "unsure", role: "defendant", text: "朋友說我推他", defenseText: "我只是擋開他" });
+    await user.click(await screen.findByRole("button", { name: "請 AI 整理敘述" }));
+    expect(await screen.findByLabelText("民事用的寫法（可以直接修改）")).toHaveValue("原告主張被告推擠原告。");
+    expect(screen.getByLabelText("刑事用的寫法（可以直接修改）")).toHaveValue("被告甲推擠被害人乙。");
+    expect(screen.getByText(/整理後出現了原文沒有的數字：「3」/)).toBeInTheDocument();
+    expect(sent.map((b) => b.case_type).sort()).toEqual(["criminal", "unsure"]);
+    for (const b of sent) {
+      expect(b.text).toBe("朋友說我推他");
+      expect(b.role).toBe("defendant");
+    }
+  });
+
+  it("不確定選被告：民事用被告的角度，刑事只送對方的主張並說明假設指控成立", async () => {
+    const report = { ...CIVIL_REPORT, role: "defendant" as const };
+    const masked = "朋友說我推他。\n【我的答辯】\n我只是擋開他。";
+    const { calls } = mockApi({ "POST /civil/report": () => report, "POST /criminal/predict": () => CRIMINAL_REPORT });
+    renderAt("/result/civil", <CivilResult />, "/result/civil", { caseType: "unsure", role: "defendant", text: "朋友說我推他。", maskedText: masked });
+    expect(await screen.findByRole("heading", { level: 2, name: /^民事參考結果（你是被告）/ })).toBeInTheDocument();
+    expect(await screen.findByText("這裡假設對方指控的事都成立")).toBeInTheDocument();
+    expect(calls.find((c) => c.key === "POST /civil/report")!.body).toMatchObject({ role: "defendant", text: masked });
+    expect(calls.find((c) => c.key === "POST /criminal/predict")!.body).toEqual({ text: "朋友說我推他。" });
+    expect(screen.getByText("刑事推估用的描述")).toBeInTheDocument();
   });
 
   it("被告的主張太短只提醒、不擋；空白才不能下一關", async () => {

@@ -136,7 +136,7 @@ def rewrite_claim(client: LLMClient, mid: Optional[str], text: str, case_type: s
                   role: str = "plaintiff") -> Dict:
     """
     把描述改寫成判決書的寫法：民事是原告主張，刑事是犯罪事實。失敗時丟 LLMError，由呼叫端退回原本的描述。
-    「還不確定」的案件結果頁兩邊都看，改寫用民事的寫法（相似判決搜尋目前只有民事）。
+    「還不確定」的案件，前端會呼叫兩次：case_type="unsure"（民事寫法，民事用）和 case_type="criminal"（刑事寫法，刑事用）。
     """
     source = outgoing(without_questions(text))
     user = f"糾紛類型：{mid or '未選擇'}\n\n<描述>\n{source}\n</描述>"

@@ -9,7 +9,7 @@ export const STORAGE_KEY = "casey-intake-v1";
 
 export interface Intake {
   caseType: CaseType | "";   // 空字串＝還沒選（第 1 關必選）
-  role: CivilRole;       // 民事：你是原告（要告對方）還是被告（被告了）；只有選「民事」時用得到
+  role: CivilRole;       // 民事：你是原告（要告對方）還是被告（被告了）；選「民事」或「不確定」時用得到（刑事不分）
   text: string;          // 原告：事情經過；被告：對方告你什麼
   defenseText: string;   // 被告：你的說法（選填）
   mids: string[];        // 糾紛類型，可以多選
@@ -28,6 +28,10 @@ export interface Intake {
   rewriteDraft: string;  // AI 整理的草稿（使用者可以直接改），在關卡之間來回時保留，不用重新呼叫 AI
   rewriteAdded: string[];   // 草稿裡有、描述裡沒有的數字
   useRewrite: "rewrite" | "original";
+  // 「不確定」另外整理一份刑事寫法（犯罪事實），只給刑事用；被告時只整理對方的主張
+  criminalDraft: string;
+  criminalAdded: string[];
+  criminalSearchText: string;
 }
 
 export const EMPTY_INTAKE: Intake = {
@@ -51,6 +55,9 @@ export const EMPTY_INTAKE: Intake = {
   rewriteDraft: "",
   rewriteAdded: [],
   useRewrite: "rewrite",
+  criminalDraft: "",
+  criminalAdded: [],
+  criminalSearchText: "",
 };
 
 /**
@@ -65,11 +72,22 @@ export function primaryMid(intake: Intake): string | null {
 export const DEFENSE_MARKER = "【我的答辯】";
 
 /**
- * 民事這次用哪個角色：只有案件類型選「民事」時才能選被告；
- * 「不確定」會同時查刑事，刑事 API 只收一段文字，所以一律用原告的問法。
+ * 民事這次用哪個角色：「民事」和「不確定」都可以選被告，刑事不分原告被告。
+ * 「不確定」選被告時，民事照被告的方式送（對方的主張＋你的答辯），刑事只送對方的主張（見 criminalText）。
  */
 export function civilRole(intake: Pick<Intake, "caseType" | "role">): CivilRole {
-  return intake.caseType === "civil" && intake.role === "defendant" ? "defendant" : "plaintiff";
+  return intake.caseType !== "criminal" && intake.role === "defendant" ? "defendant" : "plaintiff";
+}
+
+/**
+ * 送給刑事 API 的文字。
+ * 刑事：整理後的寫法，或遮名後的原文。
+ * 不確定：刑事寫法的整理（criminalSearchText），沒有就用遮名後的原文；被告時都只取對方的主張，
+ * 不送你的答辯：判決的犯罪事實段寫的是被指控的事實（答辯在理由段），刑事模型也只估「指控成立時」的罪名與刑度。
+ */
+export function criminalText(intake: Pick<Intake, "caseType" | "searchText" | "maskedText" | "criminalSearchText">): string {
+  if (intake.caseType === "unsure") return intake.criminalSearchText || claimPart(intake.maskedText);
+  return intake.searchText || intake.maskedText;
 }
 
 /**
