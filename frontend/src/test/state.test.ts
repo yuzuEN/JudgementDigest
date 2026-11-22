@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { civilInput, claimPart, DEFENSE_MARKER, EMPTY_INTAKE, fullText, loadIntake, STORAGE_KEY } from "../state";
+import { civilInput, civilRole, claimPart, criminalText, DEFENSE_MARKER, EMPTY_INTAKE, fullText, loadIntake, STORAGE_KEY } from "../state";
 
 describe("fullText", () => {
   it("描述加上有回答的追問", () => {
@@ -42,14 +42,15 @@ describe("civilInput", () => {
       defendant_has_lawyer: null, defendant_type: "company", claimed_amount: 500000, evidence: ["transfer"],
     });
   });
-  it("被告：律師是被告自己的；只有選民事才算被告", () => {
+  it("被告：律師是被告自己的；民事和不確定可以當被告，刑事不分", () => {
     const base = { ...EMPTY_INTAKE, text: "x", maskedText: "x", lawyer: "yes" as const, role: "defendant" as const };
     const input = civilInput({ ...base, caseType: "civil" });
     expect(input.role).toBe("defendant");
     expect(input.defendant_has_lawyer).toBe(true);
     expect(input.plaintiff_has_lawyer).toBeNull();
-    // 「不確定」同時查刑事，用原告的問法
-    expect(civilInput({ ...base, caseType: "unsure" }).role).toBe("plaintiff");
+    // 「不確定」也照選的角色送民事；刑事不分原告被告
+    expect(civilInput({ ...base, caseType: "unsure" }).role).toBe("defendant");
+    expect(civilRole({ caseType: "criminal", role: "defendant" })).toBe("plaintiff");
   });
   it("沒填的是 null", () => {
     const input = civilInput({ ...EMPTY_INTAKE, text: "x", maskedText: "x" });
@@ -75,5 +76,22 @@ describe("重新整理後還原（sessionStorage）", () => {
   it("不寫進 localStorage", () => {
     loadIntake();
     expect(window.localStorage.getItem(STORAGE_KEY)).toBeNull();
+  });
+});
+
+describe("刑事用的文字", () => {
+  const masked = `朋友說我推他。
+${DEFENSE_MARKER}
+我只是擋開他。`;
+  it("刑事用整理後的寫法，沒有就用遮名後的原文", () => {
+    expect(criminalText({ ...EMPTY_INTAKE, caseType: "criminal", maskedText: "原文", searchText: "整理" })).toBe("整理");
+    expect(criminalText({ ...EMPTY_INTAKE, caseType: "criminal", maskedText: "原文" })).toBe("原文");
+  });
+  it("不確定用刑事寫法的整理，不用民事那份", () => {
+    expect(criminalText({ ...EMPTY_INTAKE, caseType: "unsure", maskedText: "原文", searchText: "原告主張", criminalSearchText: "被告甲推擠被害人乙" }))
+      .toBe("被告甲推擠被害人乙");
+  });
+  it("不確定選被告、沒有刑事整理時，只送對方的主張，不送你的答辯", () => {
+    expect(criminalText({ ...EMPTY_INTAKE, caseType: "unsure", maskedText: masked, searchText: "原告主張被告推擠原告" })).toBe("朋友說我推他。");
   });
 });

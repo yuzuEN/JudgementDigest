@@ -12,7 +12,7 @@ import { CaseNumber, ErrorBox, InfoLink, LAF_URL } from "../components/Common";
 import { LinkButton } from "../components/LinkButton";
 import { PdfButton, ResultFrame, ResultHeading } from "../components/ResultFrame";
 import { percent } from "../format";
-import { useIntake } from "../state";
+import { civilRole, criminalText, useIntake } from "../state";
 
 export const CRIMINAL_TABS = [
   { key: "charges", label: "可能的罪名" },
@@ -36,7 +36,7 @@ export function useCriminalReport(enabled: boolean) {
   const { intake } = useIntake();
   const [report, setReport] = useState<CriminalReport | null>(null);
   const [error, setError] = useState("");
-  const text = intake.searchText || intake.maskedText;
+  const text = criminalText(intake);
   const load = useCallback(() => {
     if (!enabled) return;
     setError("");
@@ -55,6 +55,9 @@ export function CriminalSection({ state, tab, setTab, level = 1 }: {
   const [selected, setSelected] = useState(0);
   const { report, error, load } = state;
   const mock = report?.mock ?? false;
+  const rewritten = Boolean(intake.caseType === "unsure" ? intake.criminalSearchText : intake.searchText);
+  // 「不確定」選被告：刑事只用對方的主張推估，要說清楚這不是你會被判的結果
+  const accused = intake.caseType === "unsure" && civilRole(intake) === "defendant";
   return (
     <section id="criminal" aria-labelledby="criminal-result" className="flex scroll-mt-4 flex-col gap-6">
       <ResultHeading id="criminal-result" level={level} title="刑事參考結果" lead="根據案情推估可能的罪名與刑期，並提供相似判決供參考。" />
@@ -62,6 +65,11 @@ export function CriminalSection({ state, tab, setTab, level = 1 }: {
         <ErrorBox message={error} onRetry={load} hint="請重新載入結果，或回上一步檢查描述。">
           <LinkButton variant="outline" to="/confirm?stage=6">回上一步</LinkButton>
         </ErrorBox>
+      )}
+      {accused && (
+        <InfoNote title="這裡假設對方指控的事都成立">
+          刑事這邊只用「對方的主張」推估：如果這些事都成立，相似判決常見的罪名與刑度。這不代表你會被判有罪；你的說法會不會被採信，要看證據，這裡沒有估計。
+        </InfoNote>
       )}
       {!report && !error && <LoadingPanel />}
       {report && report.charges.length === 0 && (
@@ -72,7 +80,7 @@ export function CriminalSection({ state, tab, setTab, level = 1 }: {
           key: t.key,
           label: t.label,
           content: {
-            charges: <ChargesPanel report={report} rewritten={Boolean(intake.searchText)} />,
+            charges: <ChargesPanel report={report} rewritten={rewritten} />,
             sentence: <SentencePanel report={report} selected={selected} onSelect={(i) => setSelected(i)} />,
             cases: <CasesPanel report={report} selected={selected} onSelect={(i) => setSelected(i)} />,
           }[t.key],
