@@ -407,6 +407,23 @@ describe("結果頁的民事、刑事切換", () => {
     expect(screen.getAllByRole("button", { name: "下載 PDF" })).toHaveLength(2);
   });
 
+  it("不確定時民事寫明是原告角度，並提醒被告", async () => {
+    mockApi({ "POST /civil/report": () => CIVIL_REPORT, "POST /criminal/predict": () => CRIMINAL_REPORT });
+    renderAt("/result/civil", <CivilResult />, "/result/civil", { ...intake, caseType: "unsure" });
+    expect(await screen.findByRole("heading", { level: 2, name: /^民事參考結果（以原告角度）/ })).toBeInTheDocument();
+    expect(await screen.findByText("原告（提告的一方）勝訴的機率（勝訴或一部勝訴）")).toBeInTheDocument();
+    expect(screen.getByText(/如果你是被告，這是/)).toBeInTheDocument();
+    expect(screen.queryByText(/模型估計你的案件/)).not.toBeInTheDocument();
+  });
+
+  it("選民事原告時，不出現原告角度的提醒", async () => {
+    mockApi({ "POST /civil/report": () => CIVIL_REPORT });
+    renderAt("/result/civil", <CivilResult />, "/result/civil", { ...intake, caseType: "civil" });
+    expect(await screen.findByText("62%")).toBeInTheDocument();
+    expect(screen.queryByText(/以原告角度/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/如果你是被告，這是/)).not.toBeInTheDocument();
+  });
+
   it("不確定時開刑事網址，會到合併頁", async () => {
     mockApi({ "POST /civil/report": () => CIVIL_REPORT, "POST /criminal/predict": () => CRIMINAL_REPORT });
     renderApp("/result/criminal?tab=cases", { ...intake, caseType: "unsure" });
