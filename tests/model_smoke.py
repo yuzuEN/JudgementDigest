@@ -102,7 +102,7 @@ class RealModelSmoke(unittest.TestCase):
                     report = response.json()
                     self.assertFalse(report["mock"])
                     self.assertTrue(report["similar"], "Real retrieval must return cases")
-                    expect(page.get_by_role("heading", name="刑事參考結果" if kind == "criminal" else "民事參考結果：侵權：交通事故", exact=True)).to_be_visible()
+                    expect(page.get_by_role("heading", name="刑事參考結果" if kind == "criminal" else "民事參考結果：交通事故", exact=True)).to_be_visible()
                     if kind == "criminal":
                         self.assertTrue(report["charges"])
                         charge = report["charges"][0]
