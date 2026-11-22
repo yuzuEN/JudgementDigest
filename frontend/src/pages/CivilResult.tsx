@@ -178,14 +178,14 @@ function Overview({ report, defendant = false, unsure = false }: { report: Civil
   return (
     <>
       <ModelVerdict report={report} defendant={defendant} unsure={unsure} />
-      <h3 className="mt-2 text-lg font-bold">對照：相似判決的結果</h3>
+      <h3 className="mt-2 text-lg font-bold">對照：相似案件的判決結果</h3>
       {enough && defendant && <p className="text-muted-foreground">「敗訴」是原告輸，也就是被告不用賠，共 {lose} 件。</p>}
       {enough ? <OutcomeBar counts={{ win, partial, lose }} /> : (
         <EmptyState title={`有被告答辯的相似判決不多（只找到 ${total} 件）`}>
           數量太少，統計不可靠，所以這次不顯示比例。可以到「相似判決」分頁逐件看。
         </EmptyState>
       )}
-      {mixed && <p className="text-[15px] text-muted-foreground">相似判決的結果和模型的判定不完全一致，請先看判決內容。</p>}
+      {mixed && <p className="text-[15px] text-muted-foreground">相似案件的判決結果和模型的判定不完全一致，請先看判決內容。</p>}
       {/* 統計只用對審（in_stats）的案件，一造辯論只出現在「相似判決」列表：見 backend/civil_service.py */}
       <ul className="m-0 flex list-disc flex-col gap-1 pl-5 text-[15px] text-muted-foreground">
         <li>僅列出雙方皆有到庭的案件。</li>
