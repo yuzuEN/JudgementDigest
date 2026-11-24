@@ -454,7 +454,7 @@ function CasesPanel({ report, onlyWin, setOnlyWin, defendant = false }: {
           <Switch size="lg" checked={onlyWin} onCheckedChange={(v) => setOnlyWin(Boolean(v))} aria-label={filterLabel} />{filterLabel}
         </label>
       </>}>{scope?.mid ? `相似的真實判決——${scope.mid}` : "相似的真實判決"}</PanelTitle>
-      <Table className="min-w-[680px] text-[15px]">
+      <Table className="table-stack min-w-[680px] text-[15px]">
         <TableHeader>
           <TableRow>
             <TableHead scope="col">字號</TableHead>
@@ -467,15 +467,15 @@ function CasesPanel({ report, onlyWin, setOnlyWin, defendant = false }: {
           {cases.map((c) => (
             <TableRow key={c.case_id} className={visible(c) ? undefined : "screen-hidden"}>
               <TableCell className="py-3.5 align-top whitespace-normal"><CaseNumber c={c} /><br /><span className="line-clamp-3 text-sm text-muted-foreground print:line-clamp-none">{c.summary}</span><CommonPoints points={c.common} /><ReasoningBrief items={c.reasoning} /></TableCell>
-              <TableCell className="py-3.5 align-top">
-                <span className="flex flex-col gap-1">
+              <TableCell data-label="結果" className="py-3.5 align-top">
+                <span className="flex flex-col gap-1 phone:flex-row phone:flex-wrap">
                   <OutcomeChip tone={outcomeTone(c.outcome)}>{outcomeLabel(c.outcome)}</OutcomeChip>
                   {c.default_judgment && <OutcomeChip tone="neutral">被告未到庭</OutcomeChip>}
                 </span>
               </TableCell>
-              <TableCell className="py-3.5 text-right align-top tabular-nums">
-                {c.claimed_amount ? <><b>{yuan(c.awarded_amount ?? 0)}</b> ／ {yuan(c.claimed_amount)}</>
-                  : c.awarded_amount ? <><b>{yuan(c.awarded_amount)}</b> ／ —</> : "—"}
+              <TableCell data-label="判准／請求（元）" className="py-3.5 text-right align-top tabular-nums">
+                <span>{c.claimed_amount ? <><b>{yuan(c.awarded_amount ?? 0)}</b> ／ {yuan(c.claimed_amount)}</>
+                  : c.awarded_amount ? <><b>{yuan(c.awarded_amount)}</b> ／ —</> : "—"}</span>
               </TableCell>
               <TableCell className="no-print py-3.5 align-top">
                 <LinkButton variant="outline" size="sm" to={`/judgment/civil/${c.case_id}`}>判決導讀</LinkButton>

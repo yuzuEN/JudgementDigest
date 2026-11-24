@@ -11,7 +11,7 @@ export const BRAND = "CasEY";
 export const JUDICIAL_URL = "https://judgment.judicial.gov.tw/FJUD/default.aspx";
 
 /** 頁面內容的寬度與左右留白，各頁共用。 */
-export const PAGE = "mx-auto w-full max-w-[1120px] px-4 sm:px-6";
+export const PAGE = "mx-auto w-full max-w-[1120px] px-page";
 
 function Brand() {
   return (
@@ -60,7 +60,7 @@ export function Layout({ stage, step, scene, nav, footer, children }: {
 }) {
   const at = stage ?? (step ? STEP_TO_STAGE[step] : 0);
   return (
-    <div className="flex min-h-svh flex-col">
+    <div className="flex min-h-svh flex-col overflow-x-clip">
       <header data-slot="site-header" className="border-b bg-card">
         <div className={cn(PAGE, "flex min-h-[68px] flex-wrap items-center gap-x-5 gap-y-3 py-2")}>
           <Brand />

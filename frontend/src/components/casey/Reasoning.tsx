@@ -122,7 +122,7 @@ export function ReasoningCard({ reasoning, active, onSelect }: {
     {/* 寬螢幕（左右兩欄）：卡片黏在畫面上，捲全文時一直看得到；太長時卡片自己捲動。
         排到左欄最後（order-last），下面就沒有別的卡片會從它上方的空隙捲過去 */}
     <Card id="reasoning-card" aria-labelledby="reasoning-title"
-      className="scroll-mt-4 gap-4 px-6.5 lg:order-last lg:sticky lg:top-4 lg:max-h-[calc(100vh-2rem)] lg:overflow-y-auto print:static print:max-h-none print:overflow-visible">
+      className="scroll-mt-4 gap-4 px-6.5 lg:order-last lg:sticky lg:top-4 lg:max-h-[calc(100dvh-2rem)] lg:overflow-y-auto print:static print:max-h-none print:overflow-visible">
       <div className="flex flex-col gap-1.5">
         <h2 id="reasoning-title" className="text-xl font-bold">法院怎麼認定</h2>
         <p className="text-[15px] text-muted-foreground">點一下，右邊的全文會捲到那一段，並標出這句原文。</p>

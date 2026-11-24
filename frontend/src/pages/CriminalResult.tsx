@@ -287,7 +287,7 @@ function CasesPanel({ report, selected, onSelect }: {
 
 function CriminalCasesTable({ cases }: { cases: SimilarCase[] }) {
   return (
-    <Table className="min-w-[680px] text-[15px]">
+    <Table className="table-stack min-w-[680px] text-[15px]">
       <TableHeader>
         <TableRow>
           <TableHead scope="col">字號</TableHead>
@@ -303,12 +303,12 @@ function CriminalCasesTable({ cases }: { cases: SimilarCase[] }) {
               <CaseNumber c={c} /><br />
               <span className="line-clamp-3 text-sm text-muted-foreground print:line-clamp-none">{c.summary}</span>
             </TableCell>
-            <TableCell className="py-3.5 align-top">
-              <ul className="m-0 flex list-none flex-col items-start gap-1 p-0">
+            <TableCell data-label="罪名" className="py-3.5 align-top">
+              <ul className="m-0 flex list-none flex-col items-start gap-1 p-0 phone:flex-row phone:flex-wrap">
                 {c.mid.split("、").filter(Boolean).map((m) => <li key={m} className="rounded-full bg-secondary px-2.5 text-sm leading-[1.7] font-bold whitespace-nowrap text-secondary-foreground">{m}</li>)}
               </ul>
             </TableCell>
-            <TableCell className="py-3.5 align-top whitespace-nowrap">{c.sentence ?? "—"}</TableCell>
+            <TableCell data-label="應執行刑" className="py-3.5 align-top whitespace-nowrap">{c.sentence ?? "—"}</TableCell>
             <TableCell className="no-print py-3.5 align-top">
               {/* 原文連結在字號上 */}
               <LinkButton variant="outline" size="sm" to={`/judgment/criminal/${c.case_id}`}>判決導讀</LinkButton>
