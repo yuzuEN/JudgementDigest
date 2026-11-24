@@ -15,6 +15,7 @@ import { Toggle } from "@/components/ui/toggle";
 import { api } from "../api/client";
 import type { CaseType, CivilRole, DefendantType, Options } from "../api/types";
 import { AmountInput, amountState } from "../components/casey/AmountInput";
+import { Disclosure } from "../components/casey/Disclosure";
 import { EvidenceSlot } from "../components/casey/EvidenceSlot";
 import { MidLabels } from "../components/casey/MidLabels";
 import { PhoneCollapse } from "../components/casey/PhoneCollapse";
@@ -184,12 +185,13 @@ export default function Intake() {
                   </FieldBlock>
                 )}
                 {intake.caseType && intake.caseType !== "unsure" && (
-                  <Note>
-                    <p className="font-bold">選{TYPE_LABEL[intake.caseType]}{intake.caseType === "civil" ? `（${ROLE_LABEL[role]}）` : ""}，你會得到：</p>
+                  // 預設收起，點標題才展開
+                  <Disclosure summary={<span className="flex items-center gap-2"><InfoIcon className="size-5 flex-none text-secondary-foreground" aria-hidden="true" />
+                    選{TYPE_LABEL[intake.caseType]}{intake.caseType === "civil" ? `（${ROLE_LABEL[role]}）` : ""}會得到什麼？</span>}>
                     <ul className="m-0 list-disc pl-5 text-hint">
                       {(defendant ? YOU_GET_DEFENDANT : YOU_GET[intake.caseType]).map((g) => <li key={g}>{g}</li>)}
                     </ul>
-                  </Note>
+                  </Disclosure>
                 )}
               </StageCard>
             )}
@@ -273,15 +275,6 @@ export default function Intake() {
 
 function StageCard({ children }: { children: ReactNode }) {
   return <Card className="gap-6 px-[18px] sm:px-6.5">{children}</Card>;
-}
-
-function Note({ children }: { children: ReactNode }) {
-  return (
-    <div className="flex items-start gap-3 rounded-[14px] border border-info-line bg-info px-4 py-3.5">
-      <InfoIcon className="mt-1 size-5 flex-none text-secondary-foreground" aria-hidden="true" />
-      <div className="flex flex-col gap-2">{children}</div>
-    </div>
-  );
 }
 
 function FieldBlock({ label, hint, children }: { label: ReactNode; hint?: string; children: ReactNode }) {
