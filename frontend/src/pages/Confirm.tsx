@@ -149,7 +149,7 @@ export default function Confirm() {
                 intake={intake} update={update} kinds={kinds} llm={llmAvailable} />
             )}
             {stage === 5 && (
-              <DetailStage heading={<div className="flex flex-wrap items-center gap-3"><h1 ref={heading} tabIndex={-1} className={titleClass}>第 5 關　補充細節</h1><StageChip>可以略過</StageChip></div>}
+              <DetailStage heading={<div className="flex flex-wrap items-center gap-3"><h1 ref={heading} tabIndex={-1} className={titleClass}>第 5 關　補充細節</h1><StageChip>選填</StageChip></div>}
                 llm={llmAvailable} mode={mode} setMode={setMode} aiState={aiState} askAi={askAi}
                 consent={consent} aiAllowed={aiAllowed}
                 questions={mode === "ai" && aiState === "done" ? aiQuestions : questions}
@@ -184,7 +184,7 @@ export default function Confirm() {
   );
 }
 
-/** 關卡標題旁的小標籤（建議、可以略過）。 */
+/** 關卡標題旁的小標籤（建議、選填）。 */
 function StageChip({ children }: { children: ReactNode }) {
   return <span className="rounded-full border-[1.5px] border-outcome-part bg-outcome-part-bg px-3 text-sm leading-[1.9] font-bold text-outcome-part-fg">{children}</span>;
 }
@@ -577,7 +577,7 @@ function RewriteStage({ heading, llm, intake, update, state, onStart, consent, a
 /* ── 右側：送出前檢查、資料使用說明 ── */
 
 function Checklist({ stage, vendor }: { stage: number; vendor: string | null }) {
-  const items = [[4, "確認遮名"], [5, "補充細節（可略過）"], [6, vendor ? "判決書寫法" : "最後確認"]] as const;
+  const items = [[4, "確認遮名"], [5, "補充細節（選填）"], [6, vendor ? "判決書寫法" : "最後確認"]] as const;
   return (
     <aside aria-labelledby="check-title" className="w-full min-w-0 flex-[1_1_260px] sm:max-w-[340px]">
       <Card className="gap-4 px-[18px] sm:px-6.5">
