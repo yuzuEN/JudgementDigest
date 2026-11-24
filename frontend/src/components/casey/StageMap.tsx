@@ -26,7 +26,11 @@ export function StageMap({ at }: { at: number }) {
   const chapter = CHAPTERS.find((c) => at >= c.from && at <= c.to);
   return (
     <nav aria-label="進度" data-slot="stepper" className="no-print">
-      <div className="mb-1.5 grid grid-cols-7" aria-hidden="true">
+      {/* 手機：章節名稱擠不下，改成一行「描述案情・第 2／7 關」 */}
+      {chapter && (
+        <p aria-hidden="true" className="mb-1.5 hidden text-sm font-bold phone:block">{chapter.label}・第 {at}／7 關</p>
+      )}
+      <div className="mb-1.5 grid grid-cols-7 phone:hidden" aria-hidden="true">
         {CHAPTERS.map((c) => (
           <p key={c.label} style={{ gridColumn: `span ${c.to - c.from + 1}` }}
             className={cn("text-center text-sm font-bold whitespace-nowrap", c === chapter ? "text-foreground" : "text-muted-foreground max-sm:invisible")}>
@@ -64,7 +68,7 @@ export function StageMap({ at }: { at: number }) {
                 )} />
               )}
               {href
-                ? <Link to={href} aria-label={`第 ${n} 關 ${name}（已完成）`} className="flex flex-col items-center gap-1 rounded-lg no-underline">{dot}{label}</Link>
+                ? <Link to={href} aria-label={`第 ${n} 關 ${name}（已完成）`} className="relative flex flex-col items-center gap-1 rounded-lg no-underline after:absolute after:-inset-[3px] after:content-['']">{dot}{label}</Link>
                 : <>{dot}{label}</>}
             </li>
           );
