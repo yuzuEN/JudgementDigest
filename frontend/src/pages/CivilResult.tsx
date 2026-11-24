@@ -375,8 +375,8 @@ function EvidencePanel({ report, defendant = false }: { report: CivilReport; def
           {report.evidence.map((e) => (
             <MiniBarRow key={e.key} label={e.label} value={e.share} valueText={percent(e.share)}
               alt={`${e.label}：${percent(e.share)} 的${defendant ? cases : "相似勝訴判決"}有提到`}
-              className="border-b py-3 last:border-b-0 sm:grid-cols-[150px_minmax(0,1fr)_56px_120px]">
-              <span className="max-sm:col-span-2">
+              className="grid-cols-[minmax(0,1fr)_6.5rem] border-b py-3 last:border-b-0 phone:py-2.5 sm:grid-cols-[150px_minmax(0,1fr)_56px_120px]">
+              <span className="order-4 justify-self-end sm:order-none sm:justify-self-auto">
                 {e.user_has
                   ? <span className="inline-flex items-center gap-1.5 text-sm font-bold text-secondary-foreground"><CheckIcon className="size-4" aria-hidden="true" />你有提到</span>
                   : <span className="inline-flex items-center gap-1.5 text-sm font-semibold text-ink-faint"><CircleMinusIcon className="size-4" aria-hidden="true" />你沒有提到</span>}
