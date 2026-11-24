@@ -349,16 +349,16 @@ describe("第 6 關：整理成判決書的寫法", () => {
     expect(screen.queryByLabelText("整理後的寫法（可以直接修改）")).not.toBeInTheDocument();
   });
 
-  it("有敏感個資時，整理前要先同意；不同意就用原本的描述", async () => {
+  it("有敏感個資時，勾選同意才能整理；不勾也能直接看結果（用原本的描述）", async () => {
     const { sent } = setup(llm);
     const user = userEvent.setup();
     renderAt("/confirm", <Confirm />, at6, { text: "我骨折住院，對方不賠" });
     const button = await screen.findByRole("button", { name: BUTTON });
     expect(button).toBeDisabled();
-    await user.click(screen.getByRole("radio", { name: "不同意，不用 AI" }));
-    expect(screen.getByText(/這次不用 AI，會用你原本的描述/)).toBeInTheDocument();
+    expect(screen.queryByRole("radio", { name: /不同意/ })).not.toBeInTheDocument();
+    expect(screen.getByText(/不想用 AI 的話不用勾，直接看參考結果，會用你原本的描述/)).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "看參考結果" })).toBeEnabled();
-    await user.click(screen.getByRole("radio", { name: "我同意傳給 AI" }));
+    await user.click(screen.getByRole("checkbox", { name: "我同意傳給 AI" }));
     await user.click(screen.getByRole("button", { name: BUTTON }));
     await screen.findByLabelText("整理後的寫法（可以直接修改）");
     expect(sent).toHaveLength(1);
@@ -713,21 +713,24 @@ describe("第 5 關：補充細節", () => {
     const send = await openAi(user);
     expect(screen.getByRole("heading", { name: "傳給 AI 前，需要你同意" })).toBeInTheDocument();
     expect(send).toBeDisabled();
-    await user.click(screen.getByRole("radio", { name: "我同意傳給 AI" }));
+    await user.click(screen.getByRole("checkbox", { name: "我同意傳給 AI" }));
     expect(send).toBeEnabled();
+    await user.click(screen.getByRole("checkbox", { name: "我同意傳給 AI" }));
+    expect(send).toBeDisabled();
+    await user.click(screen.getByRole("checkbox", { name: "我同意傳給 AI" }));
     await user.click(send);
     expect(await screen.findByLabelText("對方怎麼說？")).toBeInTheDocument();
     expect(sent.filter((b) => b.allow_llm)).toHaveLength(1);
   });
 
-  it("不同意就不用 AI，可以改用固定題目，也不會傳", async () => {
+  it("不勾選同意就不會傳給 AI，可以改答固定題目", async () => {
     const sent = setup((b) => (b.allow_llm ? aiReply : rulesReply));
     const user = userEvent.setup();
     renderAt("/confirm", <Confirm />, at5, { text: "我骨折住院" });
-    await openAi(user);
-    await user.click(screen.getByRole("radio", { name: "不同意，不用 AI" }));
-    expect(screen.queryByRole("button", { name: SEND })).not.toBeInTheDocument();
-    await user.click(screen.getByRole("button", { name: "改用固定題目" }));
+    const send = await openAi(user);
+    expect(send).toBeDisabled();
+    expect(screen.getByText("不想用 AI 的話，改答上面的固定題目就好。")).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "固定題目" }));
     expect(screen.getByLabelText("什麼時候發生的？")).toBeInTheDocument();
     expect(sent.every((b) => !b.allow_llm)).toBe(true);
   });

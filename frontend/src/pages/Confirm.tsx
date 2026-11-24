@@ -52,7 +52,6 @@ export default function Confirm() {
   const [mode, setMode] = useState<"fixed" | "ai">("fixed");
   const [aiState, setAiState] = useState<AiState>("idle");
   const [rewriteState, setRewriteState] = useState<RewriteState>("idle");
-  const [declined, setDeclined] = useState(false);
   const heading = useRef<HTMLHeadingElement>(null);
   const firstRender = useRef(true);
   const text = useMemo(() => fullText(intake), [intake]);
@@ -99,8 +98,7 @@ export default function Confirm() {
   const sensitive = kinds.length > 0;
   // 病歷、前科這類特種個資：平台自己比對時不用同意（已遮名、不保存），傳給外部 AI 前才要同意
   const aiAllowed = !sensitive || intake.sensitiveConsent;
-  const consent = { kinds, given: intake.sensitiveConsent, declined,
-    onChange: (yes: boolean) => { update({ sensitiveConsent: yes }); setDeclined(!yes); } };
+  const consent = { kinds, given: intake.sensitiveConsent, onChange: (yes: boolean) => update({ sensitiveConsent: yes }) };
 
   const ready = intake.maskedText !== "";
   const go = (n: number) => setParams({ stage: String(n) });
@@ -274,11 +272,15 @@ function MaskStage({ heading, intake, update, kinds, llm }: {
 
 /* ── 傳給 AI 前的同意（只有描述裡有病歷、前科這類特種個資時才問） ── */
 
-type Consent = { kinds: string[]; given: boolean; declined: boolean; onChange: (yes: boolean) => void };
+type Consent = { kinds: string[]; given: boolean; onChange: (yes: boolean) => void };
 
-function AiConsent({ consent, use }: { consent: Consent; use: string }) {
+/**
+ * 有特種個資時，傳給 AI 前要勾選同意。只有一個勾選框：不想用 AI 就不要勾，
+ * 第 5 關改答固定題目、第 6 關直接看結果（用原本的描述），不需要另外選「不同意」。
+ */
+function AiConsent({ consent, use, skip }: { consent: Consent; use: string; skip: string }) {
   if (consent.kinds.length === 0) return null;
-  const value = consent.given ? "yes" : consent.declined ? "no" : "";
+  const on = consent.given;
   return (
     <section aria-labelledby="ai-consent-title" className="flex flex-col gap-3">
       <h2 id="ai-consent-title" className="flex items-center gap-2.5 font-bold">
@@ -287,12 +289,24 @@ function AiConsent({ consent, use }: { consent: Consent; use: string }) {
       <p className="text-hint">
         你的描述裡有法律特別保護的資料（偵測到：{consent.kinds.join("、")}）。
       </p>
-      <RadioCards label="傳給 AI 的同意" value={value}
-        options={[
-          { value: "yes", title: "我同意傳給 AI", hint: `僅用遮蓋後內容來${use}，不做其他用途。` },
-          { value: "no", title: "不同意，不用 AI" },
-        ]}
-        onChange={(v) => consent.onChange(v === "yes")} />
+      <label className={cn(
+        "flex min-h-[60px] cursor-pointer items-center gap-3 rounded-[14px] border-2 bg-card px-4 py-2.5 text-left transition-colors has-focus-visible:outline-3 has-focus-visible:outline-offset-2 has-focus-visible:outline-ring",
+        on ? "border-foreground bg-secondary" : "border-input hover:border-primary",
+      )}>
+        <input type="checkbox" className="sr-only" checked={on} onChange={(e) => consent.onChange(e.target.checked)}
+          aria-label="我同意傳給 AI" aria-describedby="ai-consent-hint" />
+        <span className="flex min-w-0 flex-1 flex-col">
+          <span className="font-bold">我同意傳給 AI</span>
+          <span id="ai-consent-hint" className="text-hint leading-snug text-muted-foreground">僅用遮蓋後內容來{use}，不做其他用途。</span>
+        </span>
+        <span aria-hidden="true" className={cn(
+          "grid size-7 flex-none place-items-center rounded-[8px] border-2",
+          on ? "border-primary bg-primary text-primary-foreground" : "border-input",
+        )}>
+          {on && <CheckIcon className="size-4" strokeWidth={3} />}
+        </span>
+      </label>
+      <p className="text-hint text-muted-foreground">{skip}</p>
     </section>
   );
 }
@@ -354,19 +368,15 @@ function DetailStage({ heading, llm, mode, setMode, aiState, askAi, consent, aiA
           {mode === "ai" && <div className="flex flex-col gap-4 text-base">
             {(aiState === "idle" || aiState === "asking") && (
               <>
-                {aiState === "idle" && <AiConsent consent={consent} use="產生補充問題" />}
-                {aiState === "idle" && consent.declined ? (
-                  <Note><p className="text-hint">已選擇不使用 AI，可以改答固定題目。</p>{backToFixed}</Note>
-                ) : (
-                  // 按鈕置中在藍色卡片裡；按下後同一顆按鈕變成載入中
-                  <div className="flex justify-center rounded-[14px] border border-info-line bg-info px-4 py-5">
-                    <Button type="button" disabled={aiState === "asking" || !aiAllowed} aria-busy={aiState === "asking"} onClick={askAi}>
-                      {aiState === "asking"
-                        ? <><LoaderCircleIcon data-icon="inline-start" className="animate-spin motion-reduce:animate-none" />AI 正在產生補充問題…</>
-                        : <><SparklesIcon data-icon="inline-start" />傳給 AI，開始提問</>}
-                    </Button>
-                  </div>
-                )}
+                {aiState === "idle" && <AiConsent consent={consent} use="產生補充問題" skip="不想用 AI 的話，改答上面的固定題目就好。" />}
+                {/* 按鈕置中在藍色卡片裡；按下後同一顆按鈕變成載入中 */}
+                <div className="flex justify-center rounded-[14px] border border-info-line bg-info px-4 py-5">
+                  <Button type="button" disabled={aiState === "asking" || !aiAllowed} aria-busy={aiState === "asking"} onClick={askAi}>
+                    {aiState === "asking"
+                      ? <><LoaderCircleIcon data-icon="inline-start" className="animate-spin motion-reduce:animate-none" />AI 正在產生補充問題…</>
+                      : <><SparklesIcon data-icon="inline-start" />傳給 AI，開始提問</>}
+                  </Button>
+                </div>
               </>
             )}
             {aiState === "asking" && (
@@ -514,12 +524,8 @@ function RewriteStage({ heading, llm, intake, update, state, onStart, consent, a
 
       {state !== "loading" && !reviewed && (
         <>
-          <AiConsent consent={consent} use="整理成法律描述" />
-          {consent.declined ? (
-            <Note><p className="text-hint">這次不用 AI，會用你原本的描述{usedFor}。</p></Note>
-          ) : (
-            <Button type="button" size="lg" className="w-full" disabled={!aiAllowed} onClick={onStart}><SparklesIcon data-icon="inline-start" />請 AI 整理敘述</Button>
-          )}
+          <AiConsent consent={consent} use="整理成法律描述" skip={`不想用 AI 的話不用勾，直接看參考結果，會用你原本的描述${usedFor}。`} />
+          <Button type="button" size="lg" className="w-full" disabled={!aiAllowed} onClick={onStart}><SparklesIcon data-icon="inline-start" />請 AI 整理敘述</Button>
         </>
       )}
 
