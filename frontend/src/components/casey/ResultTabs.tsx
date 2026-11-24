@@ -81,8 +81,9 @@ export function ResultTabs<K extends string>({ tabs, value, onChange, mock, acti
       */}
       {/* 手機上不放 action（下載 PDF 改成標題旁的圖示，見 ResultHeading），頁籤拿到整列的寬度 */}
       <div className="relative z-10 -mb-0.5 flex flex-wrap items-end gap-x-3 gap-y-2">
+      {/* 捲軸藏起來（頁籤列底下會多一條灰線）；還有頁籤時兩側淡出提示，可以左右滑 */}
       <Tabs.List ref={listRef} aria-label="結果分頁"
-        className="no-print flex min-w-0 flex-1 items-end gap-1.5 overflow-x-auto data-more-end:mask-r-from-[calc(100%-2.5rem)] data-more-start:mask-l-from-[calc(100%-2.5rem)]">
+        className="no-print flex min-w-0 flex-1 items-end gap-1.5 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden data-more-end:mask-r-from-[calc(100%-2.5rem)] data-more-start:mask-l-from-[calc(100%-2.5rem)]">
         {tabs.map((t) => (
           <Tabs.Tab key={t.key} value={t.key}
             className={cn(
