@@ -275,7 +275,7 @@ type Consent = { kinds: string[]; given: boolean; onChange: (yes: boolean) => vo
  * 有特種個資時，傳給 AI 前要勾選同意。只有一個勾選框：不想用 AI 就不要勾，
  * 第 5 關改答固定題目、第 6 關直接看結果（用原本的描述），不需要另外選「不同意」。
  */
-function AiConsent({ consent, use, skip }: { consent: Consent; use: string; skip: string }) {
+function AiConsent({ consent, skip }: { consent: Consent; skip: string }) {
   if (consent.kinds.length === 0) return null;
   const on = consent.given;
   return (
@@ -294,7 +294,7 @@ function AiConsent({ consent, use, skip }: { consent: Consent; use: string; skip
           aria-label="我同意傳給 AI" aria-describedby="ai-consent-hint" />
         <span className="flex min-w-0 flex-1 flex-col">
           <span className="font-bold">我同意傳給 AI</span>
-          <span id="ai-consent-hint" className="text-hint leading-snug text-muted-foreground">僅用遮蓋後內容來{use}，不做其他用途。</span>
+          <span id="ai-consent-hint" className="text-hint leading-snug text-muted-foreground">只傳遮名內容，不做其他用途。</span>
         </span>
         <span aria-hidden="true" className={cn(
           "grid size-7 flex-none place-items-center rounded-[8px] border-2",
@@ -365,7 +365,7 @@ function DetailStage({ heading, llm, mode, setMode, aiState, askAi, consent, aiA
           {mode === "ai" && <div className="flex flex-col gap-4 text-base">
             {(aiState === "idle" || aiState === "asking") && (
               <>
-                {aiState === "idle" && <AiConsent consent={consent} use="產生補充問題" skip="不想用 AI 的話，改答上面的固定題目就好。" />}
+                {aiState === "idle" && <AiConsent consent={consent} skip="不想用 AI 的話，改答上面的固定題目就好。" />}
                 {/* 和第 6 關「請 AI 整理敘述」同樣是整行寬的按鈕；按下後同一顆按鈕變成載入中 */}
                 <Button type="button" size="lg" className="w-full" disabled={aiState === "asking" || !aiAllowed} aria-busy={aiState === "asking"} onClick={askAi}>
                   {aiState === "asking"
@@ -518,7 +518,7 @@ function RewriteStage({ heading, llm, intake, update, state, onStart, consent, a
 
       {state !== "loading" && !reviewed && (
         <>
-          <AiConsent consent={consent} use="整理成法律描述" skip={`不想用 AI 的話不用勾，直接看參考結果，會用你原本的描述${usedFor}。`} />
+          <AiConsent consent={consent} skip={`不想用 AI 的話不用勾，直接看參考結果，會用你原本的描述${usedFor}。`} />
           <Button type="button" size="lg" className="w-full" disabled={!aiAllowed} onClick={onStart}><SparklesIcon data-icon="inline-start" />請 AI 整理敘述</Button>
         </>
       )}

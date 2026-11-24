@@ -763,7 +763,7 @@ describe("第 5 關：補充細節", () => {
     renderAt("/confirm", <Confirm />, at5, { text: "我骨折住院" });
     await openAi(user);
     expect(screen.getByText(/^你的描述裡有法律特別保護的資料（偵測到：.+）。$/)).toBeInTheDocument();
-    expect(screen.getByText("僅用遮蓋後內容來產生補充問題，不做其他用途。")).toBeInTheDocument();
+    expect(screen.getByText("只傳遮名內容，不做其他用途。")).toBeInTheDocument();
     expect(screen.queryByText(/遮名後的內容會傳給/)).toBeNull();
     // 「送出前檢查」拿掉了，資料使用說明在說明頁
     expect(screen.queryByRole("heading", { name: "送出前檢查" })).not.toBeInTheDocument();
