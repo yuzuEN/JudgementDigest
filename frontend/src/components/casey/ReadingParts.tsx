@@ -1,6 +1,7 @@
-import { ExternalLinkIcon } from "lucide-react";
+import { ArrowDownIcon, ExternalLinkIcon } from "lucide-react";
 import type { ReactNode } from "react";
 import { cn } from "@/lib/utils";
+import { buttonVariants } from "@/components/ui/button";
 import { JUDICIAL_URL } from "../Layout";
 
 /**
@@ -24,5 +25,30 @@ export function OriginalLink({ url, caseNumber }: { url?: string | null; caseNum
       className="no-print mt-1.5 inline-flex size-11 flex-none items-center justify-center rounded-full text-primary hover:bg-accent">
       <ExternalLinkIcon className="size-6" aria-hidden="true" />
     </a>
+  );
+}
+
+/**
+ * 手機（單欄）時，側欄會排在判決全文上面，而且「法院怎麼認定」可能很長：
+ * 頁首給幾個捷徑，直接捲到全文或卡片。寬螢幕兩欄並排時不需要（lg:hidden）。
+ */
+export function JumpLinks({ links }: { links: { id: string; label: string }[] }) {
+  if (links.length === 0) return null;
+  const go = (e: React.MouseEvent<HTMLAnchorElement>, id: string) => {
+    const el = document.getElementById(id);
+    if (!el) return;
+    e.preventDefault();
+    const reduce = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
+    el.scrollIntoView?.({ behavior: reduce ? "auto" : "smooth", block: "start" });
+  };
+  return (
+    <nav aria-label="跳到" className="no-print flex flex-wrap gap-2 lg:hidden">
+      {links.map((l) => (
+        <a key={l.id} href={`#${l.id}`} data-slot="button" onClick={(e) => go(e, l.id)}
+          className={cn(buttonVariants({ variant: "outline", size: "sm" }), "flex-1 border-input text-foreground no-underline")}>
+          {l.label}<ArrowDownIcon data-icon="inline-end" aria-hidden="true" />
+        </a>
+      ))}
+    </nav>
   );
 }

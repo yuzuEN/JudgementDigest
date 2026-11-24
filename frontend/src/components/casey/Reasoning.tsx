@@ -122,10 +122,10 @@ export function ReasoningCard({ reasoning, active, onSelect }: {
     {/* 寬螢幕（左右兩欄）：卡片黏在畫面上，捲全文時一直看得到；太長時卡片自己捲動。
         排到左欄最後（order-last），下面就沒有別的卡片會從它上方的空隙捲過去 */}
     <Card id="reasoning-card" aria-labelledby="reasoning-title"
-      className="scroll-mt-4 gap-4 px-6.5 lg:order-last lg:sticky lg:top-4 lg:max-h-[calc(100dvh-2rem)] lg:overflow-y-auto print:static print:max-h-none print:overflow-visible">
+      className="scroll-mt-4 gap-4 px-[18px] sm:px-6.5 lg:order-last lg:sticky lg:top-4 lg:max-h-[calc(100dvh-2rem)] lg:overflow-y-auto print:static print:max-h-none print:overflow-visible">
       <div className="flex flex-col gap-1.5">
         <h2 id="reasoning-title" className="text-xl font-bold">法院怎麼認定</h2>
-        <p className="text-[15px] text-muted-foreground">點一下，右邊的全文會捲到那一段，並標出這句原文。</p>
+        <p className="text-[15px] text-muted-foreground">點一下，判決全文會捲到那一段，並標出這句原文。</p>
       </div>
       {groups.map((g) => <ReasoningGroup key={g.label} group={g} active={active} onSelect={onSelect} />)}
       <p className="text-sm text-muted-foreground">
@@ -135,7 +135,7 @@ export function ReasoningCard({ reasoning, active, onSelect }: {
     {/* 窄螢幕（單欄）卡片不會黏住：點過一項、畫面捲到原文之後，右下角給一顆回到卡片的按鈕 */}
     {active !== null && (
       <button type="button" onClick={() => document.getElementById("reasoning-card")?.scrollIntoView?.({ behavior: "smooth", block: "start" })}
-        className="no-print fixed right-4 bottom-4 z-10 min-h-11 rounded-full border-2 border-primary bg-card px-4 text-[15px] font-bold text-primary shadow-md hover:bg-accent lg:hidden">
+        className="no-print fixed right-[max(1rem,env(safe-area-inset-right,0px))] bottom-[max(1rem,env(safe-area-inset-bottom,0px))] z-10 min-h-11 rounded-full border-2 border-primary bg-card px-4 text-[15px] font-bold text-primary shadow-md hover:bg-accent lg:hidden">
         回到法院怎麼認定
       </button>
     )}

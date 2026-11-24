@@ -4,7 +4,7 @@ import { cn } from "@/lib/utils";
 import { Card } from "@/components/ui/card";
 import type { CriminalGuideFunction, Guide } from "../api/types";
 import { MidLabels } from "../components/casey/MidLabels";
-import { InfoRow, OriginalLink } from "../components/casey/ReadingParts";
+import { InfoRow, JumpLinks, OriginalLink } from "../components/casey/ReadingParts";
 import { LoadingPanel } from "../components/casey/ResultTabs";
 import { InfoLink } from "../components/Common";
 import { SampleTag } from "../components/casey/Sample";
@@ -47,6 +47,7 @@ export default function CriminalReading({ guide, error, onRetry }: {
               <OriginalLink url={guide.case.url} caseNumber={guide.case.case_number} />
             </div>
           )}
+          {guide && <JumpLinks links={[{ id: "full-title", label: detail?.source === "dataset" ? "犯罪事實" : "判決全文" }]} />}
         </div>
 
         {error && <ErrorBox message={error} onRetry={onRetry} hint="請重新載入判決，或返回結果頁查看其他判決。" />}
@@ -54,7 +55,7 @@ export default function CriminalReading({ guide, error, onRetry }: {
         {guide && (
           <div className="flex flex-wrap items-start gap-7">
             <aside className="flex w-full min-w-0 flex-[1_1_280px] flex-col gap-4 sm:max-w-[360px]">
-              <Card className="gap-4 px-6.5" aria-labelledby="criminal-basic-title">
+              <Card className="gap-4 px-[18px] sm:px-6.5" aria-labelledby="criminal-basic-title">
                 <h2 id="criminal-basic-title" className="text-xl font-bold">判決資料</h2>
                 {/* 和「你填的資料」一樣：名稱在左、內容在右；罪名一個一個標籤直排 */}
                 <dl className="m-0 flex flex-col gap-2.5 text-[15px]">
@@ -69,13 +70,13 @@ export default function CriminalReading({ guide, error, onRetry }: {
               </Card>
 
               {shown.length > 0 && (
-                <Card className="gap-3 px-6.5" aria-labelledby="legend-title">
+                <Card className="gap-3 px-[18px] sm:px-6.5" aria-labelledby="legend-title">
                   <h2 id="legend-title" className="text-xl font-bold">段落標色</h2>
                   <p className="text-[15px] text-muted-foreground">選擇要上色的類別。取消後仍會保留文字標籤。</p>
-                  <div className="flex flex-col gap-2">
+                  <div className="grid gap-2 phone:grid-cols-2">
                     {shown.map((f) => (
                       <button key={f.id} type="button" aria-pressed={on[f.id]} onClick={() => setOn({ ...on, [f.id]: !on[f.id] })}
-                        className={cn("flex min-h-12 items-center gap-3 rounded-[14px] border-2 bg-card px-3.5 py-2 text-left",
+                        className={cn("flex min-h-12 items-center gap-3 rounded-[14px] border-2 bg-card px-3.5 py-2 text-left phone:gap-2 phone:px-2.5",
                           on[f.id] ? "border-primary" : "border-input")}>
                         <span aria-hidden="true" className={cn("grid size-6 flex-none place-items-center rounded-[7px] border-2",
                           on[f.id] ? "border-primary bg-primary text-primary-foreground" : "border-input bg-card")}>
@@ -83,14 +84,14 @@ export default function CriminalReading({ guide, error, onRetry }: {
                         </span>
                         <span aria-hidden="true" className={cn("size-[18px] flex-none rounded-[5px] border-[1.5px] border-foreground", on[f.id] ? f.swatch : "bg-transparent")} />
                         <span className="font-bold">{f.label}</span>
-                        <span className="ml-auto text-sm text-muted-foreground">{counts[f.id]} 段</span>
+                        <span className="ml-auto text-sm text-muted-foreground phone:hidden">{counts[f.id]} 段</span>
                       </button>
                     ))}
                   </div>
                 </Card>
               )}
 
-              <Card className="gap-2 px-6.5 shadow-none" aria-labelledby="about-title">
+              <Card className="gap-2 px-[18px] sm:px-6.5 shadow-none" aria-labelledby="about-title">
                 <h2 id="about-title" className="text-xl font-bold">關於這些標示</h2>
                 <p className="text-[15px] text-muted-foreground">段落依判決書的標題與編號自動切分、標示，可能有誤，請以判決原文為準。</p>
                 <p className="text-sm text-muted-foreground">辨識到的被告姓名換成「被告」，其他人名換成【關係人】。自動遮名可能有遺漏。</p>
@@ -99,7 +100,7 @@ export default function CriminalReading({ guide, error, onRetry }: {
 
             <Card className="min-w-0 flex-[999_1_500px] gap-4 px-[18px] sm:px-6.5" aria-labelledby="full-title">
               <div className="flex flex-wrap items-center justify-between gap-2">
-                <h2 id="full-title" className="text-xl font-bold">{detail?.source === "dataset" ? "犯罪事實" : "判決全文"}</h2>
+                <h2 id="full-title" className="scroll-mt-4 text-xl font-bold">{detail?.source === "dataset" ? "犯罪事實" : "判決全文"}</h2>
                 {guide.mock && <SampleTag />}
               </div>
               {guide.mock && <p className="text-[15px] text-sample-fg">這是示例判決，內容為示意，不是真實判決。</p>}
@@ -125,7 +126,7 @@ export default function CriminalReading({ guide, error, onRetry }: {
                     <section data-fn={p.function} data-on={f ? lit : undefined}
                       className={cn("para flex flex-col gap-1.5 rounded-[12px] px-4 py-3.5 transition-colors motion-reduce:transition-none",
                         !f ? "text-muted-foreground" : lit ? f.on : "border border-dashed border-input bg-transparent")}>
-                      <span className="text-[13px] font-extrabold tracking-[.06em]">{p.label}</span>
+                      <span className="text-sm font-extrabold tracking-[.06em]">{p.label}</span>
                       <p className={cn("leading-loose break-words", p.pre && "whitespace-pre-wrap", p.function === "table" && "overflow-x-auto text-[15px]")}>{p.text}</p>
                     </section>
                   </Fragment>
