@@ -170,10 +170,10 @@ export default function Confirm() {
                   ? <LinkButton variant="outline" to="/start?stage=3"><ArrowLeftIcon data-icon="inline-start" />回上一章</LinkButton>
                   : <Button type="button" variant="outline" onClick={() => go(stage - 1)}><ArrowLeftIcon data-icon="inline-start" />上一關</Button>}
                 {stage < 6
-                  ? <Button type="button" size="lg" disabled={!!why} onClick={() => go(stage + 1)}>
+                  ? <Button type="button" disabled={!!why} onClick={() => go(stage + 1)}>
                       {stage === 5 && !answered ? "略過，下一關" : "下一關"}<ArrowRightIcon data-icon="inline-end" />
                     </Button>
-                  : <Button type="button" size="lg" disabled={!ready || !!why} onClick={() => navigate(resultPath)}>看參考結果<ArrowRightIcon data-icon="inline-end" /></Button>}
+                  : <Button type="button" disabled={!ready || !!why} onClick={() => navigate(resultPath)}>看參考結果<ArrowRightIcon data-icon="inline-end" /></Button>}
               </div>
               {why && <p role="status" className="flex items-start gap-1.5 text-[15px]"><InfoIcon className="mt-1 size-4 flex-none" aria-hidden="true" />{why}</p>}
             </nav>
