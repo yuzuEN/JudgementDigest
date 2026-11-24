@@ -28,9 +28,9 @@ export { Bar };
 const TABS = [
   { key: "overview", label: "整體結果" },
   { key: "amount", label: "可能的金額" },
+  { key: "cases", label: "相似判決" },
   { key: "evidence", label: "證據對照" },
   { key: "defense", label: "對方的說法" },
-  { key: "cases", label: "相似判決" },
 ] as const;
 type TabKey = (typeof TABS)[number]["key"];
 

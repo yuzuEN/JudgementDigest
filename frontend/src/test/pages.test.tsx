@@ -776,7 +776,7 @@ describe("民事結果", () => {
   describe("分頁", () => {
     it("五個分頁，預設整體結果；解說員的話每個分頁都一樣", async () => {
       const { calls } = await show();
-      expect(screen.getAllByRole("tab").map((t) => t.textContent)).toEqual(["整體結果", "可能的金額", "證據對照", "對方的說法", "相似判決"]);
+      expect(screen.getAllByRole("tab").map((t) => t.textContent)).toEqual(["整體結果", "可能的金額", "相似判決", "證據對照", "對方的說法"]);
       expect(screen.getByRole("tab", { name: "整體結果" })).toHaveAttribute("aria-selected", "true");
       const scene = screen.getByRole("region", { name: "CasEY 角色說明" });
       expect(scene).toHaveTextContent("你可以參考模型給出的結果，也可以在相似判決中查找前10件最相似的判決書資訊，並參考導讀內容。");
@@ -809,13 +809,13 @@ describe("民事結果", () => {
       try {
         // 從判決導讀回來（?tab=cases）：第一次就捲，不用動畫
         await show({}, "/result/civil?tab=cases");
-        expect(scrollTo).toHaveBeenCalledWith({ left: 590 - 300 + 16, behavior: "auto" });
+        expect(scrollTo).toHaveBeenCalledWith({ left: 350 - 300 + 16, behavior: "auto" });   // 相似判決是第 3 個：240 + 110
         expect(scrollTo.mock.contexts[0]).toBe(screen.getByRole("tablist"));
         scrollTo.mockClear();
         await user().click(screen.getByRole("tab", { name: "整體結果" }));
         expect(scrollTo).not.toHaveBeenCalled();     // 已經在畫面內
         await user().click(screen.getByRole("tab", { name: "對方的說法" }));
-        expect(scrollTo).toHaveBeenCalledWith({ left: 470 - 300 + 16, behavior: "smooth" });
+        expect(scrollTo).toHaveBeenCalledWith({ left: 590 - 300 + 16, behavior: "smooth" });   // 對方的說法是第 5 個：480 + 110
       } finally {
         vi.restoreAllMocks();
         delete (Element.prototype as Partial<Element>).scrollTo;
@@ -1815,7 +1815,7 @@ describe("民事被告端", () => {
     });
     await screen.findByRole("tab", { name: "整體結果" });
     expect(calls[0].body).toMatchObject({ role: "defendant", defendant_has_lawyer: true, plaintiff_has_lawyer: null });
-    expect(screen.getAllByRole("tab").map((t) => t.textContent)).toEqual(["整體結果", "可能要賠的金額", "證據對照", "被告的說法", "相似判決"]);
+    expect(screen.getAllByRole("tab").map((t) => t.textContent)).toEqual(["整體結果", "可能要賠的金額", "相似判決", "證據對照", "被告的說法"]);
     const panel = screen.getByRole("tabpanel");
     expect(panel).toHaveTextContent("對方（原告）勝訴的機率");
     expect(panel).toHaveTextContent("38%");
