@@ -571,7 +571,7 @@ function Checklist({ stage, vendor }: { stage: number; vendor: string | null }) 
   const items = [[4, "確認遮名"], [5, "補充細節（可略過）"], [6, vendor ? "判決書寫法" : "最後確認"]] as const;
   return (
     <aside aria-labelledby="check-title" className="w-full min-w-0 flex-[1_1_260px] sm:max-w-[340px]">
-      <Card className="gap-4 px-6.5">
+      <Card className="gap-4 px-[18px] sm:px-6.5">
         <h2 id="check-title" className="text-xl font-bold">送出前檢查</h2>
         <ol className="m-0 flex list-none flex-col gap-1 p-0">
           {items.map(([n, label]) => {

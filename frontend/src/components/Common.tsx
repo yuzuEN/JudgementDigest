@@ -7,7 +7,7 @@ export const LAF_URL = "https://www.laf.org.tw/";
 /** 欄位名稱旁的 i，開新分頁到說明頁，不會中斷目前的流程。 */
 export function InfoLink({ to, label }: { to: string; label: string }) {
   return (
-    <a data-slot="info-link" className="no-print inline-flex size-6 items-center justify-center rounded-full text-primary hover:bg-accent"
+    <a data-slot="info-link" className="no-print relative inline-flex size-6 items-center justify-center rounded-full text-primary after:absolute after:-inset-2.5 after:content-[''] hover:bg-accent"
       href={`/guide#${encodeURIComponent(to)}`} target="_blank" rel="noreferrer" aria-label={`${label}（開新分頁）`} title={label}>
       <InfoIcon className="size-4" aria-hidden="true" />
     </a>

@@ -69,7 +69,7 @@ function BackToTop() {
 /** 「查詢結果範例」：示例資料，用虛線框與「示例」標籤標示（首頁專用的米色 #F3EFE5）。 */
 function SampleCard({ title, children }: { title: string; children: ReactNode }) {
   return (
-    <Card aria-label={`${title}（示例）`} className="gap-4 px-6.5 ring-0 border-2 border-dashed border-[#F3EFE5] dark:border-[#4A4536]">
+    <Card aria-label={`${title}（示例）`} className="gap-4 px-[18px] sm:px-6.5 ring-0 border-2 border-dashed border-[#F3EFE5] dark:border-[#4A4536]">
       <div className="flex items-center justify-between gap-3">
         <p className="font-bold">{title}</p>
         <span className="rounded-full border-2 border-dashed border-[#F3EFE5] bg-[#F3EFE5] px-2.5 text-sm leading-[1.7] font-bold text-foreground dark:border-[#4A4536] dark:bg-[#4A4536]">示例</span>
@@ -134,7 +134,7 @@ export default function Home() {
           <ol className="m-0 grid list-none gap-4 p-0 md:grid-cols-3">
             {CHAPTERS.map((c) => (
               <li key={c.n}>
-                <Card className="h-full gap-2 px-6.5">
+                <Card className="h-full gap-2 px-[18px] sm:px-6.5">
                   <span className="w-fit rounded-full border-[1.5px] border-outcome-part bg-outcome-part-bg px-3 text-sm leading-[1.9] font-bold text-outcome-part-fg">{c.n}</span>
                   <h3 className="text-2xl font-extrabold">{c.title}</h3>
                   <p className="text-base leading-relaxed text-muted-foreground">{c.text}</p>
@@ -159,14 +159,14 @@ export default function Home() {
         <Section className="flex flex-col gap-6">
           <H2>可以查到哪些資料</H2>
           <div className="grid gap-4 md:grid-cols-2">
-            <Card className="gap-4 px-6.5">
+            <Card className="gap-4 px-[18px] sm:px-6.5">
               <h3 className="flex items-center gap-3 text-lg font-bold text-balance">
                 <span className="grid size-11 place-items-center rounded-[11px] bg-primary text-primary-foreground"><FileTextIcon className="size-6" aria-hidden="true" /></span>
                 民事：賠償、還款與契約糾紛
               </h3>
               <Checks items={CIVIL_GETS} />
             </Card>
-            <Card className="gap-4 px-6.5">
+            <Card className="gap-4 px-[18px] sm:px-6.5">
               <h3 className="flex items-center gap-3 text-lg font-bold text-balance">
                 <span className="grid size-11 place-items-center rounded-[11px] bg-primary text-primary-foreground"><ScaleIcon className="size-6" aria-hidden="true" /></span>
                 刑事：犯罪案件的可能判決結果
@@ -180,11 +180,11 @@ export default function Home() {
           <div className="flex flex-col gap-4 md:pt-6.5">
             <H2 icon={<DatabaseIcon className="size-6 text-primary" aria-hidden="true" />}>資料來源</H2>
             <p>來自臺灣司法院的公開判決資料。</p>
-            <a href={JUDICIAL_URL} target="_blank" rel="noreferrer" className="inline-flex w-fit items-center gap-1 font-semibold">
+            <a href={JUDICIAL_URL} target="_blank" rel="noreferrer" className="inline-flex w-fit items-center gap-1 font-semibold phone:min-h-11">
               司法院裁判書查詢系統<ExternalLinkIcon className="size-4" aria-hidden="true" />
             </a>
           </div>
-          <Card className="gap-4 px-6.5 ring-primary">
+          <Card className="gap-4 px-[18px] sm:px-6.5 ring-primary">
             <H2 icon={<ShieldCheckIcon className="size-6 text-primary" aria-hidden="true" />}>結果的使用限制</H2>
             <p>我們提供相似判決的統計整理，但無法取代律師的專業判斷。</p>
             <p>需要專業協助，可以洽詢

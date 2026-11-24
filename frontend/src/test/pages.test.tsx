@@ -503,6 +503,20 @@ describe("說明與知識", () => {
     expect(window.location.hash).toBe("#terms");
   });
 
+  it("手機上的目錄可以展開、點了某一段就收起來", async () => {
+    Element.prototype.scrollIntoView = vi.fn();
+    const user = userEvent.setup();
+    renderApp("/guide");
+    const toc = screen.getByRole("navigation", { name: "本頁目錄" });
+    const toggle = within(toc).getByRole("button", { name: "目錄" });
+    expect(toggle).toHaveAttribute("aria-expanded", "false");
+    expect(toggle).toHaveAttribute("aria-controls", "guide-toc");
+    await user.click(toggle);
+    expect(toggle).toHaveAttribute("aria-expanded", "true");
+    await user.click(within(toc).getByRole("link", { name: "常見名詞" }));
+    expect(toggle).toHaveAttribute("aria-expanded", "false");
+  });
+
 });
 
 describe("第 4 關：確認遮名與敏感資料", () => {
