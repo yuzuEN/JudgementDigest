@@ -219,7 +219,7 @@ export default function Intake() {
                       <AmountInput id="amount" value={intake.claimedAmount} onChange={(claimedAmount) => update({ claimedAmount })} />
                     </FieldBlock>
                     <FieldBlock label={<span id="party-label">{defendant ? "你（被告）是" : "對方是"}</span>}>
-                      <Segmented labelledBy="party-label" value={intake.defendantType} items={DEFENDANT_TYPES} stackOnPhone
+                      <Segmented labelledBy="party-label" value={intake.defendantType} items={DEFENDANT_TYPES} className="phone:*:flex-auto"
                         onChange={(v) => update({ defendantType: v as DefendantType | "" })} />
                     </FieldBlock>
                   </>
