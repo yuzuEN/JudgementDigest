@@ -477,7 +477,7 @@ function CourtField({ courts, value, onChange, defendant = false }: {
     <FieldBlock label={<label htmlFor="court">{defendant ? "案子在哪個法院？" : "打算在哪個法院？"}</label>}
       hint={defendant ? "起訴狀或開庭通知上的法院，可以不選" : undefined}>
       <Select items={items} value={value || null} onValueChange={(v) => onChange((v as string | null) ?? "")}>
-        <SelectTrigger id="court" className="w-full max-w-[360px]"><SelectValue /></SelectTrigger>
+        <SelectTrigger id="court" className="w-full sm:w-60"><SelectValue /></SelectTrigger>
         <SelectContent>
           {items.map((c) => <SelectItem key={c.label} value={c.value}>{c.label}</SelectItem>)}
         </SelectContent>
