@@ -16,6 +16,7 @@ const SECTIONS = [
   ["dispute-types", "糾紛類型說明"],
   ["results", "怎麼看結果"],
   ["terms", "常見名詞"],
+  ["privacy", "資料使用說明"],
   ["next", "接下來可以怎麼做"],
 ] as const;
 
@@ -156,7 +157,22 @@ export default function Guide() {
               <TermList terms={LEGAL_TERMS} />
             </Section>
 
-            <Section id="next" n={5} title="接下來可以怎麼做？">
+            {/* 原本在確認頁右側「送出前檢查」裡，移到這裡 */}
+            <Section id="privacy" n={5} title="你的資料怎麼使用？">
+              <p className="text-muted-foreground">比對相似判決時，用的是遮名後的版本；你選擇使用 AI 補充或整理時，也只會把遮名後的版本傳給 AI。</p>
+              <Card className="gap-2 px-[18px] sm:px-6.5">
+                <ul className="m-0 flex list-disc flex-col gap-2 pl-5 text-hint">
+                  <li>蒐集者：本專題團隊</li>
+                  <li>只用來產生參考結果</li>
+                  <li>遮名在瀏覽器完成</li>
+                  <li>關掉分頁就清除</li>
+                  <li>選擇使用 AI 時，AI 服務不拿你的資料訓練模型</li>
+                  <li>敏感資料不保存</li>
+                </ul>
+              </Card>
+            </Section>
+
+            <Section id="next" n={6} title="接下來可以怎麼做？">
               <ol className="m-0 flex list-decimal flex-col gap-2 pl-5">
                 <li>下載結果 PDF，與律師或法律扶助基金會討論，取得符合實際情況的建議。</li>
                 <li>將診斷證明、收據、轉帳紀錄、對話紀錄與照片依時間整理，並保留備份。</li>

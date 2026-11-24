@@ -477,7 +477,7 @@ function CourtField({ courts, value, onChange, defendant = false }: {
     <FieldBlock label={<label htmlFor="court">{defendant ? "案子在哪個法院？" : "打算在哪個法院？"}</label>}
       hint={defendant ? "起訴狀或開庭通知上的法院，可以不選" : undefined}>
       <Select items={items} value={value || null} onValueChange={(v) => onChange((v as string | null) ?? "")}>
-        <SelectTrigger id="court" className="w-full max-w-[360px]"><SelectValue /></SelectTrigger>
+        <SelectTrigger id="court" className="w-full sm:w-60"><SelectValue /></SelectTrigger>
         <SelectContent>
           {items.map((c) => <SelectItem key={c.label} value={c.value}>{c.label}</SelectItem>)}
         </SelectContent>
@@ -486,7 +486,7 @@ function CourtField({ courts, value, onChange, defendant = false }: {
   );
 }
 
-/** 右側「你填的資料」：每一關填的內容都看得到。 */
+/** 右側「你填的資料」：每一關填的內容都看得到。手機上不顯示（太長，要一直滑）。 */
 function Summary({ intake }: { intake: IntakeState }) {
   const civil = intake.caseType !== "criminal";
   const role = civilRole(intake);
@@ -506,7 +506,7 @@ function Summary({ intake }: { intake: IntakeState }) {
     ["證物", `${evidenceCount} 項`],
   ];
   return (
-    <aside aria-labelledby="summary-title" className="w-full min-w-0 flex-[1_1_260px] sm:max-w-[340px]">
+    <aside aria-labelledby="summary-title" className="w-full min-w-0 flex-[1_1_260px] phone:hidden sm:max-w-[340px]">
       <Card className="gap-4 px-[18px] sm:px-6.5">
         <div className="flex items-center justify-between gap-2">
           <h2 id="summary-title" className="text-xl font-bold">你填的資料</h2>
