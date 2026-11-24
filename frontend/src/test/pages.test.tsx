@@ -130,27 +130,31 @@ describe("描述案情（關卡 1–3）", () => {
     mockApi({ "GET /meta/options": () => OPTIONS });
     const user = userEvent.setup();
     renderApp("/start?stage=3", { text: TRAFFIC });
-    const group = screen.getByRole("group", { name: "想請求的金額" });
     const next = screen.getByRole("button", { name: "下一關" });
     expect(screen.getByText("未填入時，結果僅會顯示求償比例")).toBeInTheDocument();
-    // 「自訂」按下去變成輸入框
-    await user.click(within(group).getByRole("button", { name: "自訂" }));
-    const amount = screen.getByLabelText("自訂金額");
-    expect(amount).toHaveFocus();
+    // 一進來就是輸入框，旁邊只有「不確定」
+    const amount = screen.getByLabelText("想請求的金額");
+    expect(screen.queryByRole("button", { name: "自訂" })).not.toBeInTheDocument();
     await user.type(amount, "64萬8千");
     expect(screen.getByText("我讀成：648,000 元")).toBeInTheDocument();
-    expect(group).toHaveTextContent("648,000 元");
     await user.clear(amount);
     await user.type(amount, "五十萬");
     expect(screen.getByText(/看不懂這個金額/)).toBeInTheDocument();
     expect(next).toBeDisabled();
     expect(screen.getByText("金額格式不對，請修改。")).toBeInTheDocument();
-    await user.click(within(group).getByRole("button", { name: "50萬" }));
-    expect(within(group).getByRole("button", { name: "50萬" })).toHaveAttribute("aria-pressed", "true");
+    await user.clear(amount);
+    await user.type(amount, "50萬");
     expect(screen.getByText("我讀成：500,000 元")).toBeInTheDocument();
     expect(next).toBeEnabled();
-    await user.click(within(group).getByRole("button", { name: "不確定" }));
+    // 「不確定」清空金額；再打字就取消
+    const unsure = screen.getByRole("button", { name: "不確定" });
+    await user.click(unsure);
+    expect(unsure).toHaveAttribute("aria-pressed", "true");
+    expect(amount).toHaveValue("");
     expect(screen.getByText("未填入時，結果僅會顯示求償比例")).toBeInTheDocument();
+    await user.type(amount, "3萬");
+    expect(unsure).toHaveAttribute("aria-pressed", "false");
+    await user.clear(amount);
 
     // 法院可以不選，選項從 API 來
     await user.click(screen.getByLabelText(/打算在哪個法院/));
