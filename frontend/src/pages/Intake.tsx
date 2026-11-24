@@ -253,12 +253,12 @@ export default function Intake() {
                 {stage > 1 ? <Button type="button" variant="outline" onClick={() => go(stage - 1)}><ArrowLeftIcon data-icon="inline-start" />上一關</Button> : <span />}
                 {stage < 3
                   ? <Button type="button" disabled={!!why} onClick={() => go(stage + 1)}>下一關<ArrowRightIcon data-icon="inline-end" /></Button>
-                  : <Button type="button" disabled={!!why} onClick={() => navigate("/confirm")} aria-label="下一章：確認內容">下一章<span className="phone:hidden">：確認內容</span><ArrowRightIcon data-icon="inline-end" /></Button>}
+                  : <Button type="button" disabled={!!why} onClick={() => navigate("/confirm")}>下一關<ArrowRightIcon data-icon="inline-end" /></Button>}
               </div>
               {why && <p role="status" className="flex items-start gap-1.5 text-hint"><InfoIcon className="mt-1 size-4 flex-none" aria-hidden="true" />{why}</p>}
               {stage === 3 && (
                 <p className="flex items-start gap-1.5 text-hint text-muted-foreground">
-                  <ShieldCheckIcon className="mt-1 size-4 flex-none" aria-hidden="true" />下一章會先讓你預覽，並遮掉姓名、身分證字號、電話。
+                  <ShieldCheckIcon className="mt-1 size-4 flex-none" aria-hidden="true" />下一關會先讓你預覽，並遮掉姓名、身分證字號、電話。
                 </p>
               )}
             </nav>

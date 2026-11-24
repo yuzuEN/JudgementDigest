@@ -23,7 +23,7 @@ describe("完整流程", () => {
     await user.click(screen.getByRole("button", { name: "下一關" }));
     await user.click(screen.getByRole("button", { name: "50萬" }));
     await user.click(screen.getByRole("button", { name: "沒有" }));
-    await user.click(screen.getByRole("button", { name: "下一章：確認內容" }));
+    await user.click(screen.getByRole("button", { name: "下一關" }));
 
     expect(await screen.findByRole("heading", { name: /第 4 關/ })).toBeInTheDocument();
     expect((await screen.findAllByText("【電話】")).length).toBeGreaterThan(0);

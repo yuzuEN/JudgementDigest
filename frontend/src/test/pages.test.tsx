@@ -126,12 +126,12 @@ describe("描述案情（關卡 1–3）", () => {
     expect(screen.queryByText("勞動", { selector: "summary span" })).not.toBeInTheDocument();
   });
 
-  it("金額告訴使用者讀成多少，看不懂就擋下一章", async () => {
+  it("金額告訴使用者讀成多少，看不懂就擋下一關", async () => {
     mockApi({ "GET /meta/options": () => OPTIONS });
     const user = userEvent.setup();
     renderApp("/start?stage=3", { text: TRAFFIC });
     const group = screen.getByRole("group", { name: "想請求的金額" });
-    const next = screen.getByRole("button", { name: "下一章：確認內容" });
+    const next = screen.getByRole("button", { name: "下一關" });
     expect(screen.getByText("未填入時，結果僅會顯示求償比例")).toBeInTheDocument();
     // 「自訂」按下去變成輸入框
     await user.click(within(group).getByRole("button", { name: "自訂" }));
@@ -173,7 +173,7 @@ describe("描述案情（關卡 1–3）", () => {
     const slot = screen.getByRole("button", { name: "驗傷單、診斷證明" });
     await user.click(slot);
     expect(slot).toHaveAttribute("aria-pressed", "true");
-    await user.click(screen.getByRole("button", { name: "下一章：確認內容" }));
+    await user.click(screen.getByRole("button", { name: "下一關" }));
     expect(await screen.findByText(/被告有沒有請辯護律師：有/)).toBeInTheDocument();
     expect(screen.getByText(/手上的證據：驗傷單、診斷證明/)).toBeInTheDocument();
   });
@@ -582,10 +582,10 @@ describe("第 4 關：確認遮名與敏感資料", () => {
     await waitFor(() => expect(screen.getByRole("button", { name: "看參考結果" })).toBeEnabled());
   });
 
-  it("回上一章是第 3 關", async () => {
+  it("第 4 關的上一關是第 3 關", async () => {
     rulesApi();
     renderAt("/confirm", <Confirm />, "/confirm", { text: "朋友借錢沒還" });
-    expect(await screen.findByRole("link", { name: "回上一章" })).toHaveAttribute("href", "/start?stage=3");
+    expect(await screen.findByRole("link", { name: "上一關" })).toHaveAttribute("href", "/start?stage=3");
   });
 });
 

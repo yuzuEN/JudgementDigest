@@ -168,7 +168,7 @@ export default function Confirm() {
             <nav aria-label="關卡" className="flex flex-col gap-2">
               <div className="flex flex-wrap items-center justify-between gap-3">
                 {stage === 4
-                  ? <LinkButton variant="outline" to="/start?stage=3"><ArrowLeftIcon data-icon="inline-start" />回上一章</LinkButton>
+                  ? <LinkButton variant="outline" to="/start?stage=3"><ArrowLeftIcon data-icon="inline-start" />上一關</LinkButton>
                   : <Button type="button" variant="outline" onClick={() => go(stage - 1)}><ArrowLeftIcon data-icon="inline-start" />上一關</Button>}
                 {stage < 6
                   ? <Button type="button" disabled={!!why} onClick={() => go(stage + 1)}>
