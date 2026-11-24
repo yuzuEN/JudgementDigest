@@ -1494,6 +1494,44 @@ describe("判決導讀", () => {
     expect(scroll).toHaveBeenCalledWith({ behavior: "smooth", block: "start" });
   });
 
+  it("法院怎麼認定：回到卡片後再點同一句，仍會捲到原文", async () => {
+    const reasoning = { labeler: "llm-p6.0", manual_version: "v0.6", items: [
+      { label: "CONCL", polarity: "有理由", quote: "原告之請求有理由", paragraph: 3, start: 3, end: 11 },
+    ] };
+    mockApi({ "GET /judgments/civil/11/guide": () => ({ ...GUIDE, reasoning }) });
+    const scroll = vi.fn();
+    Element.prototype.scrollIntoView = scroll;
+    const user = userEvent.setup();
+    const { container } = renderAt("/judgment/:source/:caseId", <Reading />, "/judgment/civil/11");
+    const quote = await screen.findByRole("button", { name: /原告之請求有理由/ });
+    await user.click(quote);
+    await user.click(quote);
+    const toPara = scroll.mock.contexts.filter((el) => el === container.querySelector("#para-3"));
+    expect(toPara).toHaveLength(2);
+  });
+
+  it("手機捷徑：跳到判決全文；有法院怎麼認定時也跳得到卡片", async () => {
+    const reasoning = { labeler: "llm-p6.0", manual_version: "v0.6", items: [
+      { label: "CONCL", polarity: "有理由", quote: "原告之請求有理由", paragraph: 3, start: 3, end: 11 },
+    ] };
+    mockApi({ "GET /judgments/civil/11/guide": () => ({ ...GUIDE, reasoning }) });
+    const scroll = vi.fn();
+    Element.prototype.scrollIntoView = scroll;
+    renderAt("/judgment/:source/:caseId", <Reading />, "/judgment/civil/11");
+    const nav = await screen.findByRole("navigation", { name: "跳到" });
+    expect(within(nav).getByRole("link", { name: "判決全文" })).toHaveAttribute("href", "#full-title");
+    expect(within(nav).getByRole("link", { name: "法院怎麼認定" })).toHaveAttribute("href", "#reasoning-card");
+    await userEvent.setup().click(within(nav).getByRole("link", { name: "判決全文" }));
+    expect(scroll.mock.contexts.at(-1)).toBe(document.getElementById("full-title"));
+  });
+
+  it("手機捷徑：沒有法院怎麼認定時，只有判決全文", async () => {
+    mockApi({ "GET /judgments/civil/11/guide": () => GUIDE });
+    renderAt("/judgment/:source/:caseId", <Reading />, "/judgment/civil/11");
+    const nav = await screen.findByRole("navigation", { name: "跳到" });
+    expect(within(nav).getAllByRole("link").map((a) => a.textContent)).toEqual(["判決全文"]);
+  });
+
   it("法院怎麼認定：引文跨兩段時，兩段都標出來", async () => {
     const reasoning = { labeler: "llm-p6.0", manual_version: "v0.6", items: [
       { label: "CONCL", polarity: "有理由", quote: "跨段的引文", paragraph: 2, start: 4, end: 9,
