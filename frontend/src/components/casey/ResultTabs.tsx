@@ -1,6 +1,6 @@
 import { Tabs } from "@base-ui/react/tabs";
 import { InfoIcon, LoaderCircleIcon } from "lucide-react";
-import type { ReactNode } from "react";
+import { useEffect, useLayoutEffect, useRef, type ReactNode } from "react";
 import { useSearchParams } from "react-router-dom";
 import { cn } from "@/lib/utils";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -35,18 +35,56 @@ export function ResultTabs<K extends string>({ tabs, value, onChange, mock, acti
   /** 放在頁籤同一列最右邊（下載 PDF），和面板右邊界對齊 */
   action?: ReactNode;
 }) {
+  const listRef = useRef<HTMLDivElement>(null);
+  const moved = useRef(false);
+
+  // 手機上頁籤會超出寬度：選中的頁籤不在畫面內時，只把頁籤列橫向捲過去（不用 scrollIntoView，免得整頁跟著捲）。
+  // 從判決導讀回來（?tab=cases）也會落在畫面外，所以第一次就要捲。
+  useLayoutEffect(() => {
+    const list = listRef.current;
+    const tab = list?.querySelector<HTMLElement>('[aria-selected="true"]');
+    if (!list || !tab) return;
+    const start = tab.offsetLeft, end = start + tab.offsetWidth;
+    const view = list.scrollLeft, width = list.clientWidth;
+    let left: number | null = null;
+    if (start < view) left = Math.max(0, start - 16);
+    else if (end > view + width) left = end - width + 16;
+    if (left !== null) {
+      const reduce = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
+      list.scrollTo?.({ left, behavior: moved.current && !reduce ? "smooth" : "auto" });
+    }
+    moved.current = true;
+  }, [value]);
+
+  // 兩側還有沒露出的頁籤時，邊緣淡出，提示可以左右滑
+  useEffect(() => {
+    const list = listRef.current;
+    if (!list) return;
+    const update = () => {
+      list.toggleAttribute("data-more-start", list.scrollLeft > 1);
+      list.toggleAttribute("data-more-end", list.scrollLeft + list.clientWidth < list.scrollWidth - 1);
+    };
+    update();
+    list.addEventListener("scroll", update, { passive: true });
+    const ro = typeof ResizeObserver === "undefined" ? null : new ResizeObserver(update);
+    ro?.observe(list);
+    return () => { list.removeEventListener("scroll", update); ro?.disconnect(); };
+  }, []);
+
   return (
     <Tabs.Root value={value} onValueChange={(v) => onChange(v as K)} className="flex flex-col">
       {/*
         資料夾式頁籤：整列往下壓 2px（面板框線的粗細）。沒選的頁籤留 2px 底距，停在框線上方，
         框線從它們底下連續通過；選中的頁籤往下延伸 2px、用面板的底色蓋住框線，和面板接成一體。
       */}
-      <div className="relative z-10 -mb-0.5 flex items-end gap-3">
-      <Tabs.List aria-label="結果分頁" className="no-print flex min-w-0 flex-1 items-end gap-1.5 overflow-x-auto">
+      {/* 手機上「下載 PDF」移到頁籤上方，頁籤才有整列的寬度 */}
+      <div className="relative z-10 -mb-0.5 flex flex-wrap items-end gap-x-3 gap-y-2">
+      <Tabs.List ref={listRef} aria-label="結果分頁"
+        className="no-print flex min-w-0 flex-1 items-end gap-1.5 overflow-x-auto data-more-end:mask-r-from-[calc(100%-2.5rem)] data-more-start:mask-l-from-[calc(100%-2.5rem)]">
         {tabs.map((t) => (
           <Tabs.Tab key={t.key} value={t.key}
             className={cn(
-              "mb-0.5 min-h-[50px] flex-none rounded-t-[12px] border-2 border-b-0 border-input bg-muted px-[18px] font-bold whitespace-nowrap text-muted-foreground hover:text-foreground",
+              "mb-0.5 min-h-[50px] flex-none rounded-t-[12px] border-2 border-b-0 border-input bg-muted px-[18px] phone:px-3.5 font-bold whitespace-nowrap text-muted-foreground hover:text-foreground",
               "data-active:mb-0 data-active:min-h-[52px] data-active:pb-0.5 data-active:bg-card data-active:text-foreground",
               mock ? "data-active:border-dashed data-active:border-sample-line" : "data-active:border-foreground",
             )}>
@@ -54,7 +92,7 @@ export function ResultTabs<K extends string>({ tabs, value, onChange, mock, acti
           </Tabs.Tab>
         ))}
       </Tabs.List>
-      {action && <div className="no-print mb-2 flex-none">{action}</div>}
+      {action && <div className="no-print mb-2 flex-none phone:order-first phone:mb-0 phone:flex phone:w-full phone:justify-end">{action}</div>}
       </div>
       {/* 左上角永遠是直角：第一個頁籤的左邊框和面板的左邊框接成一直線，不管選哪一頁 */}
       {tabs.map((t) => (

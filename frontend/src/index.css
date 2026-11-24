@@ -10,6 +10,8 @@
  * 夜間模式跟著系統（theme.ts 會在 <html> 加上 .dark）。
  */
 @custom-variant dark (&:is(.dark *));
+/* 手機（螢幕寬 < 640px）：只在螢幕上生效，列印（PDF）不會套用，窄紙張也一樣 */
+@custom-variant phone (@media screen and (width < 40rem));
 
 @theme inline {
   --font-sans: "Noto Sans TC", system-ui, -apple-system, "PingFang TC", "Microsoft JhengHei", sans-serif;
@@ -190,6 +192,7 @@
     @apply bg-background text-foreground antialiased;
     font-size: 16px;
     line-height: 1.75;                 /* 中文內文行高，別改成 1.5 以下 */
+    overflow-wrap: break-word;         /* 長網址、長數字不會撐破手機版面 */
   }
   :focus-visible {
     outline: 3px solid var(--ring);
@@ -202,6 +205,75 @@
   button:not(:disabled),
   [role="button"]:not(:disabled) {
     cursor: pointer;
+  }
+}
+
+/* 頁面左右內距：手機 16px、平板以上 24px；橫拿 iPhone 時避開瀏海（viewport-fit=cover） */
+@utility px-page {
+  padding-left: max(1rem, env(safe-area-inset-left, 0px));
+  padding-right: max(1rem, env(safe-area-inset-right, 0px));
+  @media (width >= 40rem) {
+    padding-left: max(1.5rem, env(safe-area-inset-left, 0px));
+    padding-right: max(1.5rem, env(safe-area-inset-right, 0px));
+  }
+}
+
+/*
+ * 相似判決表格：手機上每一列改排成一張卡片（同一份 DOM，列印仍是有表頭的表格）。
+ * 不放在 @layer 裡，才蓋得過 min-w-[680px]、whitespace-nowrap、text-right 這些 utility；
+ * .screen-hidden（只看勝訴的篩選）用 !important，照樣隱藏。
+ * 欄名用 ::before 顯示（td 的 data-label），不加進文字內容。
+ */
+@media screen and (width < 40rem) {
+  table.table-stack {
+    display: block;
+    min-width: 0;
+  }
+  table.table-stack > thead {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+  table.table-stack > tbody {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+  }
+  table.table-stack > tbody > tr {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    border: 2px solid var(--input);
+    border-radius: 14px;
+    padding: 14px 16px;
+  }
+  table.table-stack > tbody > tr:hover {
+    background: transparent;
+  }
+  table.table-stack > tbody > tr > td {
+    display: block;
+    padding: 0;
+    text-align: left;
+    white-space: normal;
+  }
+  table.table-stack > tbody > tr > td[data-label] {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 4px 12px;
+  }
+  table.table-stack > tbody > tr > td[data-label]::before {
+    content: attr(data-label);
+    min-width: 5.5em;
+    font-size: 14px;
+    font-weight: 700;
+    color: var(--muted-foreground);
+  }
+  table.table-stack > tbody > tr > td > [data-slot="button"] {
+    width: 100%;
   }
 }
 

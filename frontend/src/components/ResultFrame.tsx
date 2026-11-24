@@ -42,7 +42,7 @@ export function ResultHeading({ title, lead, level = 1, id }: { title: string; l
   const H = level === 1 ? "h1" : "h2";
   return (
     <div id={id} className="flex min-w-0 scroll-mt-4 flex-col gap-2">
-      <H title={title} className="truncate text-[26px] leading-[1.4] font-extrabold sm:text-[32px]">{title}</H>
+      <H title={title} className="wrap-anywhere text-balance sm:truncate text-[26px] leading-[1.4] font-extrabold sm:text-[32px]">{title}</H>
       <p className="text-lg leading-[1.8] text-muted-foreground">{lead}</p>
     </div>
   );
@@ -78,14 +78,14 @@ export function ResultFrame({ label, mock, maskedText, searchText, criminalText,
           <p className="text-sm">產生時間：{new Date().toLocaleString("zh-TW")}／{BRAND} 類案判決參考／結果僅供參考，不是法律意見</p>
           {mock && <p className="font-bold">本報告是示例資料：數字與判決都不是真的，請勿作為判斷依據。</p>}
           <h2 className="mt-3 text-base font-bold">案情描述（已遮名）</h2>
-          <p className="text-sm whitespace-pre-wrap">{maskedText}</p>
+          <p className="text-sm whitespace-pre-wrap wrap-anywhere">{maskedText}</p>
           {searchText && <>
             <h2 className="mt-3 text-base font-bold">{separate ? "民事用來比對的整理文字（已確認）" : "用來比對的整理文字（已確認）"}</h2>
-            <p className="text-sm whitespace-pre-wrap">{searchText}</p>
+            <p className="text-sm whitespace-pre-wrap wrap-anywhere">{searchText}</p>
           </>}
           {separate && <>
             <h2 className="mt-3 text-base font-bold">刑事用來推估的文字</h2>
-            <p className="text-sm whitespace-pre-wrap">{criminalText}</p>
+            <p className="text-sm whitespace-pre-wrap wrap-anywhere">{criminalText}</p>
           </>}
         </div>
 
@@ -99,12 +99,12 @@ export function ResultFrame({ label, mock, maskedText, searchText, criminalText,
         <section aria-labelledby="used-text-title" className="no-print flex flex-col gap-6">
           <div className="flex w-full flex-col gap-2 rounded-[16px] border-2 border-dashed border-primary bg-card px-5 py-4 text-left">
             <h2 id="used-text-title" className="text-[15px] font-bold text-secondary-foreground">{prefix}比對用的描述{searchText ? "（整理後的寫法）" : ""}</h2>
-            <p className="leading-loose whitespace-pre-wrap">{civilText}</p>
+            <p className="leading-loose whitespace-pre-wrap wrap-anywhere">{civilText}</p>
           </div>
           {separate && (
             <div className="flex w-full flex-col gap-2 rounded-[16px] border-2 border-dashed border-primary bg-card px-5 py-4 text-left">
               <h3 className="text-[15px] font-bold text-secondary-foreground">刑事推估用的描述</h3>
-              <p className="leading-loose whitespace-pre-wrap">{criminalText}</p>
+              <p className="leading-loose whitespace-pre-wrap wrap-anywhere">{criminalText}</p>
             </div>
           )}
           <hr className="m-0 h-px border-0 bg-border" />

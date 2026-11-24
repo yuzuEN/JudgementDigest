@@ -780,6 +780,30 @@ describe("民事結果", () => {
       expect(screen.getAllByRole("tabpanel", { hidden: true })).toHaveLength(5);
       expect(screen.getByRole("tablist")).toHaveClass("no-print");
     });
+
+    it("手機上選中的頁籤在畫面外時，只把頁籤列橫向捲過去", async () => {
+      // jsdom 沒有版面：頁籤每個寬 110、間隔 120，頁籤列只看得到 300
+      const tabIndex = (el: HTMLElement) => [...(el.parentElement?.querySelectorAll('[role="tab"]') ?? [])].indexOf(el);
+      vi.spyOn(HTMLElement.prototype, "offsetLeft", "get").mockImplementation(function (this: HTMLElement) { return Math.max(0, tabIndex(this)) * 120; });
+      vi.spyOn(HTMLElement.prototype, "offsetWidth", "get").mockImplementation(function (this: HTMLElement) { return this.getAttribute("role") === "tab" ? 110 : 0; });
+      vi.spyOn(Element.prototype, "clientWidth", "get").mockImplementation(function (this: Element) { return this.getAttribute("role") === "tablist" ? 300 : 0; });
+      const scrollTo = vi.fn();
+      Element.prototype.scrollTo = scrollTo;
+      try {
+        // 從判決導讀回來（?tab=cases）：第一次就捲，不用動畫
+        await show({}, "/result/civil?tab=cases");
+        expect(scrollTo).toHaveBeenCalledWith({ left: 590 - 300 + 16, behavior: "auto" });
+        expect(scrollTo.mock.contexts[0]).toBe(screen.getByRole("tablist"));
+        scrollTo.mockClear();
+        await user().click(screen.getByRole("tab", { name: "整體結果" }));
+        expect(scrollTo).not.toHaveBeenCalled();     // 已經在畫面內
+        await user().click(screen.getByRole("tab", { name: "對方的說法" }));
+        expect(scrollTo).toHaveBeenCalledWith({ left: 470 - 300 + 16, behavior: "smooth" });
+      } finally {
+        vi.restoreAllMocks();
+        delete (Element.prototype as Partial<Element>).scrollTo;
+      }
+    });
   });
 
   describe("整體結果", () => {
@@ -1008,6 +1032,15 @@ describe("民事結果", () => {
       expect(within(panel).getByRole("link", { name: /相似判決怎麼找的說明/ }).getAttribute("href")).toBe(`/guide#${encodeURIComponent("相似判決怎麼找")}`);
       expect(within(table).queryByRole("columnheader", { name: /相似度/ })).not.toBeInTheDocument();
       expect(table).not.toHaveTextContent(String(CIVIL_REPORT.similar[0].similarity));
+    });
+
+    it("手機上表格改排成卡片：欄名用 data-label，不加進文字", async () => {
+      await show();
+      const table = within(await openTab("相似判決")).getByRole("table");
+      expect(table).toHaveClass("table-stack");
+      const cells = within(within(table).getAllByRole("row")[1]).getAllByRole("cell");
+      expect(cells.map((c) => c.getAttribute("data-label"))).toEqual([null, "結果", "判准／請求（元）", null]);
+      expect(table.querySelector("tbody")).not.toHaveTextContent("判准／請求（元）");
     });
 
     it("沒有限定類型時：標題不帶類型，旁邊寫檢索範圍共幾件", async () => {
@@ -1301,6 +1334,14 @@ describe("刑事結果", () => {
     expect(within(panel).getByText("最相似 50 件的實際宣告刑")).toBeInTheDocument();
     expect(within(panel).getByText("實際 80%")).toBeInTheDocument();
     expect(within(panel).getByRole("img", { name: "1～6 個月：模型推估 62%，最相似 50 件實際宣告刑 80%" })).toBeInTheDocument();
+  });
+
+  it("手機上相似判決表格改排成卡片：罪名、應執行刑用 data-label", async () => {
+    await show();
+    const table = within(await openTab("相似判決")).getByRole("table");
+    expect(table).toHaveClass("table-stack");
+    const cells = within(within(table).getAllByRole("row")[1]).getAllByRole("cell");
+    expect(cells.map((c) => c.getAttribute("data-label"))).toEqual([null, "罪名", "應執行刑", null]);
   });
 
   it("真模型沒有相似判決時說明，不出現表格", async () => {
