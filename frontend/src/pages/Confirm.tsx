@@ -348,7 +348,7 @@ function DetailStage({ heading, llm, mode, setMode, aiState, askAi, consent, aiA
         <div className="flex flex-col gap-5">
           <span id="detail-mode-label" className="sr-only">補充方式</span>
           <Segmented labelledBy="detail-mode-label" value={mode} required onChange={(v) => setMode(v as "fixed" | "ai")}
-            items={[{ value: "fixed", label: "固定題目（不用 AI）" }, { value: "ai", label: <><SparklesIcon className="size-4" aria-hidden="true" />請 AI 幫我看還缺什麼</> }]} />
+            items={[{ value: "fixed", label: "固定題目" }, { value: "ai", label: <><SparklesIcon className="size-4" aria-hidden="true" />AI 提問</> }]} />
           {mode === "fixed" && <div className="flex flex-col gap-4 text-base">
             {fixed}
           </div>}

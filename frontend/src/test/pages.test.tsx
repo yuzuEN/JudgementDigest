@@ -590,7 +590,7 @@ describe("第 4 關：確認遮名與敏感資料", () => {
 });
 
 describe("第 5 關：補充細節", () => {
-  const AI_TAB = "請 AI 幫我看還缺什麼";
+  const AI_TAB = "AI 提問";
   const SEND = "傳給 AI，開始提問";
   type Body = { text: string; allow_llm: boolean };
   const setup = (reply: (b: Body) => unknown) => {
@@ -664,7 +664,7 @@ describe("第 5 關：補充細節", () => {
     renderAt("/confirm", <Confirm />, at5, { text: "內容" });
     await user.click(await openAi(user));
     await user.type(await screen.findByLabelText("對方怎麼說？"), "他不承認");
-    await user.click(screen.getByRole("button", { name: "固定題目（不用 AI）" }));
+    await user.click(screen.getByRole("button", { name: "固定題目" }));
     expect(screen.getByLabelText("什麼時候發生的？")).toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: AI_TAB }));
     expect(screen.getByLabelText("對方怎麼說？")).toHaveValue("他不承認");
