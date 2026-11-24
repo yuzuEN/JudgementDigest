@@ -656,7 +656,7 @@ describe("第 5 關：補充細節", () => {
     expect(sent.filter((b) => b.allow_llm)).toHaveLength(0);
     await user.click(send);
     expect(await screen.findByLabelText("對方怎麼說？")).toBeInTheDocument();
-    expect(screen.getByText(/由 AI 依你的案情產生/)).toBeInTheDocument();
+    expect(screen.queryByText(/由 AI 依你的案情產生/)).not.toBeInTheDocument();
     const toLlm = sent.filter((b) => b.allow_llm);
     expect(toLlm).toHaveLength(1);
     expect(toLlm[0].text).toBe("【姓名】的電話是【電話】");

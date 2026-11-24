@@ -387,7 +387,6 @@ function DetailStage({ heading, llm, mode, setMode, aiState, askAi, consent, aiA
             )}
             {aiState === "done" && (
               <>
-                <p className="text-hint">這些問題由 AI 依你的案情產生，只用來補充事實，不是法律意見。</p>
                 {questions.length > 0 ? <QuestionList questions={questions} answers={answers} onAnswer={onAnswer} />
                   : <p className="text-hint text-muted-foreground">AI 沒有提出補充問題，可以繼續下一關。</p>}
               </>
