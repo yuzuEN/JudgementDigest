@@ -3,6 +3,7 @@ import { InfoIcon, LoaderCircleIcon } from "lucide-react";
 import { useEffect, useLayoutEffect, useRef, type ReactNode } from "react";
 import { useSearchParams } from "react-router-dom";
 import { cn } from "@/lib/utils";
+import { usePhone } from "@/lib/usePhone";
 import { Skeleton } from "@/components/ui/skeleton";
 import { SampleTag } from "./Sample";
 
@@ -36,6 +37,7 @@ export function ResultTabs<K extends string>({ tabs, value, onChange, mock, acti
   action?: ReactNode;
 }) {
   const listRef = useRef<HTMLDivElement>(null);
+  const phone = usePhone();
   const moved = useRef(false);
 
   // 手機上頁籤會超出寬度：選中的頁籤不在畫面內時，只把頁籤列橫向捲過去（不用 scrollIntoView，免得整頁跟著捲）。
@@ -77,27 +79,29 @@ export function ResultTabs<K extends string>({ tabs, value, onChange, mock, acti
         資料夾式頁籤：整列往下壓 2px（面板框線的粗細）。沒選的頁籤留 2px 底距，停在框線上方，
         框線從它們底下連續通過；選中的頁籤往下延伸 2px、用面板的底色蓋住框線，和面板接成一體。
       */}
-      {/* 手機上「下載 PDF」移到頁籤上方，頁籤才有整列的寬度 */}
+      {/* 手機上不放 action（下載 PDF 改成標題旁的圖示，見 ResultHeading），頁籤拿到整列的寬度 */}
       <div className="relative z-10 -mb-0.5 flex flex-wrap items-end gap-x-3 gap-y-2">
+      {/* 捲軸藏起來（頁籤列底下會多一條灰線）；還有頁籤時兩側淡出提示，可以左右滑 */}
       <Tabs.List ref={listRef} aria-label="結果分頁"
-        className="no-print flex min-w-0 flex-1 items-end gap-1.5 overflow-x-auto data-more-end:mask-r-from-[calc(100%-2.5rem)] data-more-start:mask-l-from-[calc(100%-2.5rem)]">
+        className="no-print flex min-w-0 flex-1 items-end gap-1.5 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden data-more-end:mask-r-from-[calc(100%-2.5rem)] data-more-start:mask-l-from-[calc(100%-2.5rem)]">
         {tabs.map((t) => (
           <Tabs.Tab key={t.key} value={t.key}
             className={cn(
-              "mb-0.5 min-h-[50px] flex-none rounded-t-[12px] border-2 border-b-0 border-input bg-muted px-[18px] phone:px-3.5 font-bold whitespace-nowrap text-muted-foreground hover:text-foreground",
-              "data-active:mb-0 data-active:min-h-[52px] data-active:pb-0.5 data-active:bg-card data-active:text-foreground",
+              "mb-0.5 min-h-[50px] phone:min-h-11 flex-none rounded-t-[12px] border-2 border-b-0 border-input bg-muted px-[18px] phone:px-3.5 font-bold whitespace-nowrap text-muted-foreground hover:text-foreground",
+              "data-active:mb-0 data-active:min-h-[52px] phone:data-active:min-h-[46px] data-active:pb-0.5 data-active:bg-card data-active:text-foreground",
               mock ? "data-active:border-dashed data-active:border-sample-line" : "data-active:border-foreground",
             )}>
             {t.label}
           </Tabs.Tab>
         ))}
       </Tabs.List>
-      {action && <div className="no-print mb-2 flex-none phone:order-first phone:mb-0 phone:flex phone:w-full phone:justify-end">{action}</div>}
+      {action && !phone && <div className="no-print mb-2 flex-none">{action}</div>}
       </div>
-      {/* 左上角永遠是直角：第一個頁籤的左邊框和面板的左邊框接成一直線，不管選哪一頁 */}
+      {/* 左上角永遠是直角：第一個頁籤的左邊框和面板的左邊框接成一直線，不管選哪一頁。
+          手機上頁籤會捲到最右邊，右上角也是直角，選中最後一個頁籤時框線才接得起來 */}
       {tabs.map((t) => (
         <Tabs.Panel key={t.key} value={t.key} keepMounted data-slot="tabs-content"
-          className={cn("flex flex-col gap-4 rounded-[16px] rounded-tl-none border-2 bg-card p-[18px] outline-none sm:p-[22px] [&[hidden]]:hidden",
+          className={cn("flex flex-col gap-4 rounded-[16px] rounded-tl-none phone:rounded-tr-none border-2 bg-card p-[18px] outline-none sm:p-[22px] [&[hidden]]:hidden",
             mock ? "border-dashed border-sample-line" : "border-foreground")}>
           {t.content}
         </Tabs.Panel>
@@ -112,7 +116,7 @@ export function LoadingPanel({ children = "正在比對相似判決…" }: { chi
     <div aria-busy="true" className="flex flex-col gap-3.5 rounded-[16px] border-2 border-input bg-card p-[22px]">
       <p role="status" className="flex flex-wrap items-center gap-3">
         <LoaderCircleIcon className="size-5 animate-spin text-primary motion-reduce:animate-none" aria-hidden="true" />
-        <b>{children}</b><span className="text-[15px] text-muted-foreground">大約需要幾秒</span>
+        <b>{children}</b><span className="text-hint text-muted-foreground">大約需要幾秒</span>
       </p>
       <div className="flex flex-col gap-3" aria-hidden="true">
         <Skeleton className="h-[22px] w-2/5" /><Skeleton className="h-[22px] rounded-[11px]" />
@@ -125,7 +129,7 @@ export function LoadingPanel({ children = "正在比對相似判決…" }: { chi
 export function PanelTitle({ children, mock, action }: { children: ReactNode; mock?: boolean; action?: ReactNode }) {
   return (
     <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-2">
-      <h2 className="text-[22px] leading-[1.45] font-extrabold sm:text-[26px]">{children}</h2>
+      <h2 className="text-title leading-[1.45] font-extrabold sm:text-[26px]">{children}</h2>
       <div className="flex flex-wrap items-center gap-3">{action}{mock && <SampleTag />}</div>
     </div>
   );
@@ -137,7 +141,7 @@ export function InfoNote({ children, title }: { children: ReactNode; title?: str
       <InfoIcon className="mt-1 size-5 flex-none text-secondary-foreground" aria-hidden="true" />
       <div className="flex min-w-0 flex-col gap-1">
         {title && <p className="font-bold">{title}</p>}
-        <div className="text-[15px]">{children}</div>
+        <div className="text-hint">{children}</div>
       </div>
     </div>
   );

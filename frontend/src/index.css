@@ -13,6 +13,16 @@
 /* 手機（螢幕寬 < 640px）：只在螢幕上生效，列印（PDF）不會套用，窄紙張也一樣 */
 @custom-variant phone (@media screen and (width < 40rem));
 
+/*
+ * 字級 token：說明文字（hint）、關卡／分頁標題（title）、頁面大標（display）。
+ * 不用 inline，utility 才會讀 CSS 變數，手機上（下面的 @media）可以整批縮小。
+ */
+@theme {
+  --text-hint: 15px;
+  --text-title: 22px;
+  --text-display: 26px;
+}
+
 @theme inline {
   --font-sans: "Noto Sans TC", system-ui, -apple-system, "PingFang TC", "Microsoft JhengHei", sans-serif;
   --font-heading: var(--font-sans);
@@ -215,6 +225,24 @@
   @media (width >= 40rem) {
     padding-left: max(1.5rem, env(safe-area-inset-left, 0px));
     padding-right: max(1.5rem, env(safe-area-inset-right, 0px));
+  }
+}
+
+/*
+ * 手機字級：正文 15、說明 14、標題縮小，讓一個畫面放得下更多內容。
+ * 只在螢幕上（列印照原本大小）；輸入框另外鎖 16px（小於 16px，iPhone 點下去會自動放大畫面）。
+ */
+@media screen and (width < 40rem) {
+  :root {
+    --text-base: 15px;
+    --text-lg: 16px;
+    --text-xl: 18px;
+    --text-hint: 14px;
+    --text-title: 20px;
+    --text-display: 22px;
+  }
+  body {
+    font-size: 15px;
   }
 }
 

@@ -21,16 +21,16 @@ describe("完整流程", () => {
     await user.type(screen.getByLabelText("事情經過"), "去年三月朋友向我借了五十萬，說好半年就還，到現在一直不還，他的電話0912345678");
     await user.click(await screen.findByRole("button", { name: "民間借貸" }));
     await user.click(screen.getByRole("button", { name: "下一關" }));
-    await user.click(screen.getByRole("button", { name: "50萬" }));
+    await user.type(screen.getByLabelText("想請求的金額"), "50萬");
     await user.click(screen.getByRole("button", { name: "沒有" }));
-    await user.click(screen.getByRole("button", { name: "下一章：確認內容" }));
+    await user.click(screen.getByRole("button", { name: "下一關" }));
 
     expect(await screen.findByRole("heading", { name: /第 4 關/ })).toBeInTheDocument();
     expect((await screen.findAllByText("【電話】")).length).toBeGreaterThan(0);
     const next = screen.getByRole("button", { name: "下一關" });
     await waitFor(() => expect(next).toBeEnabled());
     await user.click(next);
-    await user.click(screen.getByRole("button", { name: "略過，下一關" }));
+    await user.click(screen.getByRole("button", { name: "下一關" }));
     const go = screen.getByRole("button", { name: "看參考結果" });
     await waitFor(() => expect(go).toBeEnabled());
     await user.click(go);

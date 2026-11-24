@@ -12,7 +12,10 @@ export function Bar({ value, className, fill = "bg-primary", label }: { value: n
   );
 }
 
-/** 一列：名稱、長條、數字。證據對照、抗辯比例、刑期分布共用。 */
+/**
+ * 一列：名稱、長條、數字（證據對照用）。
+ * 窄螢幕排兩行：名稱｜children（例如「你有提到」），長條｜數字；sm 以上一行排開，順序照 DOM。
+ */
 export function MiniBarRow({ label, value, valueText, alt, fill, className, children }: {
   label: string;
   value: number;
@@ -23,10 +26,10 @@ export function MiniBarRow({ label, value, valueText, alt, fill, className, chil
   children?: React.ReactNode;
 }) {
   return (
-    <div className={cn("grid grid-cols-[minmax(0,1fr)_56px] items-center gap-x-3 gap-y-1.5 sm:grid-cols-[150px_minmax(0,1fr)_56px]", className)}>
-      <span className="font-bold max-sm:col-span-2">{label}</span>
-      <Bar value={value} label={alt} fill={fill} />
-      <span className="text-right font-bold tabular-nums">{valueText}</span>
+    <div className={cn("grid grid-cols-[minmax(0,1fr)_auto] items-center gap-x-3 gap-y-1.5 sm:grid-cols-[150px_minmax(0,1fr)_56px]", className)}>
+      <span className="order-1 font-bold sm:order-none">{label}</span>
+      <Bar value={value} label={alt} fill={fill} className="order-3 sm:order-none" />
+      <span className="order-4 text-right font-bold tabular-nums sm:order-none">{valueText}</span>
       {children}
     </div>
   );

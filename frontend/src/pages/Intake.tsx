@@ -15,8 +15,10 @@ import { Toggle } from "@/components/ui/toggle";
 import { api } from "../api/client";
 import type { CaseType, CivilRole, DefendantType, Options } from "../api/types";
 import { AmountInput, amountState } from "../components/casey/AmountInput";
+import { Disclosure } from "../components/casey/Disclosure";
 import { EvidenceSlot } from "../components/casey/EvidenceSlot";
 import { MidLabels } from "../components/casey/MidLabels";
+import { PhoneCollapse } from "../components/casey/PhoneCollapse";
 import { RadioCards } from "../components/casey/RadioCards";
 import { Segmented } from "../components/casey/Segmented";
 import { ErrorBox } from "../components/Common";
@@ -164,13 +166,13 @@ export default function Intake() {
   const civil = intake.caseType !== "criminal";
   const role = civilRole(intake);
   const defendant = role === "defendant";
-  const titleProps = { ref: heading, tabIndex: -1, className: "text-[22px] leading-[1.45] font-extrabold text-balance outline-none sm:text-[26px]" };
+  const titleProps = { ref: heading, tabIndex: -1, className: "text-title leading-[1.45] font-extrabold text-balance outline-none sm:text-[26px]" };
 
   return (
     <Layout stage={stage} scene={{ who: "organizer", line: SCENE_LINES[stage] }}>
-      <div className={cn(PAGE, "pt-7 pb-16")}>
+      <div className={cn(PAGE, "pt-7 pb-16 phone:pt-4 phone:pb-10")}>
         <div className="flex flex-wrap items-start gap-7">
-          <main className="flex min-w-0 flex-[999_1_560px] flex-col gap-6">
+          <main className="flex min-w-0 flex-[999_1_560px] flex-col gap-6 phone:gap-4">
             {stage === 1 && (
               <StageCard>
                 <h1 {...titleProps}>第 1 關　選擇案件類型</h1>
@@ -183,12 +185,13 @@ export default function Intake() {
                   </FieldBlock>
                 )}
                 {intake.caseType && intake.caseType !== "unsure" && (
-                  <Note>
-                    <p className="font-bold">選{TYPE_LABEL[intake.caseType]}{intake.caseType === "civil" ? `（${ROLE_LABEL[role]}）` : ""}，你會得到：</p>
-                    <ul className="m-0 list-disc pl-5 text-[15px]">
+                  // 預設收起，點標題才展開
+                  <Disclosure summary={<span className="flex items-center gap-2"><InfoIcon className="size-5 flex-none text-secondary-foreground" aria-hidden="true" />
+                    選{TYPE_LABEL[intake.caseType]}{intake.caseType === "civil" ? `（${ROLE_LABEL[role]}）` : ""}會得到什麼？</span>}>
+                    <ul className="m-0 list-disc pl-5 text-hint">
                       {(defendant ? YOU_GET_DEFENDANT : YOU_GET[intake.caseType]).map((g) => <li key={g}>{g}</li>)}
                     </ul>
-                  </Note>
+                  </Disclosure>
                 )}
               </StageCard>
             )}
@@ -252,12 +255,12 @@ export default function Intake() {
                 {stage > 1 ? <Button type="button" variant="outline" onClick={() => go(stage - 1)}><ArrowLeftIcon data-icon="inline-start" />上一關</Button> : <span />}
                 {stage < 3
                   ? <Button type="button" disabled={!!why} onClick={() => go(stage + 1)}>下一關<ArrowRightIcon data-icon="inline-end" /></Button>
-                  : <Button type="button" disabled={!!why} onClick={() => navigate("/confirm")} aria-label="下一章：確認內容">下一章<span className="phone:hidden">：確認內容</span><ArrowRightIcon data-icon="inline-end" /></Button>}
+                  : <Button type="button" disabled={!!why} onClick={() => navigate("/confirm")}>下一關<ArrowRightIcon data-icon="inline-end" /></Button>}
               </div>
-              {why && <p role="status" className="flex items-start gap-1.5 text-[15px]"><InfoIcon className="mt-1 size-4 flex-none" aria-hidden="true" />{why}</p>}
+              {why && <p role="status" className="flex items-start gap-1.5 text-hint"><InfoIcon className="mt-1 size-4 flex-none" aria-hidden="true" />{why}</p>}
               {stage === 3 && (
-                <p className="flex items-start gap-1.5 text-[15px] text-muted-foreground">
-                  <ShieldCheckIcon className="mt-1 size-4 flex-none" aria-hidden="true" />下一章會先讓你預覽，並遮掉姓名、身分證字號、電話。
+                <p className="flex items-start gap-1.5 text-hint text-muted-foreground">
+                  <ShieldCheckIcon className="mt-1 size-4 flex-none" aria-hidden="true" />下一關會先讓你預覽，並遮掉姓名、身分證字號、電話。
                 </p>
               )}
             </nav>
@@ -274,19 +277,10 @@ function StageCard({ children }: { children: ReactNode }) {
   return <Card className="gap-6 px-[18px] sm:px-6.5">{children}</Card>;
 }
 
-function Note({ children }: { children: ReactNode }) {
-  return (
-    <div className="flex items-start gap-3 rounded-[14px] border border-info-line bg-info px-4 py-3.5">
-      <InfoIcon className="mt-1 size-5 flex-none text-secondary-foreground" aria-hidden="true" />
-      <div className="flex flex-col gap-2">{children}</div>
-    </div>
-  );
-}
-
 function FieldBlock({ label, hint, children }: { label: ReactNode; hint?: string; children: ReactNode }) {
   return (
     <div className="flex flex-col gap-2">
-      <p className="font-bold">{label}{hint && <span className="text-[15px] font-medium text-muted-foreground">　{hint}</span>}</p>
+      <p className="font-bold">{label}{hint && <span className="text-hint font-medium text-muted-foreground">　{hint}</span>}</p>
       {children}
     </div>
   );
@@ -299,14 +293,14 @@ function StoryField({ value, onChange, defendant = false }: { value: string; onC
     <>
       <div className="flex flex-col gap-2">
         <label htmlFor="story" className="text-lg font-bold">{defendant ? "對方的主張" : "事情經過"}</label>
-        {defendant && <p id="story-hint" className="text-[15px] text-muted-foreground">寫對方說發生了什麼事、要你賠什麼。收到起訴狀的話，可以直接貼「事實及理由」。</p>}
+        {defendant && <p id="story-hint" className="text-hint text-muted-foreground">寫對方說發生了什麼事、要你賠什麼。收到起訴狀的話，可以直接貼「事實及理由」。</p>}
         <Textarea id="story" value={value} maxLength={MAX_STORY} aria-describedby={defendant ? "story-hint story-status" : "story-status"}
-          onChange={(e) => onChange(e.target.value)} className="min-h-[200px] resize-y"
+          onChange={(e) => onChange(e.target.value)} className="min-h-[200px] resize-y phone:min-h-[150px]"
           placeholder={defendant
             ? "例如：對方說去年三月我開車右轉時撞到他的機車，害他右手骨折住院五天，要我賠醫藥費和三個月不能工作的薪水，一共 50 萬……"
             : "例如：去年三月我騎機車在路口被一輛右轉的汽車撞到，右手骨折住院五天，之後復健三個月沒辦法工作……"} />
         <div className="flex flex-wrap items-center justify-between gap-2">
-          <span id="story-status" role="status" className={cn("text-[15px]", ok && "font-bold text-secondary-foreground")}>
+          <span id="story-status" role="status" className={cn("text-hint", ok && "font-bold text-secondary-foreground")}>
             {ok ? "字數夠了，可以進下一關。"
               : !defendant ? `還需 ${MIN_STORY - len} 字`
               : len === 0 ? "寫下對方告你什麼、要你賠多少。"
@@ -316,13 +310,16 @@ function StoryField({ value, onChange, defendant = false }: { value: string; onC
         </div>
       </div>
       <div className="flex flex-col gap-2">
-        <p className="text-[15px] font-bold">可補充的細節（寫到時會標記）</p>
+        {/* 手機上收起來，標題帶著寫到幾項 */}
+        <PhoneCollapse heading={(c) => <p className="text-hint font-bold">{c}</p>}
+          label="可補充的細節（寫到時會標記）"
+          phoneLabel={`可補充的細節：已寫到 ${WRITING_HINTS.filter(([, re]) => re.test(value)).length}／${WRITING_HINTS.length}`}>
         <ul className="m-0 flex list-none flex-wrap gap-2 p-0">
           {WRITING_HINTS.map(([name, re]) => {
             const hit = re.test(value);
             return (
               <li key={name} className={cn(
-                "inline-flex min-h-9 items-center gap-1.5 rounded-full border-[1.5px] px-3 text-[15px] font-semibold",
+                "inline-flex min-h-9 items-center gap-1.5 rounded-full border-[1.5px] px-3 text-hint font-semibold",
                 hit ? "border-primary bg-secondary text-secondary-foreground" : "border-input bg-card",
               )}>
                 {hit && <CheckIcon className="size-4" aria-hidden="true" />}{name}<span className="sr-only">{hit ? "（已寫到）" : "（還沒寫到）"}</span>
@@ -330,6 +327,7 @@ function StoryField({ value, onChange, defendant = false }: { value: string; onC
             );
           })}
         </ul>
+        </PhoneCollapse>
       </div>
     </>
   );
@@ -339,8 +337,8 @@ function StoryField({ value, onChange, defendant = false }: { value: string; onC
 function DefenseField({ value, onChange }: { value: string; onChange: (v: string) => void }) {
   return (
     <div className="flex flex-col gap-2">
-      <label htmlFor="defense" className="font-bold">你的說法<span className="text-[15px] font-medium text-muted-foreground">　選填</span></label>
-      <p id="defense-hint" className="text-[15px] text-muted-foreground">
+      <label htmlFor="defense" className="font-bold">你的說法<span className="text-hint font-medium text-muted-foreground">　選填</span></label>
+      <p id="defense-hint" className="text-hint text-muted-foreground">
         你不同意哪些地方？例如事情不是這樣、金額太高、對方也有責任、已經還過錢。寫了會用來估計結果，並對照相似判決裡被告常見的說法。
       </p>
       <Textarea id="defense" value={value} maxLength={MAX_DEFENSE} aria-describedby="defense-hint"
@@ -355,7 +353,7 @@ function CriminalTips() {
   return (
     <div className="flex flex-col gap-2 rounded-[18px] border border-dashed bg-card p-5">
       <h2 className="font-bold">刑事案件怎麼寫</h2>
-      <ul className="m-0 flex list-disc flex-col gap-2 pl-5 text-[15px] text-muted-foreground">
+      <ul className="m-0 flex list-disc flex-col gap-2 pl-5 text-hint text-muted-foreground">
         <li>寫清楚時間、地點、發生了什麼，以及你被指控（或想指控）什麼事。</li>
         <li>有起訴書或傳票，可以直接貼「犯罪事實」那一段。</li>
         <li>不用寫你認為的罪名，系統會從你描述的事情推估可能的罪名。</li>
@@ -405,7 +403,7 @@ function DisputeKinds({ options, mids, onChange }: { options: Options | null; mi
   });
   return (
     <section aria-labelledby="kinds-title" className="flex flex-col gap-3">
-      <h2 id="kinds-title" className="font-bold">糾紛類型<span className="text-[15px] font-medium text-muted-foreground">　可以選好幾個，不確定可以不選</span></h2>
+      <h2 id="kinds-title" className="font-bold">糾紛類型<span className="text-hint font-medium text-muted-foreground">　可以選好幾個，不確定可以不選</span></h2>
       <div className="flex flex-wrap items-start gap-6">
         <div className="flex min-w-0 flex-[1_1_300px] flex-col gap-3">
           <div className="relative">
@@ -413,7 +411,7 @@ function DisputeKinds({ options, mids, onChange }: { options: Options | null; mi
             <Input type="search" aria-label="搜尋糾紛類型" placeholder="打字找，例如：車禍、借錢、租金" value={query}
               onChange={(e) => setQuery(e.target.value)} className="pl-11" />
           </div>
-          {shown.length === 0 && <p className="text-[15px] text-muted-foreground">找不到「{query}」。換個說法，或先不選也可以。</p>}
+          {shown.length === 0 && <p className="text-hint text-muted-foreground">找不到「{query}」。換個說法，或先不選也可以。</p>}
           <div className="flex flex-col gap-2">
             {shown.map((g) => {
               const picked = g.items.filter((i) => mids.includes(i.value)).length;
@@ -435,7 +433,7 @@ function DisputeKinds({ options, mids, onChange }: { options: Options | null; mi
                         <Toggle key={item.value} pressed={on} onPressedChange={() => onChange(toggle(mids, item.value))}
                           aria-label={item.value} title={item.summary || undefined}
                           className={cn(
-                            "h-auto min-h-11 gap-1.5 rounded-full border-[1.5px] px-3.5 text-[15px] font-semibold whitespace-normal",
+                            "h-auto min-h-11 gap-1.5 rounded-full border-[1.5px] px-3.5 text-hint font-semibold whitespace-normal",
                             "hover:border-primary hover:bg-card aria-pressed:bg-secondary aria-pressed:text-secondary-foreground aria-pressed:hover:bg-secondary",
                             on ? "border-primary" : "border-input bg-card",
                           )}>
@@ -449,19 +447,19 @@ function DisputeKinds({ options, mids, onChange }: { options: Options | null; mi
             })}
           </div>
         </div>
-        <aside aria-label="已選類型的說明" className="flex min-w-0 flex-[1_1_260px] flex-col gap-2 rounded-[18px] border bg-muted p-5">
+        <aside aria-label="已選類型的說明" className={cn("flex min-w-0 flex-[1_1_260px] flex-col gap-2 rounded-[18px] border bg-muted p-5 phone:p-4", mids.length === 0 && "phone:hidden")}>
           <p className="font-bold">糾紛類型說明</p>
           {mids.length === 0 && (
-            <p className="flex flex-col items-center gap-2 py-6 text-center text-[15px] text-muted-foreground">
+            <p className="flex flex-col items-center gap-2 py-6 text-center text-hint text-muted-foreground">
               <ListChecksIcon className="size-7" aria-hidden="true" />尚未選擇
             </p>
           )}
           {mids.map((m) => (
             <div key={m} className="flex flex-col gap-0.5 rounded-[12px] border-[1.5px] border-primary bg-card px-3 py-2.5">
-              <p className="text-[15px] font-bold">
+              <p className="text-hint font-bold">
                 <span className="mr-1.5 inline-flex items-center gap-1 text-sm text-secondary-foreground"><CheckIcon className="size-4" aria-hidden="true" />已選</span>{m}
               </p>
-              <p className="text-[15px] text-muted-foreground">{SUMMARY[m] ?? "這一類的白話說明還在整理。"}</p>
+              <p className="text-hint text-muted-foreground">{SUMMARY[m] ?? "這一類的白話說明還在整理。"}</p>
             </div>
           ))}
           <p className="text-sm text-muted-foreground">分類依判決的案由和內容整理，不是法律上的正式分類。</p>
@@ -514,7 +512,7 @@ function Summary({ intake }: { intake: IntakeState }) {
           <h2 id="summary-title" className="text-xl font-bold">你填的資料</h2>
           <span className="text-sm text-muted-foreground">目前進度</span>
         </div>
-        <dl className="m-0 flex flex-col gap-2 text-[15px]">
+        <dl className="m-0 flex flex-col gap-2 text-hint">
           {rows.map(([k, v], i) => (
             <div key={k} className="contents">
               <div className="flex items-start justify-between gap-3">

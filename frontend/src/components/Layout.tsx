@@ -29,7 +29,7 @@ function Brand() {
 
 function SiteFooter({ note }: { note?: ReactNode }) {
   return (
-    <footer data-slot="site-footer" className="mt-auto border-t bg-muted pt-8 pb-10 text-[15px] text-muted-foreground">
+    <footer data-slot="site-footer" className="mt-auto border-t bg-muted pt-8 pb-10 text-hint text-muted-foreground">
       <div className={cn(PAGE, "flex flex-col gap-2")}>
         {note}
         <p className="flex flex-wrap justify-between gap-x-4 gap-y-2 max-sm:flex-col phone:gap-y-0">

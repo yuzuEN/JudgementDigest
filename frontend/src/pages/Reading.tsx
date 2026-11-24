@@ -9,6 +9,7 @@ import { Bar } from "../components/casey/Bars";
 import { OutcomeChip } from "../components/casey/OutcomeChip";
 import { MarkedText, partIn, ReasoningCard, shownGroups } from "../components/casey/Reasoning";
 import { MidLabels } from "../components/casey/MidLabels";
+import { Disclosure } from "../components/casey/Disclosure";
 import { InfoRow, JumpLinks, OriginalLink } from "../components/casey/ReadingParts";
 import { LoadingPanel } from "../components/casey/ResultTabs";
 import { SampleTag } from "../components/casey/Sample";
@@ -57,19 +58,17 @@ export default function Reading() {
 
   return (
     <Layout stage={7} scene={{ who: "explainer", line: "在導讀中，判決書會根據不同功能段落做顏色區分。" }}>
-      <main className={cn(PAGE, "flex flex-col gap-7 pt-7 pb-14")}>
+      <main className={cn(PAGE, "flex flex-col gap-7 pt-7 pb-14 phone:gap-5 phone:pt-4 phone:pb-8")}>
         <div className="flex flex-col gap-3">
           <LinkButton variant="outline" to={resultPath} className="no-print w-fit border-input text-foreground"><ArrowLeftIcon data-icon="inline-start" />回結果</LinkButton>
           {guide && (
             <div className="flex items-start justify-between gap-4">
-              <h1 className="text-[26px] leading-[1.4] font-extrabold text-balance sm:text-[32px]">{guide.case.case_number}</h1>
+              <h1 className="text-display leading-[1.4] font-extrabold text-balance sm:text-[32px]">{guide.case.case_number}</h1>
               <OriginalLink url={guide.case.url} caseNumber={guide.case.case_number} />
             </div>
           )}
-          {guide && <JumpLinks links={[
-            { id: "full-title", label: "判決全文" },
-            ...(shownGroups(guide.reasoning).length > 0 ? [{ id: "reasoning-card", label: "法院怎麼認定" }] : []),
-          ]} />}
+          {/* 手機捷徑：只跳到「法院怎麼認定」（判決全文往下滑就到了）；沒有標註時不顯示 */}
+          {guide && shownGroups(guide.reasoning).length > 0 && <JumpLinks links={[{ id: "reasoning-card", label: "法院怎麼認定" }]} />}
         </div>
 
         {error && <ErrorBox message={error} onRetry={load} hint="請重新載入判決，或返回結果頁查看其他判決。" />}
@@ -80,7 +79,7 @@ export default function Reading() {
               <Card className="gap-4 px-[18px] sm:px-6.5" aria-labelledby="basic-title">
                 <h2 id="basic-title" className="text-xl font-bold">判決資料</h2>
                 {/* 和「你填的資料」一樣：名稱在左、內容在右；金額的長條和說明在下面各自一列 */}
-                <dl className="m-0 flex flex-col gap-2.5 text-[15px]">
+                <dl className="m-0 flex flex-col gap-2.5 text-hint">
                   <InfoRow label="案由"><MidLabels mids={[guide.case.mid]} vertical /></InfoRow>
                   <InfoRow label="結果"><OutcomeChip tone={outcomeTone(guide.case.outcome)}>{outcomeLabel(guide.case.outcome)}</OutcomeChip></InfoRow>
                   {guide.case.claimed_amount ? (
@@ -106,7 +105,7 @@ export default function Reading() {
 
               <Card className="gap-3 px-[18px] sm:px-6.5" aria-labelledby="legend-title">
                 <h2 id="legend-title" className="text-xl font-bold">段落標色</h2>
-                <p className="text-[15px] text-muted-foreground">選擇要上色的類別。取消後仍會保留文字標籤。</p>
+                <p className="text-hint text-muted-foreground">選擇要上色的類別。取消後仍會保留文字標籤。</p>
                 <div className="grid gap-2 phone:grid-cols-2">
                   {FUNCTIONS.map((f) => (
                     <button key={f.id} type="button" aria-pressed={on[f.id]} onClick={() => setOn({ ...on, [f.id]: !on[f.id] })}
@@ -126,14 +125,6 @@ export default function Reading() {
 
               <ReasoningCard reasoning={guide.reasoning} active={active} onSelect={select} />
 
-              <Card className="gap-2 px-[18px] sm:px-6.5 shadow-none" aria-labelledby="about-title">
-                <h2 id="about-title" className="text-xl font-bold">關於這些標示</h2>
-                <p className="text-[15px] text-muted-foreground">
-                  段落標示由系統判斷，可能有誤，請以判決原文為準。
-                  {guide.labeler === "rule-v0" ? "目前依文字規則標示。" : "段落功能依標註手冊，由 LLM 輔助標註、法律系學生抽查驗證。"}
-                </p>
-                <p className="text-sm text-muted-foreground">判決中的當事人姓名已換成【原告】【被告】，證人、訴外人與其他人名換成【關係人】，車牌、地址等也已遮蔽；同一角色有多人時加上編號（【被告1】【被告2】），同一件判決裡同一個編號是同一個人。這是自動處理，可能有遺漏。</p>
-              </Card>
             </aside>
 
             <Card className={cn("min-w-0 flex-[999_1_500px] gap-4 px-[18px] sm:px-6.5", active !== null && "max-lg:pb-24")} aria-labelledby="full-title">
@@ -141,7 +132,7 @@ export default function Reading() {
                 <h2 id="full-title" className="scroll-mt-4 text-xl font-bold">判決全文</h2>
                 {guide.mock && <SampleTag />}
               </div>
-              {guide.mock && <p className="text-[15px] text-sample-fg">這是示例判決，內容為示意，不是真實判決。</p>}
+              {guide.mock && <p className="text-hint text-sample-fg">這是示例判決，內容為示意，不是真實判決。</p>}
               {guide.paragraphs.map((p, i) => {
                 const f = style(p.function);
                 return (
@@ -149,12 +140,22 @@ export default function Reading() {
                     className={cn("para flex flex-col gap-1.5 rounded-[12px] px-4 py-3.5 transition-colors motion-reduce:transition-none",
                       on[p.function] ? f.on : "border border-dashed border-input bg-transparent")}>
                     <span className="text-sm font-extrabold tracking-[.06em]">{f.label}</span>
-                    <p className="leading-loose"><MarkedText text={p.text} item={partIn(activeItem, i)} /></p>
+                    <p className="leading-loose phone:leading-relaxed"><MarkedText text={p.text} item={partIn(activeItem, i)} /></p>
                   </section>
                 );
               })}
             </Card>
           </div>
+        )}
+        {/* 標示與遮名的說明：放在最下面、預設收起 */}
+        {guide && (
+          <Disclosure summary={<h2 id="about-title" className="text-lg font-bold">關於這些標示</h2>}>
+            <p className="text-hint text-muted-foreground">
+              段落標示由系統判斷，可能有誤，請以判決原文為準。
+              {guide.labeler === "rule-v0" ? "目前依文字規則標示。" : "段落功能依標註手冊，由 LLM 輔助標註、法律系學生抽查驗證。"}
+            </p>
+            <p className="text-sm text-muted-foreground">判決中的當事人姓名已換成【原告】【被告】，證人、訴外人與其他人名換成【關係人】，車牌、地址等也已遮蔽；同一角色有多人時加上編號（【被告1】【被告2】），同一件判決裡同一個編號是同一個人。這是自動處理，可能有遺漏。</p>
+          </Disclosure>
         )}
       </main>
     </Layout>

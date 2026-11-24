@@ -126,31 +126,35 @@ describe("描述案情（關卡 1–3）", () => {
     expect(screen.queryByText("勞動", { selector: "summary span" })).not.toBeInTheDocument();
   });
 
-  it("金額告訴使用者讀成多少，看不懂就擋下一章", async () => {
+  it("金額告訴使用者讀成多少，看不懂就擋下一關", async () => {
     mockApi({ "GET /meta/options": () => OPTIONS });
     const user = userEvent.setup();
     renderApp("/start?stage=3", { text: TRAFFIC });
-    const group = screen.getByRole("group", { name: "想請求的金額" });
-    const next = screen.getByRole("button", { name: "下一章：確認內容" });
+    const next = screen.getByRole("button", { name: "下一關" });
     expect(screen.getByText("未填入時，結果僅會顯示求償比例")).toBeInTheDocument();
-    // 「自訂」按下去變成輸入框
-    await user.click(within(group).getByRole("button", { name: "自訂" }));
-    const amount = screen.getByLabelText("自訂金額");
-    expect(amount).toHaveFocus();
+    // 一進來就是輸入框，旁邊只有「不確定」
+    const amount = screen.getByLabelText("想請求的金額");
+    expect(screen.queryByRole("button", { name: "自訂" })).not.toBeInTheDocument();
     await user.type(amount, "64萬8千");
-    expect(screen.getByText("我讀成：648,000 元")).toBeInTheDocument();
-    expect(group).toHaveTextContent("648,000 元");
+    expect(document.getElementById("amount-status")).toHaveTextContent(/^648,000 元$/);
     await user.clear(amount);
     await user.type(amount, "五十萬");
     expect(screen.getByText(/看不懂這個金額/)).toBeInTheDocument();
     expect(next).toBeDisabled();
     expect(screen.getByText("金額格式不對，請修改。")).toBeInTheDocument();
-    await user.click(within(group).getByRole("button", { name: "50萬" }));
-    expect(within(group).getByRole("button", { name: "50萬" })).toHaveAttribute("aria-pressed", "true");
-    expect(screen.getByText("我讀成：500,000 元")).toBeInTheDocument();
+    await user.clear(amount);
+    await user.type(amount, "50萬");
+    expect(document.getElementById("amount-status")).toHaveTextContent(/^500,000 元$/);
     expect(next).toBeEnabled();
-    await user.click(within(group).getByRole("button", { name: "不確定" }));
+    // 「不確定」清空金額；再打字就取消
+    const unsure = screen.getByRole("button", { name: "不確定" });
+    await user.click(unsure);
+    expect(unsure).toHaveAttribute("aria-pressed", "true");
+    expect(amount).toHaveValue("");
     expect(screen.getByText("未填入時，結果僅會顯示求償比例")).toBeInTheDocument();
+    await user.type(amount, "3萬");
+    expect(unsure).toHaveAttribute("aria-pressed", "false");
+    await user.clear(amount);
 
     // 法院可以不選，選項從 API 來
     await user.click(screen.getByLabelText(/打算在哪個法院/));
@@ -173,7 +177,7 @@ describe("描述案情（關卡 1–3）", () => {
     const slot = screen.getByRole("button", { name: "驗傷單、診斷證明" });
     await user.click(slot);
     expect(slot).toHaveAttribute("aria-pressed", "true");
-    await user.click(screen.getByRole("button", { name: "下一章：確認內容" }));
+    await user.click(screen.getByRole("button", { name: "下一關" }));
     expect(await screen.findByText(/被告有沒有請辯護律師：有/)).toBeInTheDocument();
     expect(screen.getByText(/手上的證據：驗傷單、診斷證明/)).toBeInTheDocument();
   });
@@ -286,7 +290,7 @@ describe("第 6 關：整理成判決書的寫法", () => {
     renderApp(at6, { text: "他欠我錢", names: ["王小明"] });
     await user.click(await screen.findByRole("button", { name: BUTTON }));
     const box = await screen.findByLabelText("整理後的寫法（可以直接修改）");
-    expect(screen.getByRole("radio", { name: "使用整理後的寫法" })).toBeChecked();
+    expect(screen.getByRole("radio", { name: "整理後的寫法" })).toBeChecked();
     await user.clear(box);
     await user.type(box, "原告王小明主張被告未還款");
     await user.click(screen.getByRole("button", { name: "看參考結果" }));
@@ -294,12 +298,12 @@ describe("第 6 關：整理成判決書的寫法", () => {
     expect(calls.find((c) => c.key === "POST /civil/report")!.body).toMatchObject({ search_text: "原告【姓名】主張被告未還款" });
   });
 
-  it("選「改用我的原文」就不用整理的文字", async () => {
+  it("選「我的原文」就不用整理的文字", async () => {
     const { calls } = setup(llm, { "POST /civil/report": () => CIVIL_REPORT });
     const user = userEvent.setup();
     renderApp(at6, { text: "他欠我錢" });
     await user.click(await screen.findByRole("button", { name: BUTTON }));
-    await user.click(await screen.findByRole("radio", { name: "改用我的原文" }));
+    await user.click(await screen.findByRole("radio", { name: "我的原文" }));
     await user.click(screen.getByRole("button", { name: "看參考結果" }));
     await screen.findByText("62%");
     expect(calls.find((c) => c.key === "POST /civil/report")!.body).toMatchObject({ search_text: null });
@@ -349,16 +353,16 @@ describe("第 6 關：整理成判決書的寫法", () => {
     expect(screen.queryByLabelText("整理後的寫法（可以直接修改）")).not.toBeInTheDocument();
   });
 
-  it("有敏感個資時，整理前要先同意；不同意就用原本的描述", async () => {
+  it("有敏感個資時，勾選同意才能整理；不勾也能直接看結果（用原本的描述）", async () => {
     const { sent } = setup(llm);
     const user = userEvent.setup();
     renderAt("/confirm", <Confirm />, at6, { text: "我骨折住院，對方不賠" });
     const button = await screen.findByRole("button", { name: BUTTON });
     expect(button).toBeDisabled();
-    await user.click(screen.getByRole("radio", { name: "不同意，不用 AI" }));
-    expect(screen.getByText(/這次不用 AI，會用你原本的描述/)).toBeInTheDocument();
+    expect(screen.queryByRole("radio", { name: /不同意/ })).not.toBeInTheDocument();
+    expect(screen.getByText(/不想用 AI 的話不用勾，直接看參考結果，會用你原本的描述/)).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "看參考結果" })).toBeEnabled();
-    await user.click(screen.getByRole("radio", { name: "我同意傳給 AI" }));
+    await user.click(screen.getByRole("checkbox", { name: "我同意傳給 AI" }));
     await user.click(screen.getByRole("button", { name: BUTTON }));
     await screen.findByLabelText("整理後的寫法（可以直接修改）");
     expect(sent).toHaveLength(1);
@@ -582,15 +586,15 @@ describe("第 4 關：確認遮名與敏感資料", () => {
     await waitFor(() => expect(screen.getByRole("button", { name: "看參考結果" })).toBeEnabled());
   });
 
-  it("回上一章是第 3 關", async () => {
+  it("第 4 關的上一關是第 3 關", async () => {
     rulesApi();
     renderAt("/confirm", <Confirm />, "/confirm", { text: "朋友借錢沒還" });
-    expect(await screen.findByRole("link", { name: "回上一章" })).toHaveAttribute("href", "/start?stage=3");
+    expect(await screen.findByRole("link", { name: "上一關" })).toHaveAttribute("href", "/start?stage=3");
   });
 });
 
 describe("第 5 關：補充細節", () => {
-  const AI_TAB = "請 AI 幫我看還缺什麼";
+  const AI_TAB = "AI 提問";
   const SEND = "傳給 AI，開始提問";
   type Body = { text: string; allow_llm: boolean };
   const setup = (reply: (b: Body) => unknown) => {
@@ -633,11 +637,11 @@ describe("第 5 關：補充細節", () => {
     expect(screen.queryByText("問題f")).not.toBeInTheDocument();
   });
 
-  it("回答會加進送出的內容，按鈕從「略過」變成「下一關」", async () => {
+  it("回答會加進送出的內容；不管有沒有回答，按鈕都是「下一關」", async () => {
     setup(() => rulesReply);
     const user = userEvent.setup();
     renderAt("/confirm", <Confirm />, at5, { text: "朋友借錢沒還" });
-    expect(screen.getByRole("button", { name: "略過，下一關" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "下一關" })).toBeInTheDocument();
     await user.type(await screen.findByLabelText("什麼時候發生的？"), "去年");
     expect(screen.getByRole("button", { name: "下一關" })).toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: "上一關" }));
@@ -652,7 +656,7 @@ describe("第 5 關：補充細節", () => {
     expect(sent.filter((b) => b.allow_llm)).toHaveLength(0);
     await user.click(send);
     expect(await screen.findByLabelText("對方怎麼說？")).toBeInTheDocument();
-    expect(screen.getByText(/由 AI 依你的案情產生/)).toBeInTheDocument();
+    expect(screen.queryByText(/由 AI 依你的案情產生/)).not.toBeInTheDocument();
     const toLlm = sent.filter((b) => b.allow_llm);
     expect(toLlm).toHaveLength(1);
     expect(toLlm[0].text).toBe("【姓名】的電話是【電話】");
@@ -664,7 +668,7 @@ describe("第 5 關：補充細節", () => {
     renderAt("/confirm", <Confirm />, at5, { text: "內容" });
     await user.click(await openAi(user));
     await user.type(await screen.findByLabelText("對方怎麼說？"), "他不承認");
-    await user.click(screen.getByRole("button", { name: "固定題目（不用 AI）" }));
+    await user.click(screen.getByRole("button", { name: "固定題目" }));
     expect(screen.getByLabelText("什麼時候發生的？")).toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: AI_TAB }));
     expect(screen.getByLabelText("對方怎麼說？")).toHaveValue("他不承認");
@@ -713,21 +717,24 @@ describe("第 5 關：補充細節", () => {
     const send = await openAi(user);
     expect(screen.getByRole("heading", { name: "傳給 AI 前，需要你同意" })).toBeInTheDocument();
     expect(send).toBeDisabled();
-    await user.click(screen.getByRole("radio", { name: "我同意傳給 AI" }));
+    await user.click(screen.getByRole("checkbox", { name: "我同意傳給 AI" }));
     expect(send).toBeEnabled();
+    await user.click(screen.getByRole("checkbox", { name: "我同意傳給 AI" }));
+    expect(send).toBeDisabled();
+    await user.click(screen.getByRole("checkbox", { name: "我同意傳給 AI" }));
     await user.click(send);
     expect(await screen.findByLabelText("對方怎麼說？")).toBeInTheDocument();
     expect(sent.filter((b) => b.allow_llm)).toHaveLength(1);
   });
 
-  it("不同意就不用 AI，可以改用固定題目，也不會傳", async () => {
+  it("不勾選同意就不會傳給 AI，可以改答固定題目", async () => {
     const sent = setup((b) => (b.allow_llm ? aiReply : rulesReply));
     const user = userEvent.setup();
     renderAt("/confirm", <Confirm />, at5, { text: "我骨折住院" });
-    await openAi(user);
-    await user.click(screen.getByRole("radio", { name: "不同意，不用 AI" }));
-    expect(screen.queryByRole("button", { name: SEND })).not.toBeInTheDocument();
-    await user.click(screen.getByRole("button", { name: "改用固定題目" }));
+    const send = await openAi(user);
+    expect(send).toBeDisabled();
+    expect(screen.getByText("不想用 AI 的話，改答上面的固定題目就好。")).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "固定題目" }));
     expect(screen.getByLabelText("什麼時候發生的？")).toBeInTheDocument();
     expect(sent.every((b) => !b.allow_llm)).toBe(true);
   });
@@ -773,12 +780,12 @@ describe("民事結果", () => {
   describe("分頁", () => {
     it("五個分頁，預設整體結果；解說員的話每個分頁都一樣", async () => {
       const { calls } = await show();
-      expect(screen.getAllByRole("tab").map((t) => t.textContent)).toEqual(["整體結果", "可能的金額", "證據對照", "對方的說法", "相似判決"]);
+      expect(screen.getAllByRole("tab").map((t) => t.textContent)).toEqual(["整體結果", "可能的金額", "相似判決", "證據對照", "對方的說法"]);
       expect(screen.getByRole("tab", { name: "整體結果" })).toHaveAttribute("aria-selected", "true");
       const scene = screen.getByRole("region", { name: "CasEY 角色說明" });
-      expect(scene).toHaveTextContent("我是解說員。你可以參考模型給出的結果，也可以在相似判決中查找前10件最相似的判決書資訊，並參考導讀內容。");
+      expect(scene).toHaveTextContent("你可以參考模型給出的結果，也可以在相似判決中查找前10件最相似的判決書資訊，並參考導讀內容。");
       await openTab("對方的說法");
-      expect(scene).toHaveTextContent("我是解說員。你可以參考模型給出的結果，也可以在相似判決中查找前10件最相似的判決書資訊，並參考導讀內容。");
+      expect(scene).toHaveTextContent("你可以參考模型給出的結果，也可以在相似判決中查找前10件最相似的判決書資訊，並參考導讀內容。");
       expect(screen.getByText(/比對了 30 件案由相同的真實判決/)).toBeInTheDocument();
       expect(calls[0].body).toMatchObject({ text: TRAFFIC, mid: "侵權：交通事故", claimed_amount: 500000, evidence: ["medical"] });
     });
@@ -806,13 +813,13 @@ describe("民事結果", () => {
       try {
         // 從判決導讀回來（?tab=cases）：第一次就捲，不用動畫
         await show({}, "/result/civil?tab=cases");
-        expect(scrollTo).toHaveBeenCalledWith({ left: 590 - 300 + 16, behavior: "auto" });
+        expect(scrollTo).toHaveBeenCalledWith({ left: 350 - 300 + 16, behavior: "auto" });   // 相似判決是第 3 個：240 + 110
         expect(scrollTo.mock.contexts[0]).toBe(screen.getByRole("tablist"));
         scrollTo.mockClear();
         await user().click(screen.getByRole("tab", { name: "整體結果" }));
         expect(scrollTo).not.toHaveBeenCalled();     // 已經在畫面內
         await user().click(screen.getByRole("tab", { name: "對方的說法" }));
-        expect(scrollTo).toHaveBeenCalledWith({ left: 470 - 300 + 16, behavior: "smooth" });
+        expect(scrollTo).toHaveBeenCalledWith({ left: 590 - 300 + 16, behavior: "smooth" });   // 對方的說法是第 5 個：480 + 110
       } finally {
         vi.restoreAllMocks();
         delete (Element.prototype as Partial<Element>).scrollTo;
@@ -1191,6 +1198,23 @@ describe("民事結果", () => {
     expect(screen.queryByText(/示例資料/)).not.toBeInTheDocument();
   });
 
+  it("手機上下載 PDF 是標題旁的圖示按鈕，分頁列上不再放", async () => {
+    window.matchMedia = vi.fn((q: string) => ({
+      matches: q.includes("40rem"), media: q, addEventListener: () => {}, removeEventListener: () => {},
+    })) as unknown as typeof window.matchMedia;
+    try {
+      const print = vi.spyOn(window, "print").mockImplementation(() => {});
+      await show();
+      const pdf = screen.getByRole("button", { name: "下載 PDF" });
+      expect(pdf.parentElement).toContainElement(screen.getByRole("heading", { level: 1, name: /^民事參考結果/ }));
+      expect(screen.getByRole("tablist").parentElement).not.toContainElement(pdf);
+      await user().click(pdf);
+      expect(print).toHaveBeenCalledOnce();
+    } finally {
+      delete (window as { matchMedia?: unknown }).matchMedia;
+    }
+  });
+
   it("頁尾沒有「請注意」，列印時直接印出條列", async () => {
     await show();
     expect(screen.queryByRole("button", { name: "請注意" })).not.toBeInTheDocument();
@@ -1237,7 +1261,7 @@ describe("刑事結果", () => {
     await show({ mock: false });
     expect(screen.getAllByRole("tab").map((t) => t.textContent)).toEqual(["可能的罪名", "刑期範圍", "相似判決"]);
     const scene = screen.getByRole("region", { name: "CasEY 角色說明" });
-    expect(scene).toHaveTextContent("我是解說員。你可以參考模型給出的結果，也可以在相似判決中查找前10件最相似的判決書資訊，並參考導讀內容。");
+    expect(scene).toHaveTextContent("你可以參考模型給出的結果，也可以在相似判決中查找前10件最相似的判決書資訊，並參考導讀內容。");
     const panel = await openTab("刑期範圍");
     const [, second] = CRIMINAL_REPORT.charges;
     await userEvent.setup().click(within(panel).getByRole("button", { name: second.name }));
@@ -1524,7 +1548,7 @@ describe("判決導讀", () => {
     expect(toPara).toHaveLength(2);
   });
 
-  it("手機捷徑：跳到判決全文；有法院怎麼認定時也跳得到卡片", async () => {
+  it("手機捷徑：有法院怎麼認定時，只有一顆跳到卡片的按鈕", async () => {
     const reasoning = { labeler: "llm-p6.0", manual_version: "v0.6", items: [
       { label: "CONCL", polarity: "有理由", quote: "原告之請求有理由", paragraph: 3, start: 3, end: 11 },
     ] };
@@ -1533,17 +1557,17 @@ describe("判決導讀", () => {
     Element.prototype.scrollIntoView = scroll;
     renderAt("/judgment/:source/:caseId", <Reading />, "/judgment/civil/11");
     const nav = await screen.findByRole("navigation", { name: "跳到" });
-    expect(within(nav).getByRole("link", { name: "判決全文" })).toHaveAttribute("href", "#full-title");
+    expect(within(nav).getAllByRole("link").map((a) => a.textContent)).toEqual(["法院怎麼認定"]);
     expect(within(nav).getByRole("link", { name: "法院怎麼認定" })).toHaveAttribute("href", "#reasoning-card");
-    await userEvent.setup().click(within(nav).getByRole("link", { name: "判決全文" }));
-    expect(scroll.mock.contexts.at(-1)).toBe(document.getElementById("full-title"));
+    await userEvent.setup().click(within(nav).getByRole("link", { name: "法院怎麼認定" }));
+    expect(scroll.mock.contexts.at(-1)).toBe(document.getElementById("reasoning-card"));
   });
 
-  it("手機捷徑：沒有法院怎麼認定時，只有判決全文", async () => {
+  it("手機捷徑：沒有法院怎麼認定時不顯示", async () => {
     mockApi({ "GET /judgments/civil/11/guide": () => GUIDE });
     renderAt("/judgment/:source/:caseId", <Reading />, "/judgment/civil/11");
-    const nav = await screen.findByRole("navigation", { name: "跳到" });
-    expect(within(nav).getAllByRole("link").map((a) => a.textContent)).toEqual(["判決全文"]);
+    expect(await screen.findByRole("heading", { name: "判決全文" })).toBeInTheDocument();
+    expect(screen.queryByRole("navigation", { name: "跳到" })).not.toBeInTheDocument();
   });
 
   it("法院怎麼認定：引文跨兩段時，兩段都標出來", async () => {
@@ -1749,7 +1773,7 @@ describe("民事被告端", () => {
     expect(JSON.parse(window.sessionStorage.getItem(STORAGE_KEY)!)).toMatchObject({ caseType: "unsure", rewriteFor: "", searchText: "", rewriteDraft: "" });
   });
 
-  it("不確定：刑事那份整理失敗時民事照用，刑事留空；選「改用我的原文」兩份都不用", async () => {
+  it("不確定：刑事那份整理失敗時民事照用，刑事留空；選「我的原文」兩份都不用", async () => {
     mockApi({
       "POST /intake/followup": () => ({ questions: [], source: "rules", llm_available: true }),
       "POST /intake/rewrite": (b: { case_type: string }) => (b.case_type === "criminal"
@@ -1765,7 +1789,7 @@ describe("民事被告端", () => {
     expect(saved()).toMatchObject({ searchText: "原告主張被告未還款。", criminalSearchText: "" });
     await user.type(screen.getByLabelText("刑事用的寫法（可以直接修改）"), "被告甲未還款");
     expect(saved()).toMatchObject({ criminalSearchText: "被告甲未還款" });
-    await user.click(screen.getByRole("radio", { name: "改用我的原文" }));
+    await user.click(screen.getByRole("radio", { name: "我的原文" }));
     expect(saved()).toMatchObject({ useRewrite: "original", searchText: "", criminalSearchText: "" });
   });
 
@@ -1795,7 +1819,7 @@ describe("民事被告端", () => {
     });
     await screen.findByRole("tab", { name: "整體結果" });
     expect(calls[0].body).toMatchObject({ role: "defendant", defendant_has_lawyer: true, plaintiff_has_lawyer: null });
-    expect(screen.getAllByRole("tab").map((t) => t.textContent)).toEqual(["整體結果", "可能要賠的金額", "證據對照", "被告的說法", "相似判決"]);
+    expect(screen.getAllByRole("tab").map((t) => t.textContent)).toEqual(["整體結果", "可能要賠的金額", "相似判決", "證據對照", "被告的說法"]);
     const panel = screen.getByRole("tabpanel");
     expect(panel).toHaveTextContent("對方（原告）勝訴的機率");
     expect(panel).toHaveTextContent("38%");

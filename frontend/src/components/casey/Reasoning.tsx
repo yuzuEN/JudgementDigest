@@ -6,6 +6,7 @@ import { outcomeLabel, outcomeTone } from "../../format";
 import { InfoLink } from "../Common";
 import { LinkButton } from "../LinkButton";
 import { OutcomeChip } from "./OutcomeChip";
+import { PhoneCollapse } from "./PhoneCollapse";
 
 /**
  * 判決導讀「法院怎麼認定」（D3）。
@@ -94,14 +95,14 @@ function ReasoningGroup({ group: g, active, onSelect }: {
               className={cn("flex w-full min-h-11 flex-col gap-1.5 rounded-[12px] border-2 bg-card px-3.5 py-2.5 text-left",
                 active === index ? "border-primary" : "border-input")}>
               <Tag item={item} />
-              <span className="text-[15px] leading-relaxed">「{displayQuote(item.quote)}」</span>
+              <span className="text-hint leading-relaxed">「{displayQuote(item.quote)}」</span>
             </button>
           </li>
         ))}
       </ul>
       {hidden > 0 && (
         <button type="button" aria-expanded={expanded} onClick={() => setOpen(!expanded)}
-          className="no-print min-h-11 w-fit rounded-[10px] px-2 text-[15px] font-bold text-primary hover:bg-accent">
+          className="no-print min-h-11 w-fit rounded-[10px] px-2 text-hint font-bold text-primary hover:bg-accent">
           {expanded ? "收起" : `顯示全部 ${g.items.length} 處`}
         </button>
       )}
@@ -125,7 +126,7 @@ export function ReasoningCard({ reasoning, active, onSelect }: {
       className="scroll-mt-4 gap-4 px-[18px] sm:px-6.5 lg:order-last lg:sticky lg:top-4 lg:max-h-[calc(100dvh-2rem)] lg:overflow-y-auto print:static print:max-h-none print:overflow-visible">
       <div className="flex flex-col gap-1.5">
         <h2 id="reasoning-title" className="text-xl font-bold">法院怎麼認定</h2>
-        <p className="text-[15px] text-muted-foreground">點一下，判決全文會捲到那一段，並標出這句原文。</p>
+        <p className="text-hint text-muted-foreground">點一下，判決全文會捲到那一段，並標出這句原文。</p>
       </div>
       {groups.map((g) => <ReasoningGroup key={g.label} group={g} active={active} onSelect={onSelect} />)}
       <p className="text-sm text-muted-foreground">
@@ -135,7 +136,7 @@ export function ReasoningCard({ reasoning, active, onSelect }: {
     {/* 窄螢幕（單欄）卡片不會黏住：點過一項、畫面捲到原文之後，右下角給一顆回到卡片的按鈕 */}
     {active !== null && (
       <button type="button" onClick={() => document.getElementById("reasoning-card")?.scrollIntoView?.({ behavior: "smooth", block: "start" })}
-        className="no-print fixed right-[max(1rem,env(safe-area-inset-right,0px))] bottom-[max(1rem,env(safe-area-inset-bottom,0px))] z-10 min-h-11 rounded-full border-2 border-primary bg-card px-4 text-[15px] font-bold text-primary shadow-md hover:bg-accent lg:hidden">
+        className="no-print fixed right-[max(1rem,env(safe-area-inset-right,0px))] bottom-[max(1rem,env(safe-area-inset-bottom,0px))] z-10 min-h-11 rounded-full border-2 border-primary bg-card px-4 text-hint font-bold text-primary shadow-md hover:bg-accent lg:hidden">
         回到法院怎麼認定
       </button>
     )}
@@ -222,7 +223,7 @@ function DamQuote({ item }: { item: ReasoningQuote }) {
   const long = item.text !== item.quote;
   return (
     <>
-      <span className={cn("text-[15px] leading-relaxed", !full && "line-clamp-4 print:line-clamp-none")}>「{full ? item.text : short}」</span>
+      <span className={cn("text-hint leading-relaxed", !full && "line-clamp-4 print:line-clamp-none")}>「{full ? item.text : short}」</span>
       {long && (
         <button type="button" aria-expanded={full} onClick={() => setFull(!full)}
           className="no-print min-h-11 w-fit rounded-[10px] px-2 text-sm font-bold text-primary hover:bg-accent">
@@ -254,9 +255,11 @@ export function DamageReasons({ cases }: { cases: SimilarCase[] }) {
         <h3 className="flex items-center gap-1 text-lg font-bold">
           <span id="damage-reasons-title">相似判決的法院怎麼決定金額</span><InfoLink to="法院怎麼認定" label="法院怎麼認定的說明" />
         </h3>
-        <p className="text-[15px] text-muted-foreground">
-          範圍只說明判多少；下面是 {rows.length} 件相似判決裡，法院斟酌金額的原文，可以看出法院考量了哪些因素。「酌減」是判准的比請求的少，「全額准許」是照請求的金額判准。<InfoLink to="酌減" label="酌減的說明" />
-        </p>
+        <PhoneCollapse label="說明">
+          <p className="text-hint text-muted-foreground">
+            範圍只說明判多少；下面是 {rows.length} 件相似判決裡，法院斟酌金額的原文，可以看出法院考量了哪些因素。「酌減」是判准的比請求的少，「全額准許」是照請求的金額判准。<InfoLink to="酌減" label="酌減的說明" />
+          </p>
+        </PhoneCollapse>
       </div>
       <ul className="m-0 flex list-none flex-col gap-3 p-0">
         {rows.map(({ c, items }, k) => (
@@ -264,7 +267,7 @@ export function DamageReasons({ cases }: { cases: SimilarCase[] }) {
             className={cn("flex flex-col gap-2 rounded-[12px] border-2 border-input bg-card px-3.5 py-3",
               !open && k >= DAM_CASES_PREVIEW && "print:!flex")}>
             <div className="flex flex-wrap items-center gap-2">
-              <b className="text-[15px]">{c.case_number}</b>
+              <b className="text-hint">{c.case_number}</b>
               <OutcomeChip tone={outcomeTone(c.outcome)}>{outcomeLabel(c.outcome)}</OutcomeChip>
               {c.claimed_amount ? (
                 <span className="text-sm text-muted-foreground tabular-nums">判准 <b className="text-foreground">{yuan(c.awarded_amount ?? 0)}</b> ／ 請求 {yuan(c.claimed_amount)} 元</span>
@@ -288,7 +291,7 @@ export function DamageReasons({ cases }: { cases: SimilarCase[] }) {
       </ul>
       {hidden > 0 && (
         <button type="button" aria-expanded={open} onClick={() => setOpen(!open)}
-          className="no-print min-h-11 w-fit rounded-[10px] px-2 text-[15px] font-bold text-primary hover:bg-accent">
+          className="no-print min-h-11 w-fit rounded-[10px] px-2 text-hint font-bold text-primary hover:bg-accent">
           {open ? "收起" : `顯示其他 ${hidden} 件`}
         </button>
       )}

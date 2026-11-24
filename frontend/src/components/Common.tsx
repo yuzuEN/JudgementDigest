@@ -49,7 +49,7 @@ export function ErrorBox({ message, onRetry, hint = "請稍後再試。", childr
       <p className="flex items-center gap-3 text-xl font-bold">
         <TriangleAlertIcon className="size-7 flex-none text-secondary-foreground" aria-hidden="true" />無法載入資料
       </p>
-      <p className="text-[15px] text-muted-foreground">{hint}</p>
+      <p className="text-hint text-muted-foreground">{hint}</p>
       <p className="text-sm text-muted-foreground">（{message}）</p>
       {(onRetry || children) && (
         <div className="flex flex-wrap gap-2.5">

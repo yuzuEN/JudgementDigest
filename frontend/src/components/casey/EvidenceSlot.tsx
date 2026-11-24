@@ -15,7 +15,7 @@ export function EvidenceSlot({ label, icon: Icon, pressed, onPressedChange }: {
   return (
     <Toggle pressed={pressed} onPressedChange={onPressedChange}
       className={cn(
-        "relative grid h-auto min-h-[100px] w-full place-items-center content-center gap-1 rounded-[14px] border-2 bg-card p-2.5 text-center text-[15px] leading-snug font-bold whitespace-normal text-foreground",
+        "relative grid h-auto min-h-[100px] w-full place-items-center content-center gap-1 rounded-[14px] border-2 bg-card p-2.5 text-center text-hint leading-snug font-bold whitespace-normal text-foreground",
         "hover:bg-card hover:border-primary aria-pressed:bg-secondary aria-pressed:hover:bg-secondary",
         pressed ? "border-foreground" : "border-input",
       )}>
