@@ -369,14 +369,12 @@ function DetailStage({ heading, llm, mode, setMode, aiState, askAi, consent, aiA
             {(aiState === "idle" || aiState === "asking") && (
               <>
                 {aiState === "idle" && <AiConsent consent={consent} use="產生補充問題" skip="不想用 AI 的話，改答上面的固定題目就好。" />}
-                {/* 按鈕置中在藍色卡片裡；按下後同一顆按鈕變成載入中 */}
-                <div className="flex justify-center rounded-[14px] border border-info-line bg-info px-4 py-5">
-                  <Button type="button" disabled={aiState === "asking" || !aiAllowed} aria-busy={aiState === "asking"} onClick={askAi}>
-                    {aiState === "asking"
-                      ? <><LoaderCircleIcon data-icon="inline-start" className="animate-spin motion-reduce:animate-none" />AI 正在產生補充問題…</>
-                      : <><SparklesIcon data-icon="inline-start" />傳給 AI，開始提問</>}
-                  </Button>
-                </div>
+                {/* 和第 6 關「請 AI 整理敘述」同樣是整行寬的按鈕；按下後同一顆按鈕變成載入中 */}
+                <Button type="button" size="lg" className="w-full" disabled={aiState === "asking" || !aiAllowed} aria-busy={aiState === "asking"} onClick={askAi}>
+                  {aiState === "asking"
+                    ? <><LoaderCircleIcon data-icon="inline-start" className="animate-spin motion-reduce:animate-none" />AI 正在產生補充問題…</>
+                    : <><SparklesIcon data-icon="inline-start" />傳給 AI，開始提問</>}
+                </Button>
               </>
             )}
             {aiState === "asking" && (
