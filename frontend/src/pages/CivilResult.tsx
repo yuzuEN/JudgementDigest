@@ -401,30 +401,38 @@ function DefensePanel({ report, defendant = false }: { report: CivilReport; defe
     <>
       <PanelTitle mock={report.mock}>{defendant ? "相似判決中被告常見的說法" : "相似判決中的被告抗辯"}</PanelTitle>
       <p className="text-muted-foreground">
-        數字表示各項說法在相似判決中出現的比例。{defendant && "展開可以看提出這個說法的判決裡，原告輸的比例；標上「你有提到」的是你寫過的說法。"}
+        數字表示各項說法在相似判決中出現的比例。{defendant && "標上「你有提到」的是你寫過的說法。每項下面是提出這個說法的判決裡原告敗訴的比例；這是相關、不是因果，說法有沒有用要看證據和個案。"}
       </p>
       {report.defenses.length === 0 ? (
         <EmptyState title="未整理出常見的抗辯">
           {defendant ? "這些判決中沒有整理出常見說法。可以到「相似判決」分頁，看被告實際怎麼答辯。" : "這些判決中沒有整理出常見說法，對方仍可能提出反駁。"}
         </EmptyState>
       ) : (
-        <div className="flex flex-col gap-2">
-          {report.defenses.map((d) => (
-            <Disclosure key={d.key} summary={<>
-              <span className="flex-1">{defenseLabel(d.label, defendant)}</span>
-              {defendant && d.user_has && <span className="inline-flex items-center gap-1 text-sm font-bold text-secondary-foreground"><CheckIcon className="size-4" aria-hidden="true" />你有提到</span>}
-              <span className="tabular-nums">{percent(d.share)}</span>
-            </>}>
-              <Bar value={d.share} label={`${defenseLabel(d.label, defendant)}：出現在 ${percent(d.share)} 的相似判決`} />
-              <p className="text-hint text-muted-foreground">{d.description}。</p>
-              {defendant && (d.lose_share != null
-                ? <p className="text-hint">提出這個說法的 {d.n_raised ?? 0} 件相似判決中，<b className="tabular-nums">{percent(d.lose_share)}</b> 原告敗訴。這是相關、不是因果：說法有沒有用，要看證據和個案。</p>
-                : <p className="text-hint text-muted-foreground">提出這個說法的相似判決太少（{d.n_raised ?? 0} 件），不計算原告敗訴的比例。</p>)}
-              {d.label.includes("與有過失") && (
-                <a href={`/guide#${encodeURIComponent("與有過失")}`} target="_blank" rel="noreferrer" className="w-fit text-hint font-semibold decoration-dotted">什麼是「與有過失」？</a>
-              )}
-            </Disclosure>
-          ))}
+        // 和證據對照同一種排法：名稱｜你有提到、長條｜比例，下面一行說明
+        <div className="flex flex-col">
+          {report.defenses.map((d) => {
+            const label = defenseLabel(d.label, defendant);
+            return (
+              <MiniBarRow key={d.key} label={label} value={d.share} valueText={percent(d.share)}
+                alt={`${label}：出現在 ${percent(d.share)} 的相似判決`}
+                className={cn("border-b py-3 last:border-b-0 phone:py-2.5",
+                  defendant ? "grid-cols-[minmax(0,1fr)_6.5rem] sm:grid-cols-[200px_minmax(0,1fr)_56px_120px]" : "grid-cols-[minmax(0,1fr)_3.5rem] sm:grid-cols-[200px_minmax(0,1fr)_56px]")}>
+                {/* 被告角度才有「你有提到」；原告角度留空位，手機上的比例才會排在長條旁 */}
+                <span className={cn("order-2 justify-self-end sm:order-none sm:justify-self-auto", !defendant && "sm:hidden")}>
+                  {defendant && d.user_has && <span className="inline-flex items-center gap-1.5 text-sm font-bold text-secondary-foreground"><CheckIcon className="size-4" aria-hidden="true" />你有提到</span>}
+                </span>
+                <div className="order-5 col-span-full flex flex-col gap-1 sm:order-none">
+                  <p className="text-hint text-muted-foreground">{d.description}。</p>
+                  {defendant && (d.lose_share != null
+                    ? <p className="text-hint">提出這個說法的 {d.n_raised ?? 0} 件中，原告敗訴 <b className="tabular-nums">{percent(d.lose_share)}</b>。</p>
+                    : <p className="text-hint text-muted-foreground">提出這個說法的判決太少（{d.n_raised ?? 0} 件），不計算原告敗訴的比例。</p>)}
+                  {d.label.includes("與有過失") && (
+                    <a href={`/guide#${encodeURIComponent("與有過失")}`} target="_blank" rel="noreferrer" className="w-fit text-hint font-semibold decoration-dotted">什麼是「與有過失」？</a>
+                  )}
+                </div>
+              </MiniBarRow>
+            );
+          })}
         </div>
       )}
     </>
