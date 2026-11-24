@@ -1,5 +1,6 @@
-import { ArrowRightIcon, ExternalLinkIcon } from "lucide-react";
-import { useEffect, type ReactNode } from "react";
+import { ArrowRightIcon, ChevronDownIcon, ExternalLinkIcon } from "lucide-react";
+import { useEffect, useState, type ReactNode } from "react";
+import { flushSync } from "react-dom";
 import { useLocation } from "react-router-dom";
 import { cn } from "@/lib/utils";
 import { Card } from "@/components/ui/card";
@@ -45,7 +46,7 @@ function TermList({ terms }: { terms: Term[] }) {
         <div key={t.term} id={t.term} className="flex scroll-mt-6 flex-col gap-1 rounded-[18px] border bg-card px-[18px] py-4">
           <div className="flex items-center justify-between gap-2">
             <dt className="font-bold">{t.term}</dt>
-            <span className="rounded-full border-[1.5px] border-input px-2.5 text-[13px] leading-[1.9] font-semibold">{t.group}</span>
+            <span className="rounded-full border-[1.5px] border-input px-2.5 text-sm leading-[1.9] font-semibold">{t.group}</span>
           </div>
           <dd className="m-0 text-[15px] text-muted-foreground">{t.meaning}</dd>
         </div>
@@ -56,6 +57,8 @@ function TermList({ terms }: { terms: Term[] }) {
 
 export default function Guide() {
   const { hash } = useLocation();
+  // 手機上目錄預設收起來，不然要先滑過一整排連結才看得到內容
+  const [tocOpen, setTocOpen] = useState(false);
 
   useEffect(() => {
     if (!hash) return;
@@ -79,13 +82,21 @@ export default function Guide() {
     <Layout scene={{ who: "explainer", line: "在結果頁點選名詞旁的「i」，就能跳到這裡查看說明。" }}>
       <div className={cn(PAGE, "pt-8 pb-16")}>
         <div className="flex flex-wrap items-start gap-9">
-          <nav aria-label="本頁目錄" className="w-full min-w-0 flex-[1_1_240px] sm:sticky sm:top-5 sm:max-w-[300px]">
-            <Card className="gap-2 px-5">
-              <p className="font-bold">目錄</p>
-              <ul className="m-0 flex list-none flex-col gap-2 p-0">
+          <nav aria-label="本頁目錄" className="w-full min-w-0 flex-[1_1_240px] sm:max-w-[300px] lg:sticky lg:top-5">
+            <Card className="gap-2 px-5 phone:py-2">
+              <p className="font-bold phone:hidden">目錄</p>
+              <button type="button" aria-expanded={tocOpen} aria-controls="guide-toc" onClick={() => setTocOpen((o) => !o)}
+                className="hidden min-h-11 w-full items-center justify-between font-bold phone:flex">
+                目錄<ChevronDownIcon className={cn("size-5 transition-transform motion-reduce:transition-none", tocOpen && "rotate-180")} aria-hidden="true" />
+              </button>
+              <ul id="guide-toc" className={cn("m-0 flex list-none flex-col gap-2 p-0", !tocOpen && "phone:hidden", tocOpen && "phone:pb-3")}>
                 {SECTIONS.map(([id, label]) => (
                   <li key={id}>
-                    <a href={`#${id}`} onClick={(e) => { if (scrollToSection(id)) e.preventDefault(); }}
+                    <a href={`#${id}`} onClick={(e) => {
+                      // 先收起目錄再捲動，不然捲到一半目錄縮起來，標題會跑到畫面外
+                      flushSync(() => setTocOpen(false));
+                      if (scrollToSection(id)) e.preventDefault();
+                    }}
                       className="flex min-h-12 items-center rounded-[14px] border-2 border-input bg-card px-4 font-bold text-foreground no-underline hover:border-foreground hover:bg-secondary">
                       {label}
                     </a>

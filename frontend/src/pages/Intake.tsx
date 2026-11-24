@@ -509,7 +509,7 @@ function Summary({ intake }: { intake: IntakeState }) {
   ];
   return (
     <aside aria-labelledby="summary-title" className="w-full min-w-0 flex-[1_1_260px] sm:max-w-[340px]">
-      <Card className="gap-4 px-6.5">
+      <Card className="gap-4 px-[18px] sm:px-6.5">
         <div className="flex items-center justify-between gap-2">
           <h2 id="summary-title" className="text-xl font-bold">你填的資料</h2>
           <span className="text-sm text-muted-foreground">目前進度</span>

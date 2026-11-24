@@ -32,10 +32,10 @@ function SiteFooter({ note }: { note?: ReactNode }) {
     <footer data-slot="site-footer" className="mt-auto border-t bg-muted pt-8 pb-10 text-[15px] text-muted-foreground">
       <div className={cn(PAGE, "flex flex-col gap-2")}>
         {note}
-        <p className="flex flex-wrap justify-between gap-x-4 gap-y-2 max-sm:flex-col">
-          <a href={LAF_URL} target="_blank" rel="noreferrer">法律扶助基金會</a>
-          <Link to="/guide" className="text-link underline underline-offset-3">說明與法律小知識</Link>
-          <a href={JUDICIAL_URL} target="_blank" rel="noreferrer">司法院裁判書查詢系統</a>
+        <p className="flex flex-wrap justify-between gap-x-4 gap-y-2 max-sm:flex-col phone:gap-y-0">
+          <a href={LAF_URL} target="_blank" rel="noreferrer" className="phone:inline-flex phone:min-h-11 phone:items-center">法律扶助基金會</a>
+          <Link to="/guide" className="text-link underline underline-offset-3 phone:inline-flex phone:min-h-11 phone:items-center">說明與法律小知識</Link>
+          <a href={JUDICIAL_URL} target="_blank" rel="noreferrer" className="phone:inline-flex phone:min-h-11 phone:items-center">司法院裁判書查詢系統</a>
         </p>
       </div>
     </footer>
