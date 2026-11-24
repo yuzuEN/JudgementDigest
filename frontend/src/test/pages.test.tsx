@@ -507,6 +507,15 @@ describe("說明與知識", () => {
     expect(window.location.hash).toBe("#terms");
   });
 
+  it("資料使用說明在說明頁，目錄也連得到", () => {
+    renderApp("/guide");
+    const section = screen.getByRole("region", { name: "你的資料怎麼使用？" });
+    expect(section).toHaveTextContent("蒐集者：本專題團隊");
+    expect(section).toHaveTextContent("AI 服務不拿你的資料訓練模型");
+    const toc = screen.getByRole("navigation", { name: "本頁目錄" });
+    expect(within(toc).getByRole("link", { name: "資料使用說明" })).toHaveAttribute("href", "#privacy");
+  });
+
   it("手機上的目錄可以展開、點了某一段就收起來", async () => {
     Element.prototype.scrollIntoView = vi.fn();
     const user = userEvent.setup();
@@ -756,7 +765,8 @@ describe("第 5 關：補充細節", () => {
     expect(screen.getByText(/^你的描述裡有法律特別保護的資料（偵測到：.+）。$/)).toBeInTheDocument();
     expect(screen.getByText("僅用遮蓋後內容來產生補充問題，不做其他用途。")).toBeInTheDocument();
     expect(screen.queryByText(/遮名後的內容會傳給/)).toBeNull();
-    expect(screen.getByText("AI 不拿來訓練模型")).toBeInTheDocument();
+    // 「送出前檢查」拿掉了，資料使用說明在說明頁
+    expect(screen.queryByRole("heading", { name: "送出前檢查" })).not.toBeInTheDocument();
   });
 });
 

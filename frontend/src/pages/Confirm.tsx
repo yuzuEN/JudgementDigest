@@ -1,5 +1,5 @@
 import {
-  ArrowLeftIcon, ArrowRightIcon, CheckIcon, ChevronDownIcon, ClockIcon, InfoIcon, LoaderCircleIcon, PencilIcon, PlusIcon,
+  ArrowLeftIcon, ArrowRightIcon, CheckIcon, ClockIcon, InfoIcon, LoaderCircleIcon, PencilIcon, PlusIcon,
   RotateCwIcon, ShieldCheckIcon, SparklesIcon, TriangleAlertIcon, XIcon,
 } from "lucide-react";
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
@@ -48,7 +48,6 @@ export default function Confirm() {
   const [questions, setQuestions] = useState<Question[]>([]);
   const [aiQuestions, setAiQuestions] = useState<Question[]>([]);
   const [llmAvailable, setLlmAvailable] = useState(false);
-  const [vendor, setVendor] = useState("AI 服務");
   const [mode, setMode] = useState<"fixed" | "ai">("fixed");
   const [aiState, setAiState] = useState<AiState>("idle");
   const [rewriteState, setRewriteState] = useState<RewriteState>("idle");
@@ -70,7 +69,6 @@ export default function Confirm() {
         if (stale) return;
         setQuestions(r.questions.filter((q) => !q.skip_if || !new RegExp(q.skip_if).test(story)).slice(0, MAX_QUESTIONS));
         setLlmAvailable(Boolean(r.llm_available));
-        if (r.llm_vendor) setVendor(r.llm_vendor);
       })
       .catch(() => { if (!stale) setQuestions([]); });   // 追問失敗不影響後面的流程
     return () => { stale = true; };
@@ -177,7 +175,6 @@ export default function Confirm() {
             </nav>
           </main>
 
-          <Checklist stage={stage} vendor={llmAvailable ? vendor : null} />
         </div>
       </div>
     </Layout>
@@ -573,47 +570,3 @@ function RewriteStage({ heading, llm, intake, update, state, onStart, consent, a
 
 /* ── 右側：送出前檢查、資料使用說明 ── */
 
-function Checklist({ stage, vendor }: { stage: number; vendor: string | null }) {
-  const items = [[4, "確認遮名"], [5, "補充細節（選填）"], [6, vendor ? "判決書寫法" : "最後確認"]] as const;
-  return (
-    <aside aria-labelledby="check-title" className="w-full min-w-0 flex-[1_1_260px] sm:max-w-[340px]">
-      <Card className="gap-4 px-[18px] sm:px-6.5">
-        <h2 id="check-title" className="text-xl font-bold">送出前檢查</h2>
-        <ol className="m-0 flex list-none flex-col gap-1 p-0">
-          {items.map(([n, label]) => {
-            const done = stage > n;
-            const now = stage === n;
-            return (
-              <li key={n} aria-current={now ? "step" : undefined} className={cn("flex min-h-10 items-center gap-2.5", now ? "font-bold" : done ? "" : "text-muted-foreground")}>
-                <span aria-hidden="true" className={cn(
-                  "grid size-6 flex-none place-items-center rounded-full border-2",
-                  done ? "border-primary bg-primary text-primary-foreground" : now ? "border-primary ring-4 ring-secondary" : "border-input",
-                )}>
-                  {done && <CheckIcon className="size-3.5" strokeWidth={3} />}
-                </span>
-                {label}{done && <span className="sr-only">（已完成）</span>}
-              </li>
-            );
-          })}
-        </ol>
-        <p className="text-sm text-muted-foreground">
-          我們會以遮蓋版本來比對您的判決結果{vendor ? "；也只會使用遮蓋版本來傳給 AI 整理與改寫。" : "。"}
-        </p>
-        <details className="group rounded-[12px] border bg-card">
-          <summary className="flex min-h-11 cursor-pointer list-none items-center gap-2 px-3 font-bold [&::-webkit-details-marker]:hidden">
-            資料使用說明
-            <ChevronDownIcon className="ml-auto size-5 transition-transform group-open:rotate-180 motion-reduce:transition-none" aria-hidden="true" />
-          </summary>
-          <ul className="m-0 flex list-disc flex-col gap-2 px-3 pb-3 pl-8 text-sm">
-            <li>蒐集者：本專題團隊</li>
-            <li>只用來產生參考結果</li>
-            <li>遮名在瀏覽器完成</li>
-            <li>關掉分頁就清除</li>
-            {vendor && <li>AI 不拿來訓練模型</li>}
-            <li>敏感資料不保存</li>
-          </ul>
-        </details>
-      </Card>
-    </aside>
-  );
-}
