@@ -164,7 +164,8 @@ describe("描述案情（關卡 1–3）", () => {
     const company = screen.getByRole("button", { name: "公司" });
     await user.click(company);
     expect(company).toHaveAttribute("aria-pressed", "true");
-    expect(screen.getByRole("complementary", { name: "你填的資料" })).toHaveTextContent("公司");
+    // 右側「你填的資料」拿掉了
+    expect(screen.queryByRole("complementary", { name: "你填的資料" })).not.toBeInTheDocument();
   });
 
   it("刑事只問律師和證物，答案接在描述後面送出", async () => {
