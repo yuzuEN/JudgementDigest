@@ -92,7 +92,7 @@ function CivilSection({ state, tab, setTab, level = 1 }: {
   const mock = report?.mock ?? false;
   return (
     <section aria-labelledby="civil-result" className="flex flex-col gap-6 phone:gap-3">
-      <ResultHeading id="civil-result" level={level} title={title} lead={lead} />
+      <ResultHeading id="civil-result" level={level} title={title} lead={lead} action={report && <PdfButton icon />} />
       {error && (
         <ErrorBox message={error} onRetry={load} hint="請重新載入結果，或回上一步檢查描述。">
           <LinkButton variant="outline" to="/confirm?stage=6">回上一步</LinkButton>

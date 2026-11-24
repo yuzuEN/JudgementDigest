@@ -60,7 +60,8 @@ export function CriminalSection({ state, tab, setTab, level = 1 }: {
   const accused = intake.caseType === "unsure" && civilRole(intake) === "defendant";
   return (
     <section id="criminal" aria-labelledby="criminal-result" className="flex scroll-mt-4 flex-col gap-6 phone:gap-3">
-      <ResultHeading id="criminal-result" level={level} title="刑事參考結果" lead="根據案情推估可能的罪名與刑期，並提供相似判決供參考。" />
+      <ResultHeading id="criminal-result" level={level} title="刑事參考結果" lead="根據案情推估可能的罪名與刑期，並提供相似判決供參考。"
+        action={report && report.charges.length > 0 && <PdfButton icon />} />
       {error && (
         <ErrorBox message={error} onRetry={load} hint="請重新載入結果，或回上一步檢查描述。">
           <LinkButton variant="outline" to="/confirm?stage=6">回上一步</LinkButton>

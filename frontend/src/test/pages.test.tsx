@@ -1194,6 +1194,23 @@ describe("民事結果", () => {
     expect(screen.queryByText(/示例資料/)).not.toBeInTheDocument();
   });
 
+  it("手機上下載 PDF 是標題旁的圖示按鈕，分頁列上不再放", async () => {
+    window.matchMedia = vi.fn((q: string) => ({
+      matches: q.includes("40rem"), media: q, addEventListener: () => {}, removeEventListener: () => {},
+    })) as unknown as typeof window.matchMedia;
+    try {
+      const print = vi.spyOn(window, "print").mockImplementation(() => {});
+      await show();
+      const pdf = screen.getByRole("button", { name: "下載 PDF" });
+      expect(pdf.parentElement).toContainElement(screen.getByRole("heading", { level: 1, name: /^民事參考結果/ }));
+      expect(screen.getByRole("tablist").parentElement).not.toContainElement(pdf);
+      await user().click(pdf);
+      expect(print).toHaveBeenCalledOnce();
+    } finally {
+      delete (window as { matchMedia?: unknown }).matchMedia;
+    }
+  });
+
   it("頁尾沒有「請注意」，列印時直接印出條列", async () => {
     await show();
     expect(screen.queryByRole("button", { name: "請注意" })).not.toBeInTheDocument();
