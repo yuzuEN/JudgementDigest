@@ -486,7 +486,7 @@ function RewriteStage({ heading, llm, intake, update, state, onStart, consent, a
   const draft = intake.rewriteDraft;
   const reviewed = intake.rewriteFor !== "";   // 整理過了（草稿清空也還在編輯，不能讓文字框消失）
   const masked = (useRewrite: Intake["useRewrite"], text: string) => (useRewrite === "rewrite" && text.trim() ? maskText(text.trim(), intake.names) : "");
-  // 「使用整理後的寫法／改用原文」民事、刑事兩份一起切換
+  // 「整理後的寫法／我的原文」民事、刑事兩份一起切換
   const choose = (useRewrite: Intake["useRewrite"], text = draft, ctext = intake.criminalDraft) =>
     update({ useRewrite, rewriteDraft: text, searchText: masked(useRewrite, text), criminalDraft: ctext, criminalSearchText: unsure ? masked(useRewrite, ctext) : "" });
   const added = [...new Set([...intake.rewriteAdded, ...(unsure ? intake.criminalAdded : [])])];
@@ -563,8 +563,9 @@ function RewriteStage({ heading, llm, intake, update, state, onStart, consent, a
                 onChange={(e) => choose(intake.useRewrite, draft, e.target.value)} />
             </div>
           )}
-          <RadioCards label="使用哪一種寫法" value={intake.useRewrite} onChange={(v) => choose(v)}
-            options={[{ value: "rewrite", title: "使用整理後的寫法" }, { value: "original", title: "改用我的原文" }]} />
+          {/* 一列兩個：左邊原文、右邊整理後的寫法 */}
+          <RadioCards label="使用哪一種寫法" value={intake.useRewrite} onChange={(v) => choose(v)} className="grid-cols-2"
+            options={[{ value: "original", title: "我的原文" }, { value: "rewrite", title: "整理後的寫法" }]} />
         </>
       )}
 

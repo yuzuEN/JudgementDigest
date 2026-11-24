@@ -290,7 +290,7 @@ describe("第 6 關：整理成判決書的寫法", () => {
     renderApp(at6, { text: "他欠我錢", names: ["王小明"] });
     await user.click(await screen.findByRole("button", { name: BUTTON }));
     const box = await screen.findByLabelText("整理後的寫法（可以直接修改）");
-    expect(screen.getByRole("radio", { name: "使用整理後的寫法" })).toBeChecked();
+    expect(screen.getByRole("radio", { name: "整理後的寫法" })).toBeChecked();
     await user.clear(box);
     await user.type(box, "原告王小明主張被告未還款");
     await user.click(screen.getByRole("button", { name: "看參考結果" }));
@@ -298,12 +298,12 @@ describe("第 6 關：整理成判決書的寫法", () => {
     expect(calls.find((c) => c.key === "POST /civil/report")!.body).toMatchObject({ search_text: "原告【姓名】主張被告未還款" });
   });
 
-  it("選「改用我的原文」就不用整理的文字", async () => {
+  it("選「我的原文」就不用整理的文字", async () => {
     const { calls } = setup(llm, { "POST /civil/report": () => CIVIL_REPORT });
     const user = userEvent.setup();
     renderApp(at6, { text: "他欠我錢" });
     await user.click(await screen.findByRole("button", { name: BUTTON }));
-    await user.click(await screen.findByRole("radio", { name: "改用我的原文" }));
+    await user.click(await screen.findByRole("radio", { name: "我的原文" }));
     await user.click(screen.getByRole("button", { name: "看參考結果" }));
     await screen.findByText("62%");
     expect(calls.find((c) => c.key === "POST /civil/report")!.body).toMatchObject({ search_text: null });
@@ -1773,7 +1773,7 @@ describe("民事被告端", () => {
     expect(JSON.parse(window.sessionStorage.getItem(STORAGE_KEY)!)).toMatchObject({ caseType: "unsure", rewriteFor: "", searchText: "", rewriteDraft: "" });
   });
 
-  it("不確定：刑事那份整理失敗時民事照用，刑事留空；選「改用我的原文」兩份都不用", async () => {
+  it("不確定：刑事那份整理失敗時民事照用，刑事留空；選「我的原文」兩份都不用", async () => {
     mockApi({
       "POST /intake/followup": () => ({ questions: [], source: "rules", llm_available: true }),
       "POST /intake/rewrite": (b: { case_type: string }) => (b.case_type === "criminal"
@@ -1789,7 +1789,7 @@ describe("民事被告端", () => {
     expect(saved()).toMatchObject({ searchText: "原告主張被告未還款。", criminalSearchText: "" });
     await user.type(screen.getByLabelText("刑事用的寫法（可以直接修改）"), "被告甲未還款");
     expect(saved()).toMatchObject({ criminalSearchText: "被告甲未還款" });
-    await user.click(screen.getByRole("radio", { name: "改用我的原文" }));
+    await user.click(screen.getByRole("radio", { name: "我的原文" }));
     expect(saved()).toMatchObject({ useRewrite: "original", searchText: "", criminalSearchText: "" });
   });
 
