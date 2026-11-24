@@ -633,11 +633,11 @@ describe("第 5 關：補充細節", () => {
     expect(screen.queryByText("問題f")).not.toBeInTheDocument();
   });
 
-  it("回答會加進送出的內容，按鈕從「略過」變成「下一關」", async () => {
+  it("回答會加進送出的內容；不管有沒有回答，按鈕都是「下一關」", async () => {
     setup(() => rulesReply);
     const user = userEvent.setup();
     renderAt("/confirm", <Confirm />, at5, { text: "朋友借錢沒還" });
-    expect(screen.getByRole("button", { name: "略過，下一關" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "下一關" })).toBeInTheDocument();
     await user.type(await screen.findByLabelText("什麼時候發生的？"), "去年");
     expect(screen.getByRole("button", { name: "下一關" })).toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: "上一關" }));

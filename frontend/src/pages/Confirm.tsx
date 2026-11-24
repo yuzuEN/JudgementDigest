@@ -138,7 +138,6 @@ export default function Confirm() {
       .catch(() => setRewriteState("failed"));
   };
 
-  const answered = Object.values(intake.followupAnswers).some((a) => a.answer.trim());
   const why = stage === 6 && rewriteState === "loading" ? "正在整理敘述，請稍等。" : null;
   const titleClass = "text-title leading-[1.45] font-extrabold text-balance outline-none sm:text-[26px]";
 
@@ -172,7 +171,7 @@ export default function Confirm() {
                   : <Button type="button" variant="outline" onClick={() => go(stage - 1)}><ArrowLeftIcon data-icon="inline-start" />上一關</Button>}
                 {stage < 6
                   ? <Button type="button" disabled={!!why} onClick={() => go(stage + 1)}>
-                      {stage === 5 && !answered ? "略過，下一關" : "下一關"}<ArrowRightIcon data-icon="inline-end" />
+                      下一關<ArrowRightIcon data-icon="inline-end" />
                     </Button>
                   : <Button type="button" disabled={!ready || !!why} onClick={() => navigate(resultPath)}>看參考結果<ArrowRightIcon data-icon="inline-end" /></Button>}
               </div>

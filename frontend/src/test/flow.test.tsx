@@ -30,7 +30,7 @@ describe("完整流程", () => {
     const next = screen.getByRole("button", { name: "下一關" });
     await waitFor(() => expect(next).toBeEnabled());
     await user.click(next);
-    await user.click(screen.getByRole("button", { name: "略過，下一關" }));
+    await user.click(screen.getByRole("button", { name: "下一關" }));
     const go = screen.getByRole("button", { name: "看參考結果" });
     await waitFor(() => expect(go).toBeEnabled());
     await user.click(go);
