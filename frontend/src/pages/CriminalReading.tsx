@@ -4,6 +4,7 @@ import { cn } from "@/lib/utils";
 import { Card } from "@/components/ui/card";
 import type { CriminalGuideFunction, Guide } from "../api/types";
 import { MidLabels } from "../components/casey/MidLabels";
+import { Disclosure } from "../components/casey/Disclosure";
 import { InfoRow, JumpLinks, OriginalLink } from "../components/casey/ReadingParts";
 import { LoadingPanel } from "../components/casey/ResultTabs";
 import { InfoLink } from "../components/Common";
@@ -91,11 +92,6 @@ export default function CriminalReading({ guide, error, onRetry }: {
                 </Card>
               )}
 
-              <Card className="gap-2 px-[18px] sm:px-6.5 shadow-none" aria-labelledby="about-title">
-                <h2 id="about-title" className="text-xl font-bold">關於這些標示</h2>
-                <p className="text-hint text-muted-foreground">段落依判決書的標題與編號自動切分、標示，可能有誤，請以判決原文為準。</p>
-                <p className="text-sm text-muted-foreground">辨識到的被告姓名換成「被告」，其他人名換成【關係人】。自動遮名可能有遺漏。</p>
-              </Card>
             </aside>
 
             <Card className="min-w-0 flex-[999_1_500px] gap-4 px-[18px] sm:px-6.5" aria-labelledby="full-title">
@@ -134,6 +130,13 @@ export default function CriminalReading({ guide, error, onRetry }: {
               })}
             </Card>
           </div>
+        )}
+        {/* 標示與遮名的說明：放在最下面、預設收起 */}
+        {guide && (
+          <Disclosure summary={<h2 id="about-title" className="text-lg font-bold">關於這些標示</h2>}>
+            <p className="text-hint text-muted-foreground">段落依判決書的標題與編號自動切分、標示，可能有誤，請以判決原文為準。</p>
+            <p className="text-sm text-muted-foreground">辨識到的被告姓名換成「被告」，其他人名換成【關係人】。自動遮名可能有遺漏。</p>
+          </Disclosure>
         )}
       </main>
     </Layout>

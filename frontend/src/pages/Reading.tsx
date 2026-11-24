@@ -9,6 +9,7 @@ import { Bar } from "../components/casey/Bars";
 import { OutcomeChip } from "../components/casey/OutcomeChip";
 import { MarkedText, partIn, ReasoningCard, shownGroups } from "../components/casey/Reasoning";
 import { MidLabels } from "../components/casey/MidLabels";
+import { Disclosure } from "../components/casey/Disclosure";
 import { InfoRow, JumpLinks, OriginalLink } from "../components/casey/ReadingParts";
 import { LoadingPanel } from "../components/casey/ResultTabs";
 import { SampleTag } from "../components/casey/Sample";
@@ -126,14 +127,6 @@ export default function Reading() {
 
               <ReasoningCard reasoning={guide.reasoning} active={active} onSelect={select} />
 
-              <Card className="gap-2 px-[18px] sm:px-6.5 shadow-none" aria-labelledby="about-title">
-                <h2 id="about-title" className="text-xl font-bold">關於這些標示</h2>
-                <p className="text-hint text-muted-foreground">
-                  段落標示由系統判斷，可能有誤，請以判決原文為準。
-                  {guide.labeler === "rule-v0" ? "目前依文字規則標示。" : "段落功能依標註手冊，由 LLM 輔助標註、法律系學生抽查驗證。"}
-                </p>
-                <p className="text-sm text-muted-foreground">判決中的當事人姓名已換成【原告】【被告】，證人、訴外人與其他人名換成【關係人】，車牌、地址等也已遮蔽；同一角色有多人時加上編號（【被告1】【被告2】），同一件判決裡同一個編號是同一個人。這是自動處理，可能有遺漏。</p>
-              </Card>
             </aside>
 
             <Card className={cn("min-w-0 flex-[999_1_500px] gap-4 px-[18px] sm:px-6.5", active !== null && "max-lg:pb-24")} aria-labelledby="full-title">
@@ -155,6 +148,16 @@ export default function Reading() {
               })}
             </Card>
           </div>
+        )}
+        {/* 標示與遮名的說明：放在最下面、預設收起 */}
+        {guide && (
+          <Disclosure summary={<h2 id="about-title" className="text-lg font-bold">關於這些標示</h2>}>
+            <p className="text-hint text-muted-foreground">
+              段落標示由系統判斷，可能有誤，請以判決原文為準。
+              {guide.labeler === "rule-v0" ? "目前依文字規則標示。" : "段落功能依標註手冊，由 LLM 輔助標註、法律系學生抽查驗證。"}
+            </p>
+            <p className="text-sm text-muted-foreground">判決中的當事人姓名已換成【原告】【被告】，證人、訴外人與其他人名換成【關係人】，車牌、地址等也已遮蔽；同一角色有多人時加上編號（【被告1】【被告2】），同一件判決裡同一個編號是同一個人。這是自動處理，可能有遺漏。</p>
+          </Disclosure>
         )}
       </main>
     </Layout>
