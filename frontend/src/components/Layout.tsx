@@ -62,21 +62,21 @@ export function Layout({ stage, step, scene, nav, footer, children }: {
   return (
     <div className="flex min-h-svh flex-col overflow-x-clip">
       <header data-slot="site-header" className="border-b bg-card">
-        <div className={cn(PAGE, "flex min-h-[68px] flex-wrap items-center gap-x-5 gap-y-3 py-2")}>
+        <div className={cn(PAGE, "flex min-h-14 flex-wrap items-center gap-x-5 gap-y-3 py-2 sm:min-h-[68px]")}>
           <Brand />
           <span className="flex-1" />
           {nav}
           <Link to="/guide" aria-label="說明與法律小知識"
-            className="inline-flex min-h-11 items-center gap-1.5 px-1.5 font-semibold text-link no-underline hover:underline">
+            className="inline-flex min-h-11 min-w-11 items-center justify-center gap-1.5 px-1.5 font-semibold text-link no-underline hover:underline">
             <CircleHelpIcon className="size-5" aria-hidden="true" />
             <span className="max-sm:hidden">說明與法律小知識</span>
           </Link>
           <ThemeToggle />
         </div>
       </header>
-      {at > 0 && <div className={cn(PAGE, "pt-5.5")}><StageMap at={at} /></div>}
+      {at > 0 && <div className={cn(PAGE, "pt-4 sm:pt-5.5")}><StageMap at={at} /></div>}
       {scene && (
-        <div className={cn(PAGE, "pt-5.5")}>
+        <div className={cn(PAGE, "pt-4 sm:pt-5.5")}>
           <CharacterScene who={scene.who} note={scene.note}>{scene.line}</CharacterScene>
         </div>
       )}

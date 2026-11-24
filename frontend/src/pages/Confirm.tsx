@@ -247,7 +247,7 @@ function MaskStage({ heading, intake, update, kinds, llm }: {
             {intake.names.map((n) => (
               <li key={n} className="inline-flex min-h-9 items-center gap-1 rounded-full border-[1.5px] border-mask-line bg-mask pr-1 pl-3 text-[15px] font-semibold text-mask-fg">
                 {n}
-                <Button type="button" variant="ghost" size="icon-sm" className="size-8 rounded-full text-mask-fg hover:bg-transparent"
+                <Button type="button" variant="ghost" size="icon-sm" className="relative size-8 rounded-full text-mask-fg after:absolute after:-inset-1.5 after:content-[''] hover:bg-transparent"
                   aria-label={`不遮「${n}」`} onClick={() => update({ names: intake.names.filter((x) => x !== n) })}>
                   <XIcon />
                 </Button>

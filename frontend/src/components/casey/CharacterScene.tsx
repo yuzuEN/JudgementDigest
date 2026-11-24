@@ -12,7 +12,7 @@ export const ROLE_NOTE = "整理員和解說員只是 CasEY 的輔助角色：�
 
 function Figure({ src, active }: { src: string; active: boolean }) {
   return (
-    <div className={cn("relative z-10 w-[92px] flex-none sm:w-[150px]", !active && "opacity-50 grayscale-[.4] max-sm:hidden")}>
+    <div className={cn("relative z-10 w-[92px] flex-none phone:w-[72px] sm:w-[150px]", !active && "opacity-50 grayscale-[.4] max-sm:hidden")}>
       <img src={src} alt="" className="block w-full" />
     </div>
   );
@@ -25,9 +25,9 @@ function Figure({ src, active }: { src: string; active: boolean }) {
 export function CharacterScene({ who = "organizer", children, note = false }: { who?: Speaker; children: ReactNode; note?: boolean }) {
   return (
     <section aria-label="CasEY 角色說明" data-slot="character-scene"
-      className="no-print relative flex items-end gap-2.5 overflow-hidden rounded-[20px] border bg-secondary px-3.5 pt-6 sm:gap-4 sm:px-5 sm:pt-6.5">
+      className="no-print relative flex items-end gap-2.5 overflow-hidden rounded-[20px] border bg-secondary px-3.5 pt-6 phone:gap-2 phone:px-3 phone:pt-5 sm:gap-4 sm:px-5 sm:pt-6.5">
       <Figure src={organizer} active={who === "organizer"} />
-      <div role="status" className="relative z-10 mb-7 min-w-0 flex-1 rounded-2xl border-3 border-foreground bg-card px-3.5 pt-5.5 pb-3.5 sm:mb-[34px] sm:px-5 sm:pt-6 sm:pb-4">
+      <div role="status" className="relative z-10 mb-7 min-w-0 flex-1 rounded-2xl border-3 border-foreground bg-card px-3.5 pt-5.5 pb-3.5 phone:mb-5 phone:px-3 phone:pt-5 phone:pb-3 sm:mb-[34px] sm:px-5 sm:pt-6 sm:pb-4">
         <span className="absolute -top-[18px] left-4 rounded-[10px] border-3 border-foreground bg-primary px-3.5 text-[15px] leading-[1.9] font-extrabold text-primary-foreground">
           {NAME[who]}
         </span>

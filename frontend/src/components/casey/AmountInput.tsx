@@ -28,6 +28,7 @@ function initialMode(value: string): Mode {
 /**
  * 請求金額：一列按鈕（5萬、50萬、自訂、不確定），單位「元」在同一列最右邊。
  * 「自訂」按下去直接變成輸入框；讀得懂的金額在「元」右邊滑入「✓ 金額」，看不懂時在下面說明怎麼寫。
+ * 手機：輸入框自己一列、「元」緊接在後面；「✓ 金額」改在下面的說明列顯示。
  */
 export function AmountInput({ id, value, onChange }: { id: string; value: string; onChange: (value: string) => void }) {
   const [mode, setMode] = useState<Mode>(() => initialMode(value));
@@ -52,16 +53,19 @@ export function AmountInput({ id, value, onChange }: { id: string; value: string
           );
         })}
         {mode === "custom" ? (
-          <Input ref={input} id={id} inputMode="numeric" autoComplete="off" value={value} placeholder="輸入金額"
-            onChange={(e) => onChange(e.target.value)} aria-label="自訂金額" aria-invalid={state === "bad"} aria-describedby={`${id}-status`}
-            className="h-11 w-[180px] rounded-full tabular-nums" />
+          <span className="inline-flex items-center gap-2 phone:order-last phone:w-full">
+            <Input ref={input} id={id} inputMode="numeric" autoComplete="off" value={value} placeholder="輸入金額"
+              onChange={(e) => onChange(e.target.value)} aria-label="自訂金額" aria-invalid={state === "bad"} aria-describedby={`${id}-status`}
+              className="h-11 w-[180px] rounded-full tabular-nums phone:w-auto phone:min-w-0 phone:flex-1" />
+            <span aria-hidden="true" className="hidden font-bold phone:inline">元</span>
+          </span>
         ) : (
           <Button type="button" variant="outline" aria-pressed={false} className={cn(choice, pressed(false))}
             onClick={() => { setMode("custom"); if (mode === "preset") onChange(""); }}>自訂</Button>
         )}
         <Button type="button" variant="outline" aria-pressed={mode === "unsure"} className={cn(choice, pressed(mode === "unsure"))}
           onClick={() => { setMode("unsure"); onChange(""); }}>不確定</Button>
-        <span className="ml-auto flex items-center gap-3">
+        <span className="ml-auto flex items-center gap-3 phone:hidden">
           <span className="font-bold">元</span>
           {state === "ok" && (
             <span key={parsed} className="flex items-center gap-1 font-bold text-secondary-foreground tabular-nums animate-in fade-in slide-in-from-right-4 duration-300 motion-reduce:animate-none">
@@ -75,7 +79,8 @@ export function AmountInput({ id, value, onChange }: { id: string; value: string
         {state === "bad" && (
           <><InfoIcon className="mt-1 size-4 flex-none" aria-hidden="true" /><span className="font-bold">看不懂這個金額。請輸入數字，例如 50萬 或 648000。</span></>
         )}
-        {state === "ok" && <span className="sr-only">我讀成：{parsed!.toLocaleString("en-US")} 元</span>}
+        {state === "ok" && <CheckIcon className="mt-1 hidden size-4 flex-none text-secondary-foreground phone:block" aria-hidden="true" />}
+        {state === "ok" && <span className="sr-only phone:not-sr-only phone:font-bold phone:text-secondary-foreground phone:tabular-nums">我讀成：{parsed!.toLocaleString("en-US")} 元</span>}
       </p>
     </div>
   );
