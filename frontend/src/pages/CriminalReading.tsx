@@ -5,7 +5,7 @@ import { Card } from "@/components/ui/card";
 import type { CriminalGuideFunction, Guide } from "../api/types";
 import { MidLabels } from "../components/casey/MidLabels";
 import { Disclosure } from "../components/casey/Disclosure";
-import { InfoRow, JumpLinks, OriginalLink } from "../components/casey/ReadingParts";
+import { InfoRow, OriginalLink } from "../components/casey/ReadingParts";
 import { LoadingPanel } from "../components/casey/ResultTabs";
 import { InfoLink } from "../components/Common";
 import { SampleTag } from "../components/casey/Sample";
@@ -48,7 +48,6 @@ export default function CriminalReading({ guide, error, onRetry }: {
               <OriginalLink url={guide.case.url} caseNumber={guide.case.case_number} />
             </div>
           )}
-          {guide && <JumpLinks links={[{ id: "full-title", label: detail?.source === "dataset" ? "犯罪事實" : "判決全文" }]} />}
         </div>
 
         {error && <ErrorBox message={error} onRetry={onRetry} hint="請重新載入判決，或返回結果頁查看其他判決。" />}

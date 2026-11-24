@@ -67,10 +67,8 @@ export default function Reading() {
               <OriginalLink url={guide.case.url} caseNumber={guide.case.case_number} />
             </div>
           )}
-          {guide && <JumpLinks links={[
-            { id: "full-title", label: "判決全文" },
-            ...(shownGroups(guide.reasoning).length > 0 ? [{ id: "reasoning-card", label: "法院怎麼認定" }] : []),
-          ]} />}
+          {/* 手機捷徑：只跳到「法院怎麼認定」（判決全文往下滑就到了）；沒有標註時不顯示 */}
+          {guide && shownGroups(guide.reasoning).length > 0 && <JumpLinks links={[{ id: "reasoning-card", label: "法院怎麼認定" }]} />}
         </div>
 
         {error && <ErrorBox message={error} onRetry={load} hint="請重新載入判決，或返回結果頁查看其他判決。" />}

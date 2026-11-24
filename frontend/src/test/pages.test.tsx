@@ -1544,7 +1544,7 @@ describe("判決導讀", () => {
     expect(toPara).toHaveLength(2);
   });
 
-  it("手機捷徑：跳到判決全文；有法院怎麼認定時也跳得到卡片", async () => {
+  it("手機捷徑：有法院怎麼認定時，只有一顆跳到卡片的按鈕", async () => {
     const reasoning = { labeler: "llm-p6.0", manual_version: "v0.6", items: [
       { label: "CONCL", polarity: "有理由", quote: "原告之請求有理由", paragraph: 3, start: 3, end: 11 },
     ] };
@@ -1553,17 +1553,17 @@ describe("判決導讀", () => {
     Element.prototype.scrollIntoView = scroll;
     renderAt("/judgment/:source/:caseId", <Reading />, "/judgment/civil/11");
     const nav = await screen.findByRole("navigation", { name: "跳到" });
-    expect(within(nav).getByRole("link", { name: "判決全文" })).toHaveAttribute("href", "#full-title");
+    expect(within(nav).getAllByRole("link").map((a) => a.textContent)).toEqual(["法院怎麼認定"]);
     expect(within(nav).getByRole("link", { name: "法院怎麼認定" })).toHaveAttribute("href", "#reasoning-card");
-    await userEvent.setup().click(within(nav).getByRole("link", { name: "判決全文" }));
-    expect(scroll.mock.contexts.at(-1)).toBe(document.getElementById("full-title"));
+    await userEvent.setup().click(within(nav).getByRole("link", { name: "法院怎麼認定" }));
+    expect(scroll.mock.contexts.at(-1)).toBe(document.getElementById("reasoning-card"));
   });
 
-  it("手機捷徑：沒有法院怎麼認定時，只有判決全文", async () => {
+  it("手機捷徑：沒有法院怎麼認定時不顯示", async () => {
     mockApi({ "GET /judgments/civil/11/guide": () => GUIDE });
     renderAt("/judgment/:source/:caseId", <Reading />, "/judgment/civil/11");
-    const nav = await screen.findByRole("navigation", { name: "跳到" });
-    expect(within(nav).getAllByRole("link").map((a) => a.textContent)).toEqual(["判決全文"]);
+    expect(await screen.findByRole("heading", { name: "判決全文" })).toBeInTheDocument();
+    expect(screen.queryByRole("navigation", { name: "跳到" })).not.toBeInTheDocument();
   });
 
   it("法院怎麼認定：引文跨兩段時，兩段都標出來", async () => {
