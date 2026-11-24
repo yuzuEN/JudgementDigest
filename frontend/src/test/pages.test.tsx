@@ -136,7 +136,7 @@ describe("描述案情（關卡 1–3）", () => {
     const amount = screen.getByLabelText("想請求的金額");
     expect(screen.queryByRole("button", { name: "自訂" })).not.toBeInTheDocument();
     await user.type(amount, "64萬8千");
-    expect(screen.getByText("我讀成：648,000 元")).toBeInTheDocument();
+    expect(document.getElementById("amount-status")).toHaveTextContent(/^648,000 元$/);
     await user.clear(amount);
     await user.type(amount, "五十萬");
     expect(screen.getByText(/看不懂這個金額/)).toBeInTheDocument();
@@ -144,7 +144,7 @@ describe("描述案情（關卡 1–3）", () => {
     expect(screen.getByText("金額格式不對，請修改。")).toBeInTheDocument();
     await user.clear(amount);
     await user.type(amount, "50萬");
-    expect(screen.getByText("我讀成：500,000 元")).toBeInTheDocument();
+    expect(document.getElementById("amount-status")).toHaveTextContent(/^500,000 元$/);
     expect(next).toBeEnabled();
     // 「不確定」清空金額；再打字就取消
     const unsure = screen.getByRole("button", { name: "不確定" });

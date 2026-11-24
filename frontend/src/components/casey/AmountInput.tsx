@@ -14,7 +14,7 @@ export function amountState(text: string): AmountState {
 
 /**
  * 請求金額：一進來就是輸入框（後面接「元」），旁邊一顆「不確定」。
- * 讀得懂的金額在下面說明列顯示「✓ 我讀成：648,000 元」，看不懂時說明怎麼寫。
+ * 讀得懂的金額在下面說明列顯示「✓ 648,000 元」，看不懂時說明怎麼寫。
  * 「不確定」會清空金額，再按一次取消；開始打字也會取消。
  */
 export function AmountInput({ id, value, onChange }: { id: string; value: string; onChange: (value: string) => void }) {
@@ -43,7 +43,7 @@ export function AmountInput({ id, value, onChange }: { id: string; value: string
         )}
         {state === "ok" && (
           <><CheckIcon className="mt-1 size-4 flex-none text-secondary-foreground" aria-hidden="true" />
-            <span className="font-bold text-secondary-foreground tabular-nums">我讀成：{parsed!.toLocaleString("en-US")} 元</span></>
+            <span className="font-bold text-secondary-foreground tabular-nums">{parsed!.toLocaleString("en-US")} 元</span></>
         )}
       </p>
     </div>
