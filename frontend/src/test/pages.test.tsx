@@ -164,8 +164,7 @@ describe("描述案情（關卡 1–3）", () => {
     const company = screen.getByRole("button", { name: "公司" });
     await user.click(company);
     expect(company).toHaveAttribute("aria-pressed", "true");
-    // 右側「你填的資料」拿掉了
-    expect(screen.queryByRole("complementary", { name: "你填的資料" })).not.toBeInTheDocument();
+    expect(screen.getByRole("complementary", { name: "你填的資料" })).toHaveTextContent("公司");
   });
 
   it("刑事只問律師和證物，答案接在描述後面送出", async () => {
@@ -766,8 +765,7 @@ describe("第 5 關：補充細節", () => {
     expect(screen.getByText(/^你的描述裡有法律特別保護的資料（偵測到：.+）。$/)).toBeInTheDocument();
     expect(screen.getByText("只傳遮名內容，不做其他用途。")).toBeInTheDocument();
     expect(screen.queryByText(/遮名後的內容會傳給/)).toBeNull();
-    // 「送出前檢查」拿掉了，資料使用說明在說明頁
-    expect(screen.queryByRole("heading", { name: "送出前檢查" })).not.toBeInTheDocument();
+    expect(screen.getByText("AI 不拿來訓練模型")).toBeInTheDocument();
   });
 });
 

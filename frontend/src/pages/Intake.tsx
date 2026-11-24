@@ -17,11 +17,13 @@ import type { CaseType, CivilRole, DefendantType, Options } from "../api/types";
 import { AmountInput, amountState } from "../components/casey/AmountInput";
 import { Disclosure } from "../components/casey/Disclosure";
 import { EvidenceSlot } from "../components/casey/EvidenceSlot";
+import { MidLabels } from "../components/casey/MidLabels";
 import { PhoneCollapse } from "../components/casey/PhoneCollapse";
 import { RadioCards } from "../components/casey/RadioCards";
 import { Segmented } from "../components/casey/Segmented";
 import { ErrorBox } from "../components/Common";
 import { Layout, PAGE } from "../components/Layout";
+import { parseAmount } from "../format";
 import { DISPUTE_GROUPS } from "../knowledge";
 import { civilRole, lawyerQuestion, REWRITE_RESET, useIntake, type Intake as IntakeState } from "../state";
 
@@ -264,6 +266,7 @@ export default function Intake() {
             </nav>
           </main>
 
+          <Summary intake={intake} />
         </div>
       </div>
     </Layout>
@@ -480,5 +483,52 @@ function CourtField({ courts, value, onChange, defendant = false }: {
         </SelectContent>
       </Select>
     </FieldBlock>
+  );
+}
+
+/** 右側「你填的資料」：每一關填的內容都看得到。手機上不顯示（太長，要一直滑）。 */
+function Summary({ intake }: { intake: IntakeState }) {
+  const civil = intake.caseType !== "criminal";
+  const role = civilRole(intake);
+  const defendant = role === "defendant";
+  const amount = parseAmount(intake.claimedAmount);
+  const evidenceCount = civil ? intake.evidence.length : intake.criminalEvidence.length;
+  const rows: [string, string][] = [
+    ["案件類型", TYPE_LABEL[intake.caseType]],
+    ...(civil && intake.caseType ? [["你是", ROLE_LABEL[role]]] as [string, string][] : []),
+    [defendant ? "對方的主張" : "案情", intake.text.trim() ? `${intake.text.length} 字` : "還沒寫"],
+    ...(defendant ? [["你的說法", intake.defenseText.trim() ? `${intake.defenseText.length} 字` : "未填"]] as [string, string][] : []),
+    ...(civil ? [
+      ["請求金額", amount !== null ? `${amount.toLocaleString("en-US")} 元` : amountState(intake.claimedAmount) === "bad" ? "格式錯誤" : "未填"],
+      [defendant ? "你（被告）" : "對方", DEFENDANT_TYPES.find((d) => d.value === intake.defendantType)?.label ?? "未選"],
+    ] as [string, string][] : []),
+    [lawyerQuestion(intake.caseType, role).short, intake.lawyer === "yes" ? "有" : intake.lawyer === "no" ? "沒有" : "未選"],
+    ["證物", `${evidenceCount} 項`],
+  ];
+  return (
+    <aside aria-labelledby="summary-title" className="w-full min-w-0 flex-[1_1_260px] phone:hidden sm:max-w-[340px]">
+      <Card className="gap-4 px-[18px] sm:px-6.5">
+        <div className="flex items-center justify-between gap-2">
+          <h2 id="summary-title" className="text-xl font-bold">你填的資料</h2>
+          <span className="text-sm text-muted-foreground">目前進度</span>
+        </div>
+        <dl className="m-0 flex flex-col gap-2 text-hint">
+          {rows.map(([k, v], i) => (
+            <div key={k} className="contents">
+              <div className="flex items-start justify-between gap-3">
+                <dt className="flex-none text-muted-foreground">{k}</dt>
+                <dd className="m-0 text-right font-bold tabular-nums">{v}</dd>
+              </div>
+              {civil && i === 1 && (
+                <div className="flex items-start justify-between gap-3">
+                  <dt className="flex-none text-muted-foreground">糾紛類型</dt>
+                  <dd className="m-0">{intake.mids.length ? <MidLabels mids={intake.mids} vertical /> : <span className="font-bold">未選</span>}</dd>
+                </div>
+              )}
+            </div>
+          ))}
+        </dl>
+      </Card>
+    </aside>
   );
 }
