@@ -30,10 +30,10 @@ export function AmountInput({ id, value, onChange }: { id: string; value: string
           <Input id={id} inputMode="numeric" autoComplete="off" value={value} placeholder="例如 50萬"
             onChange={(e) => { setUnsure(false); onChange(e.target.value); }}
             aria-labelledby={`${id}-label`} aria-invalid={state === "bad"} aria-describedby={`${id}-status`}
-            className="h-11 w-36 tabular-nums" />
+            className="h-11 w-36 tabular-nums sm:h-[50px] sm:w-60" />
           <span aria-hidden="true" className="font-bold">元</span>
         </span>
-        <Button type="button" variant="outline" aria-pressed={unsure} className={cn("ml-auto h-11 border-2 px-4 text-base font-bold", pressed)}
+        <Button type="button" variant="outline" aria-pressed={unsure} className={cn("ml-auto h-11 border-2 px-4 text-base font-bold sm:h-[50px]", pressed)}
           onClick={() => { setUnsure(!unsure); if (!unsure) onChange(""); }}>不確定</Button>
       </div>
       <p id={`${id}-status`} role="status" className="flex items-start gap-1.5 text-hint">
