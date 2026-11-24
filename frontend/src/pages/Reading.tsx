@@ -57,12 +57,12 @@ export default function Reading() {
 
   return (
     <Layout stage={7} scene={{ who: "explainer", line: "在導讀中，判決書會根據不同功能段落做顏色區分。" }}>
-      <main className={cn(PAGE, "flex flex-col gap-7 pt-7 pb-14")}>
+      <main className={cn(PAGE, "flex flex-col gap-7 pt-7 pb-14 phone:gap-5 phone:pt-4 phone:pb-8")}>
         <div className="flex flex-col gap-3">
           <LinkButton variant="outline" to={resultPath} className="no-print w-fit border-input text-foreground"><ArrowLeftIcon data-icon="inline-start" />回結果</LinkButton>
           {guide && (
             <div className="flex items-start justify-between gap-4">
-              <h1 className="text-[26px] leading-[1.4] font-extrabold text-balance sm:text-[32px]">{guide.case.case_number}</h1>
+              <h1 className="text-display leading-[1.4] font-extrabold text-balance sm:text-[32px]">{guide.case.case_number}</h1>
               <OriginalLink url={guide.case.url} caseNumber={guide.case.case_number} />
             </div>
           )}
@@ -80,7 +80,7 @@ export default function Reading() {
               <Card className="gap-4 px-[18px] sm:px-6.5" aria-labelledby="basic-title">
                 <h2 id="basic-title" className="text-xl font-bold">判決資料</h2>
                 {/* 和「你填的資料」一樣：名稱在左、內容在右；金額的長條和說明在下面各自一列 */}
-                <dl className="m-0 flex flex-col gap-2.5 text-[15px]">
+                <dl className="m-0 flex flex-col gap-2.5 text-hint">
                   <InfoRow label="案由"><MidLabels mids={[guide.case.mid]} vertical /></InfoRow>
                   <InfoRow label="結果"><OutcomeChip tone={outcomeTone(guide.case.outcome)}>{outcomeLabel(guide.case.outcome)}</OutcomeChip></InfoRow>
                   {guide.case.claimed_amount ? (
@@ -106,7 +106,7 @@ export default function Reading() {
 
               <Card className="gap-3 px-[18px] sm:px-6.5" aria-labelledby="legend-title">
                 <h2 id="legend-title" className="text-xl font-bold">段落標色</h2>
-                <p className="text-[15px] text-muted-foreground">選擇要上色的類別。取消後仍會保留文字標籤。</p>
+                <p className="text-hint text-muted-foreground">選擇要上色的類別。取消後仍會保留文字標籤。</p>
                 <div className="grid gap-2 phone:grid-cols-2">
                   {FUNCTIONS.map((f) => (
                     <button key={f.id} type="button" aria-pressed={on[f.id]} onClick={() => setOn({ ...on, [f.id]: !on[f.id] })}
@@ -128,7 +128,7 @@ export default function Reading() {
 
               <Card className="gap-2 px-[18px] sm:px-6.5 shadow-none" aria-labelledby="about-title">
                 <h2 id="about-title" className="text-xl font-bold">關於這些標示</h2>
-                <p className="text-[15px] text-muted-foreground">
+                <p className="text-hint text-muted-foreground">
                   段落標示由系統判斷，可能有誤，請以判決原文為準。
                   {guide.labeler === "rule-v0" ? "目前依文字規則標示。" : "段落功能依標註手冊，由 LLM 輔助標註、法律系學生抽查驗證。"}
                 </p>
@@ -141,7 +141,7 @@ export default function Reading() {
                 <h2 id="full-title" className="scroll-mt-4 text-xl font-bold">判決全文</h2>
                 {guide.mock && <SampleTag />}
               </div>
-              {guide.mock && <p className="text-[15px] text-sample-fg">這是示例判決，內容為示意，不是真實判決。</p>}
+              {guide.mock && <p className="text-hint text-sample-fg">這是示例判決，內容為示意，不是真實判決。</p>}
               {guide.paragraphs.map((p, i) => {
                 const f = style(p.function);
                 return (
@@ -149,7 +149,7 @@ export default function Reading() {
                     className={cn("para flex flex-col gap-1.5 rounded-[12px] px-4 py-3.5 transition-colors motion-reduce:transition-none",
                       on[p.function] ? f.on : "border border-dashed border-input bg-transparent")}>
                     <span className="text-sm font-extrabold tracking-[.06em]">{f.label}</span>
-                    <p className="leading-loose"><MarkedText text={p.text} item={partIn(activeItem, i)} /></p>
+                    <p className="leading-loose phone:leading-relaxed"><MarkedText text={p.text} item={partIn(activeItem, i)} /></p>
                   </section>
                 );
               })}

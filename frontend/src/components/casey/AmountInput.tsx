@@ -74,7 +74,7 @@ export function AmountInput({ id, value, onChange }: { id: string; value: string
           )}
         </span>
       </div>
-      <p id={`${id}-status`} role="status" className="flex items-start gap-1.5 text-[15px]">
+      <p id={`${id}-status`} role="status" className="flex items-start gap-1.5 text-hint">
         {state === "empty" && <span className="text-muted-foreground">未填入時，結果僅會顯示求償比例</span>}
         {state === "bad" && (
           <><InfoIcon className="mt-1 size-4 flex-none" aria-hidden="true" /><span className="font-bold">看不懂這個金額。請輸入數字，例如 50萬 或 648000。</span></>

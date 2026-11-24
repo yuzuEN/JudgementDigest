@@ -84,8 +84,8 @@ export function ResultTabs<K extends string>({ tabs, value, onChange, mock, acti
         {tabs.map((t) => (
           <Tabs.Tab key={t.key} value={t.key}
             className={cn(
-              "mb-0.5 min-h-[50px] flex-none rounded-t-[12px] border-2 border-b-0 border-input bg-muted px-[18px] phone:px-3.5 font-bold whitespace-nowrap text-muted-foreground hover:text-foreground",
-              "data-active:mb-0 data-active:min-h-[52px] data-active:pb-0.5 data-active:bg-card data-active:text-foreground",
+              "mb-0.5 min-h-[50px] phone:min-h-11 flex-none rounded-t-[12px] border-2 border-b-0 border-input bg-muted px-[18px] phone:px-3.5 font-bold whitespace-nowrap text-muted-foreground hover:text-foreground",
+              "data-active:mb-0 data-active:min-h-[52px] phone:data-active:min-h-[46px] data-active:pb-0.5 data-active:bg-card data-active:text-foreground",
               mock ? "data-active:border-dashed data-active:border-sample-line" : "data-active:border-foreground",
             )}>
             {t.label}
@@ -112,7 +112,7 @@ export function LoadingPanel({ children = "正在比對相似判決…" }: { chi
     <div aria-busy="true" className="flex flex-col gap-3.5 rounded-[16px] border-2 border-input bg-card p-[22px]">
       <p role="status" className="flex flex-wrap items-center gap-3">
         <LoaderCircleIcon className="size-5 animate-spin text-primary motion-reduce:animate-none" aria-hidden="true" />
-        <b>{children}</b><span className="text-[15px] text-muted-foreground">大約需要幾秒</span>
+        <b>{children}</b><span className="text-hint text-muted-foreground">大約需要幾秒</span>
       </p>
       <div className="flex flex-col gap-3" aria-hidden="true">
         <Skeleton className="h-[22px] w-2/5" /><Skeleton className="h-[22px] rounded-[11px]" />
@@ -125,7 +125,7 @@ export function LoadingPanel({ children = "正在比對相似判決…" }: { chi
 export function PanelTitle({ children, mock, action }: { children: ReactNode; mock?: boolean; action?: ReactNode }) {
   return (
     <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-2">
-      <h2 className="text-[22px] leading-[1.45] font-extrabold sm:text-[26px]">{children}</h2>
+      <h2 className="text-title leading-[1.45] font-extrabold sm:text-[26px]">{children}</h2>
       <div className="flex flex-wrap items-center gap-3">{action}{mock && <SampleTag />}</div>
     </div>
   );
@@ -137,7 +137,7 @@ export function InfoNote({ children, title }: { children: ReactNode; title?: str
       <InfoIcon className="mt-1 size-5 flex-none text-secondary-foreground" aria-hidden="true" />
       <div className="flex min-w-0 flex-col gap-1">
         {title && <p className="font-bold">{title}</p>}
-        <div className="text-[15px]">{children}</div>
+        <div className="text-hint">{children}</div>
       </div>
     </div>
   );

@@ -33,7 +33,7 @@ export function RadioCards<T extends string>({ label, value, onChange, options, 
             <RadioGroupItem value={o.value} aria-label={o.title} className="sr-only" />
             <span className="flex min-w-0 flex-1 flex-col">
               <span className="font-bold">{o.title}</span>
-              {o.hint && <span className="text-[15px] leading-snug text-muted-foreground">{o.hint}</span>}
+              {o.hint && <span className="text-hint leading-snug text-muted-foreground">{o.hint}</span>}
             </span>
             <span aria-hidden="true" className={cn(
               "grid size-7 flex-none place-items-center rounded-full border-2",

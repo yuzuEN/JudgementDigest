@@ -91,7 +91,7 @@ function CivilSection({ state, tab, setTab, level = 1 }: {
   const lead = report ? `比對了 ${report.n_compared} 件${mid ? "案由相同的" : ""}真實判決。` : "正在比對相似的真實判決……";
   const mock = report?.mock ?? false;
   return (
-    <section aria-labelledby="civil-result" className="flex flex-col gap-6">
+    <section aria-labelledby="civil-result" className="flex flex-col gap-6 phone:gap-3">
       <ResultHeading id="civil-result" level={level} title={title} lead={lead} />
       {error && (
         <ErrorBox message={error} onRetry={load} hint="請重新載入結果，或回上一步檢查描述。">
@@ -185,9 +185,9 @@ function Overview({ report, defendant = false, unsure = false }: { report: Civil
           數量太少，統計不可靠，所以這次不顯示比例。可以到「相似判決」分頁逐件看。
         </EmptyState>
       )}
-      {mixed && <p className="text-[15px] text-muted-foreground">相似案件的判決結果和模型的判定不完全一致，請先看判決內容。</p>}
+      {mixed && <p className="text-hint text-muted-foreground">相似案件的判決結果和模型的判定不完全一致，請先看判決內容。</p>}
       {/* 統計只用對審（in_stats）的案件，一造辯論只出現在「相似判決」列表：見 backend/civil_service.py */}
-      <ul className="m-0 flex list-disc flex-col gap-1 pl-5 text-[15px] text-muted-foreground">
+      <ul className="m-0 flex list-disc flex-col gap-1 pl-5 text-hint text-muted-foreground">
         <li>僅列出雙方皆有到庭的案件。</li>
         {report.amount_range?.n_wins ? (
           <li>相似的勝訴判決 {report.amount_range.n_wins} 件中，<b>{report.amount_range.n_full_wins ?? 0} 件是全部勝訴</b>（判准請求的全部金額）。</li>
@@ -211,7 +211,7 @@ function ModelVerdict({ report, defendant = false, unsure = false }: { report: C
       <PanelTitle mock={report.mock}><span id="model-verdict-title">模型判定</span></PanelTitle>
       <div className="flex flex-wrap items-end justify-between gap-x-6 gap-y-2">
         <p className="flex flex-col">
-          <span className="flex items-center gap-1 text-[15px] text-muted-foreground"><InfoLink to="勝訴機率" label="勝訴機率說明" />{probLabel}</span>
+          <span className="flex items-center gap-1 text-hint text-muted-foreground"><InfoLink to="勝訴機率" label="勝訴機率說明" />{probLabel}</span>
           <b className="text-[40px] leading-[1.2] font-extrabold tabular-nums">{percent(p)}</b>
         </p>
         <p className="pb-1.5 text-lg font-bold">參考訊號：{signals[signal].label}</p>
@@ -228,7 +228,7 @@ function ModelVerdict({ report, defendant = false, unsure = false }: { report: C
           <span>100%</span>
         </div>
       </div>
-      <ul className="m-0 flex list-disc flex-col gap-1.5 pl-5 text-[15px]">
+      <ul className="m-0 flex list-disc flex-col gap-1.5 pl-5 text-hint">
         {defendant && <li>換成你的角度：模型估計原告<b>敗訴（你不用賠）</b>的機率約 <b className="tabular-nums">{percent(1 - p)}</b>。</li>}
         {unsure && <li>這是以你為<b>原告（提告的一方）</b>估計的。如果其實是對方要你賠錢、或你收到法院寄來的起訴狀，你是<b>被告</b>，這就變成對方贏的機率；請回<Link to="/start?stage=1">第 1 關</Link>把「你是原告還是被告」改成被告。</li>}
         <li>{signals[signal].text}</li>
@@ -237,7 +237,7 @@ function ModelVerdict({ report, defendant = false, unsure = false }: { report: C
           : "這是模型以過去判決來預估的數值，請當作參考；通常來說口語描述會降低模型判定的準確性，因此會比較分不出輸贏。"}</li>
         {warnings.map((w) => <li key={w}><Emphasize text={w} part={inferred} /></li>)}
       </ul>
-      <p className="flex flex-wrap items-center gap-1 border-t pt-3 text-[15px] text-muted-foreground">
+      <p className="flex flex-wrap items-center gap-1 border-t pt-3 text-hint text-muted-foreground">
         對模型如何處理感到好奇？點擊可以參考<InfoLink to="勝敗模型怎麼算" label="勝敗模型怎麼算的說明" />
       </p>
     </section>
@@ -296,7 +296,7 @@ function AmountPanel({ range, mock, cases = [], defendant = false }: {
             ? <SourceChip tone="partial">來源：模型推估</SourceChip>
             : <SourceChip tone="win">來源：相似判決</SourceChip>
           : <SourceChip tone="lose">沒有填請求金額</SourceChip>}
-        <span className="text-[15px] text-muted-foreground">
+        <span className="text-hint text-muted-foreground">
           {isModel ? "用過去的一部勝訴判決訓練的模型估計" : `依 ${range.n_cases ?? 0} 件相似的勝訴判決`}
         </span>
       </div>
@@ -327,7 +327,7 @@ function AmountPanel({ range, mock, cases = [], defendant = false }: {
         {!isModel && <li className="text-muted-foreground"><b>金額模型</b>：要選一個糾紛類型，並填法院或{defendant ? "對方請求的" : "請求"}金額才會使用；這次改用相似判決的判准比例。</li>}
       </ul>
       {isModel && <Note>模型推估的範圍<b>很寬</b>，因為同樣的案情，法院判准的比例落差很大，只能看個大概。如果判決是全部勝訴，通常就是請求的全部金額。</Note>}
-      {defendant && <p className="text-[15px] text-muted-foreground">原告敗訴時你不用賠；這裡的範圍只在原告勝訴（全部或一部分）時才有意義，勝負的機率見「整體結果」。</p>}
+      {defendant && <p className="text-hint text-muted-foreground">原告敗訴時你不用賠；這裡的範圍只在原告勝訴（全部或一部分）時才有意義，勝負的機率見「整體結果」。</p>}
       {!claimed && <Note>想看到實際的金額範圍？<Link to="/start?stage=3">{defendant ? "回上一步填寫對方請求的金額" : "回上一步填寫想請求的金額"}</Link>，資料會保留。</Note>}
       <AmountDetail range={range} />
       <DamageReasons cases={cases} />
@@ -343,12 +343,12 @@ function AmountDetail({ range }: { range: AmountRange }) {
   const label = (b: { low: number; high: number }) => `${Math.round(b.low * 100)}–${Math.round(b.high * 100)}%`;
   return (
     <Disclosure summary="看各金額範圍有幾件">
-      <p className="text-[15px] text-muted-foreground">
+      <p className="text-hint text-muted-foreground">
         {range.source === "model" ? "上面的範圍是模型推估的；這裡是相似的勝訴判決實際" : "相似的勝訴判決"}判准了請求金額的幾成（當作對照，不是每件都和你的案情一樣）：
       </p>
       <ul className="m-0 flex list-none flex-col gap-1 p-0">
         {buckets.map((b) => (
-          <li key={b.low} className="grid grid-cols-[78px_minmax(0,1fr)_48px] items-center gap-2.5 text-[15px]">
+          <li key={b.low} className="grid grid-cols-[78px_minmax(0,1fr)_48px] items-center gap-2.5 text-hint">
             <span className="tabular-nums">{label(b)}</span>
             <Bar value={b.count / most} className="h-3.5" fill="bg-outcome-part" />
             <b className="text-right tabular-nums">{b.count} 件</b>
@@ -416,12 +416,12 @@ function DefensePanel({ report, defendant = false }: { report: CivilReport; defe
               <span className="tabular-nums">{percent(d.share)}</span>
             </>}>
               <Bar value={d.share} label={`${defenseLabel(d.label, defendant)}：出現在 ${percent(d.share)} 的相似判決`} />
-              <p className="text-[15px] text-muted-foreground">{d.description}。</p>
+              <p className="text-hint text-muted-foreground">{d.description}。</p>
               {defendant && (d.lose_share != null
-                ? <p className="text-[15px]">提出這個說法的 {d.n_raised ?? 0} 件相似判決中，<b className="tabular-nums">{percent(d.lose_share)}</b> 原告敗訴。這是相關、不是因果：說法有沒有用，要看證據和個案。</p>
-                : <p className="text-[15px] text-muted-foreground">提出這個說法的相似判決太少（{d.n_raised ?? 0} 件），不計算原告敗訴的比例。</p>)}
+                ? <p className="text-hint">提出這個說法的 {d.n_raised ?? 0} 件相似判決中，<b className="tabular-nums">{percent(d.lose_share)}</b> 原告敗訴。這是相關、不是因果：說法有沒有用，要看證據和個案。</p>
+                : <p className="text-hint text-muted-foreground">提出這個說法的相似判決太少（{d.n_raised ?? 0} 件），不計算原告敗訴的比例。</p>)}
               {d.label.includes("與有過失") && (
-                <a href={`/guide#${encodeURIComponent("與有過失")}`} target="_blank" rel="noreferrer" className="w-fit text-[15px] font-semibold decoration-dotted">什麼是「與有過失」？</a>
+                <a href={`/guide#${encodeURIComponent("與有過失")}`} target="_blank" rel="noreferrer" className="w-fit text-hint font-semibold decoration-dotted">什麼是「與有過失」？</a>
               )}
             </Disclosure>
           ))}
@@ -446,7 +446,7 @@ function CasesPanel({ report, onlyWin, setOnlyWin, defendant = false }: {
     <>
       <PanelTitle mock={report.mock} action={<>
         {/* 和刑事一樣：檢索範圍的總數＋「怎麼找的」說明連結 */}
-        <p className="flex items-center gap-1 text-[15px] text-muted-foreground tabular-nums">
+        <p className="flex items-center gap-1 text-hint text-muted-foreground tabular-nums">
           {scope && <>共 {scope.n.toLocaleString("en-US")} 件</>}
           <InfoLink to="相似判決怎麼找" label="相似判決怎麼找的說明" />
         </p>
@@ -454,7 +454,7 @@ function CasesPanel({ report, onlyWin, setOnlyWin, defendant = false }: {
           <Switch size="lg" checked={onlyWin} onCheckedChange={(v) => setOnlyWin(Boolean(v))} aria-label={filterLabel} />{filterLabel}
         </label>
       </>}>{scope?.mid ? `相似的真實判決——${scope.mid}` : "相似的真實判決"}</PanelTitle>
-      <Table className="table-stack min-w-[680px] text-[15px]">
+      <Table className="table-stack min-w-[680px] text-hint">
         <TableHeader>
           <TableRow>
             <TableHead scope="col">字號</TableHead>
@@ -490,12 +490,12 @@ function CasesPanel({ report, onlyWin, setOnlyWin, defendant = false }: {
         </EmptyState>
       )}
       {cases.some((c) => (c.reasoning ?? []).length > 0) && (
-        <p className="text-[15px] text-muted-foreground">
+        <p className="text-hint text-muted-foreground">
           「法院怎麼認定」由 AI 依標註手冊標註、人工抽查，可能有誤；只有部分判決有標註。點「判決導讀」可以看完整的認定和原文。<InfoLink to="法院怎麼認定" label="法院怎麼認定的說明" />
         </p>
       )}
       {cases.some((c) => c.default_judgment) && (
-        <p className={cn("flex items-start gap-1 text-[15px] text-muted-foreground", !shown.some((c) => c.default_judgment) && "screen-hidden")}>
+        <p className={cn("flex items-start gap-1 text-hint text-muted-foreground", !shown.some((c) => c.default_judgment) && "screen-hidden")}>
           <InfoLink to="被告未到庭（一造辯論）" label="被告未到庭說明" />
           <span>「被告未到庭」的判決沒有經過雙方攻防，原告幾乎都會贏（僅作參考）。金額範圍、證據與抗辯的統計不包含這些判決。</span>
         </p>

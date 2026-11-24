@@ -13,6 +13,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { api } from "../api/client";
 import type { Question } from "../api/types";
 import { MaskedText } from "../components/casey/MaskedText";
+import { PhoneCollapse } from "../components/casey/PhoneCollapse";
 import { RadioCards } from "../components/casey/RadioCards";
 import { Layout, PAGE } from "../components/Layout";
 import { LinkButton } from "../components/LinkButton";
@@ -139,13 +140,13 @@ export default function Confirm() {
 
   const answered = Object.values(intake.followupAnswers).some((a) => a.answer.trim());
   const why = stage === 6 && rewriteState === "loading" ? "正在整理敘述，請稍等。" : null;
-  const titleClass = "text-[22px] leading-[1.45] font-extrabold text-balance outline-none sm:text-[26px]";
+  const titleClass = "text-title leading-[1.45] font-extrabold text-balance outline-none sm:text-[26px]";
 
   return (
     <Layout stage={stage} scene={{ who: "organizer", line: stage === 6 && !llmAvailable ? NO_LLM_LINE : SCENE_LINES[stage] }}>
-      <div className={cn(PAGE, "pt-7 pb-16")}>
+      <div className={cn(PAGE, "pt-7 pb-16 phone:pt-4 phone:pb-10")}>
         <div className="flex flex-wrap items-start gap-7">
-          <main className="flex min-w-0 flex-[999_1_560px] flex-col gap-6">
+          <main className="flex min-w-0 flex-[999_1_560px] flex-col gap-6 phone:gap-4">
             {stage === 4 && (
               <MaskStage heading={<h1 ref={heading} tabIndex={-1} className={titleClass}>第 4 關　確認遮名</h1>}
                 intake={intake} update={update} kinds={kinds} llm={llmAvailable} />
@@ -175,7 +176,7 @@ export default function Confirm() {
                     </Button>
                   : <Button type="button" disabled={!ready || !!why} onClick={() => navigate(resultPath)}>看參考結果<ArrowRightIcon data-icon="inline-end" /></Button>}
               </div>
-              {why && <p role="status" className="flex items-start gap-1.5 text-[15px]"><InfoIcon className="mt-1 size-4 flex-none" aria-hidden="true" />{why}</p>}
+              {why && <p role="status" className="flex items-start gap-1.5 text-hint"><InfoIcon className="mt-1 size-4 flex-none" aria-hidden="true" />{why}</p>}
             </nav>
           </main>
 
@@ -227,7 +228,7 @@ function MaskStage({ heading, intake, update, kinds, llm }: {
       </div>
       <div className="flex flex-col gap-2">
         <p className="font-bold">會送出的內容（已遮名）</p>
-        <p className="flex flex-wrap items-center gap-2 text-[15px]">
+        <p className="flex flex-wrap items-center gap-2 text-hint">
           <mark className="masked">橘色</mark><span className="text-muted-foreground">標示已遮蔽的身分證字號、電話、email、地址、車牌、出生日期，以及你加入的名字</span>
         </p>
         <MaskedText text={intake.maskedText} live />
@@ -235,7 +236,7 @@ function MaskStage({ heading, intake, update, kinds, llm }: {
 
       <div className="flex flex-col gap-2">
         <label htmlFor="mask-name" className="font-bold">有沒遮到的名稱嗎？</label>
-        <p id="mask-name-hint" className="text-[15px] text-muted-foreground">你可以自行新增尚未完整遮蓋的名稱，相同的字會以【姓名】遮蓋掉。</p>
+        <p id="mask-name-hint" className="text-hint text-muted-foreground">你可以自行新增尚未完整遮蓋的名稱，相同的字會以【姓名】遮蓋掉。</p>
         <div className="flex flex-wrap gap-2.5">
           <Input id="mask-name" value={name} placeholder="例如：對方的姓名、公司名稱" aria-describedby="mask-name-hint"
             className="min-w-0 flex-[1_1_240px]" onChange={(e) => setName(e.target.value)}
@@ -245,7 +246,7 @@ function MaskStage({ heading, intake, update, kinds, llm }: {
         {intake.names.length > 0 && (
           <ul aria-label="要遮掉的名字" className="m-0 flex list-none flex-wrap gap-2 p-0">
             {intake.names.map((n) => (
-              <li key={n} className="inline-flex min-h-9 items-center gap-1 rounded-full border-[1.5px] border-mask-line bg-mask pr-1 pl-3 text-[15px] font-semibold text-mask-fg">
+              <li key={n} className="inline-flex min-h-9 items-center gap-1 rounded-full border-[1.5px] border-mask-line bg-mask pr-1 pl-3 text-hint font-semibold text-mask-fg">
                 {n}
                 <Button type="button" variant="ghost" size="icon-sm" className="relative size-8 rounded-full text-mask-fg after:absolute after:-inset-1.5 after:content-[''] hover:bg-transparent"
                   aria-label={`不遮「${n}」`} onClick={() => update({ names: intake.names.filter((x) => x !== n) })}>
@@ -260,10 +261,12 @@ function MaskStage({ heading, intake, update, kinds, llm }: {
       {kinds.length > 0 && (
         <Note icon={ShieldCheckIcon}>
           <p className="font-bold">描述裡有法律特別保護的資料（偵測到：{kinds.join("、")}）</p>
-          <p className="text-[15px]">
-            這段文字只用來比對相似判決，不會保存。{llm && "之後如果你選擇用 AI 補充或整理，傳給 AI 服務前會先問你同意。"}
-            不想提供的話，可以<LinkButton variant="link" to="/start?stage=2" className="h-auto p-0 text-[15px]">回描述案情</LinkButton>刪掉這些內容。
-          </p>
+          <PhoneCollapse label="這些資料會怎麼處理？">
+            <p className="text-hint">
+              這段文字只用來比對相似判決，不會保存。{llm && "之後如果你選擇用 AI 補充或整理，傳給 AI 服務前會先問你同意。"}
+              不想提供的話，可以<LinkButton variant="link" to="/start?stage=2" className="h-auto p-0 text-hint">回描述案情</LinkButton>刪掉這些內容。
+            </p>
+          </PhoneCollapse>
         </Note>
       )}
     </StageCard>
@@ -282,7 +285,7 @@ function AiConsent({ consent, use }: { consent: Consent; use: string }) {
       <h2 id="ai-consent-title" className="flex items-center gap-2.5 font-bold">
         <ShieldCheckIcon className="size-6 text-secondary-foreground" aria-hidden="true" />傳給 AI 前，需要你同意
       </h2>
-      <p className="text-[15px]">
+      <p className="text-hint">
         你的描述裡有法律特別保護的資料（偵測到：{consent.kinds.join("、")}）。
       </p>
       <RadioCards label="傳給 AI 的同意" value={value}
@@ -307,7 +310,7 @@ function QuestionList({ questions, answers, onAnswer }: {
       {questions.map((q) => (
         <div key={q.id} className="flex flex-col gap-2 border-t pt-4">
           <label htmlFor={`q-${q.id}`} className="font-bold">{q.text}</label>
-          <p className="text-[15px] text-muted-foreground">{q.why}</p>
+          <p className="text-hint text-muted-foreground">{q.why}</p>
           <Input id={`q-${q.id}`} placeholder="你的回答（可留空）" value={answers[q.id]?.answer ?? ""} onChange={(e) => onAnswer(q, e.target.value)} />
         </div>
       ))}
@@ -330,14 +333,14 @@ function DetailStage({ heading, llm, mode, setMode, aiState, askAi, consent, aiA
 }) {
   const fixed = questions.length > 0
     ? <QuestionList questions={questions} answers={answers} onAnswer={onAnswer} />
-    : <p className="text-[15px] text-muted-foreground">這類案件沒有固定題目，可以直接下一關。</p>;
+    : <p className="text-hint text-muted-foreground">這類案件沒有固定題目，可以直接下一關。</p>;
   const backToFixed = <Button type="button" variant="outline" onClick={() => setMode("fixed")}>改用固定題目</Button>;
 
   return (
     <StageCard>
       <div className="flex flex-col gap-2">
         {heading}
-        <p className="text-[15px] text-muted-foreground">補充細節有助於比對。回答會和案情一起送出，切換補充方式時也會保留。</p>
+        <p className="text-hint text-muted-foreground">補充細節有助於比對。回答會和案情一起送出，切換補充方式時也會保留。</p>
       </div>
       {!llm ? (
         fixed
@@ -354,7 +357,7 @@ function DetailStage({ heading, llm, mode, setMode, aiState, askAi, consent, aiA
               <>
                 {aiState === "idle" && <AiConsent consent={consent} use="產生補充問題" />}
                 {aiState === "idle" && consent.declined ? (
-                  <Note><p className="text-[15px]">已選擇不使用 AI，可以改答固定題目。</p>{backToFixed}</Note>
+                  <Note><p className="text-hint">已選擇不使用 AI，可以改答固定題目。</p>{backToFixed}</Note>
                 ) : (
                   // 按鈕置中在藍色卡片裡；按下後同一顆按鈕變成載入中
                   <div className="flex justify-center rounded-[14px] border border-info-line bg-info px-4 py-5">
@@ -377,15 +380,15 @@ function DetailStage({ heading, llm, mode, setMode, aiState, askAi, consent, aiA
             )}
             {aiState === "done" && (
               <>
-                <p className="text-[15px]">這些問題由 AI 依你的案情產生，只用來補充事實，不是法律意見。</p>
+                <p className="text-hint">這些問題由 AI 依你的案情產生，只用來補充事實，不是法律意見。</p>
                 {questions.length > 0 ? <QuestionList questions={questions} answers={answers} onAnswer={onAnswer} />
-                  : <p className="text-[15px] text-muted-foreground">AI 沒有提出補充問題，可以繼續下一關。</p>}
+                  : <p className="text-hint text-muted-foreground">AI 沒有提出補充問題，可以繼續下一關。</p>}
               </>
             )}
             {aiState === "failed" && (
               <Note icon={TriangleAlertIcon}>
                 <p className="font-bold">無法產生補充問題</p>
-                <p className="text-[15px] text-muted-foreground">請再試一次，或改用固定題目。</p>
+                <p className="text-hint text-muted-foreground">請再試一次，或改用固定題目。</p>
                 <div className="flex flex-wrap gap-2.5">
                   <Button type="button" onClick={askAi}><RotateCwIcon data-icon="inline-start" />再試一次</Button>
                   {backToFixed}
@@ -395,14 +398,14 @@ function DetailStage({ heading, llm, mode, setMode, aiState, askAi, consent, aiA
             {aiState === "limited" && (
               <Note icon={ClockIcon}>
                 <p className="font-bold">今天的 AI 次數用完了</p>
-                <p className="text-[15px] text-muted-foreground">還是可以用固定題目，不影響看結果。</p>
+                <p className="text-hint text-muted-foreground">還是可以用固定題目，不影響看結果。</p>
                 {backToFixed}
               </Note>
             )}
             {aiState === "unrelated" && (
               <Note>
                 <p className="font-bold">這看起來不像法律糾紛</p>
-                <p className="text-[15px] text-muted-foreground">內容未傳給 AI。請回到案情描述，補充糾紛的經過。</p>
+                <p className="text-hint text-muted-foreground">內容未傳給 AI。請回到案情描述，補充糾紛的經過。</p>
                 <div className="flex flex-wrap gap-2.5">
                   <LinkButton variant="outline" to="/start?stage=2">回描述案情</LinkButton>
                   {backToFixed}
@@ -440,7 +443,7 @@ function FinalSummary({ intake }: { intake: Intake }) {
   return (
     <section aria-labelledby="final-title" className="flex flex-col gap-2 border-t pt-5">
       <h2 id="final-title" className="font-bold">最後確認：你提供的資料</h2>
-      <dl className="m-0 grid gap-x-6 gap-y-1.5 text-[15px] sm:grid-cols-2">
+      <dl className="m-0 grid gap-x-6 gap-y-1.5 text-hint sm:grid-cols-2">
         {rows.map(([k, v]) => (
           <div key={k} className="flex items-start justify-between gap-3">
             <dt className="flex-none text-muted-foreground">{k}</dt>
@@ -483,7 +486,7 @@ function RewriteStage({ heading, llm, intake, update, state, onStart, consent, a
     return (
       <StageCard>
         {heading}
-        <p className="text-[15px]">會用你遮名後的描述{usedFor}。</p>
+        <p className="text-hint">會用你遮名後的描述{usedFor}。</p>
         <FinalSummary intake={intake} />
       </StageCard>
     );
@@ -496,12 +499,12 @@ function RewriteStage({ heading, llm, intake, update, state, onStart, consent, a
           {heading}
           <StageChip>建議</StageChip>
         </div>
-        <p className="text-[15px] text-muted-foreground">
+        <p className="text-hint text-muted-foreground">
           由於法律用詞與口語描述不盡相同，若能接受 AI 幫忙整理描述成專業法律用詞，後續的判決比對會有更佳的結果。
         </p>
       </div>
 
-      {REWRITE_NOTICE[state] && <Note icon={TriangleAlertIcon}><p className="text-[15px]">{REWRITE_NOTICE[state]}</p></Note>}
+      {REWRITE_NOTICE[state] && <Note icon={TriangleAlertIcon}><p className="text-hint">{REWRITE_NOTICE[state]}</p></Note>}
 
       {state === "loading" && (
         <>
@@ -514,7 +517,7 @@ function RewriteStage({ heading, llm, intake, update, state, onStart, consent, a
         <>
           <AiConsent consent={consent} use="整理成法律描述" />
           {consent.declined ? (
-            <Note><p className="text-[15px]">這次不用 AI，會用你原本的描述{usedFor}。</p></Note>
+            <Note><p className="text-hint">這次不用 AI，會用你原本的描述{usedFor}。</p></Note>
           ) : (
             <Button type="button" size="lg" className="w-full" disabled={!aiAllowed} onClick={onStart}><SparklesIcon data-icon="inline-start" />請 AI 整理敘述</Button>
           )}
@@ -528,15 +531,15 @@ function RewriteStage({ heading, llm, intake, update, state, onStart, consent, a
               <TriangleAlertIcon className="mt-1 size-5 flex-none" aria-hidden="true" />
               <div className="flex flex-col gap-1.5">
                 <p className="font-bold">整理後出現了原文沒有的數字：{added.map((n) => `「${n}」`).join("、")}</p>
-                <p className="text-[15px]">請逐一確認這些數字是否正確。若有錯誤，可以直接修改，或改用原文。</p>
+                <p className="text-hint">請逐一確認這些數字是否正確。若有錯誤，可以直接修改，或改用原文。</p>
               </div>
             </div>
           ) : (
-            <p className="flex items-center gap-1.5 text-[15px] font-bold text-secondary-foreground"><CheckIcon className="size-4" aria-hidden="true" />整理後的數字，都能在原文找到。</p>
+            <p className="flex items-center gap-1.5 text-hint font-bold text-secondary-foreground"><CheckIcon className="size-4" aria-hidden="true" />整理後的數字，都能在原文找到。</p>
           )}
           <div className="flex flex-col gap-2">
             <label htmlFor="rewrite-draft" className="font-bold">{unsure ? "民事用的寫法（可以直接修改）" : "整理後的寫法（可以直接修改）"}</label>
-            <p id="rewrite-hint" className="text-[15px] text-muted-foreground">
+            <p id="rewrite-hint" className="text-hint text-muted-foreground">
               {criminal && "請先確認被告、被害人與「敘述者」是否對應正確；稱謂是本次分析的角色，不代表已起訴或有罪。"}
               請檢查有沒有多出你<b className="text-foreground">沒說過</b>的事，例如{criminal ? "日期、傷勢、前科、和解" : "日期、金額、簽約或書面文件"}。
             </p>
@@ -546,7 +549,7 @@ function RewriteStage({ heading, llm, intake, update, state, onStart, consent, a
           {unsure && (
             <div className="flex flex-col gap-2">
               <label htmlFor="criminal-draft" className="font-bold">刑事用的寫法（可以直接修改）</label>
-              <p id="criminal-hint" className="text-[15px] text-muted-foreground">
+              <p id="criminal-hint" className="text-hint text-muted-foreground">
                 刑事用判決書「犯罪事實」的寫法推估罪名與刑期{civilRole(intake) === "defendant" && "，只整理對方的主張，不含你的說法"}。
                 請先確認被告、被害人與「敘述者」是否對應正確；稱謂是本次分析的角色，不代表已起訴或有罪。
                 留空的話，刑事會用你原本的描述。

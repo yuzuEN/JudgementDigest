@@ -36,7 +36,7 @@ function Section({ id, divider = true, children, className }: { id?: string; div
   return (
     <section id={id} className="scroll-mt-4">
       {divider && <div className={PAGE}><hr className="m-0 h-px border-0 bg-border" /></div>}
-      <div className={cn(PAGE, "py-9 sm:py-14", className)}>{children}</div>
+      <div className={cn(PAGE, "py-9 phone:py-6 sm:py-14", className)}>{children}</div>
     </section>
   );
 }
@@ -45,7 +45,7 @@ function Section({ id, divider = true, children, className }: { id?: string; div
 function H2({ icon, children, id, primary = false }: { icon?: ReactNode; children: ReactNode; id?: string; primary?: boolean }) {
   return (
     <h2 id={id} className={cn("flex items-center gap-3 leading-[1.4] font-extrabold text-balance",
-      primary ? "text-[26px] sm:text-[34px]" : "text-[20px] sm:text-[24px]")}>
+      primary ? "text-display sm:text-[34px]" : "text-[20px] sm:text-[24px]")}>
       {icon}{children}
     </h2>
   );
@@ -82,13 +82,13 @@ function SampleCard({ title, children }: { title: string; children: ReactNode })
 function CivilSample() {
   return (
     <SampleCard title="民事查詢結果範例">
-      <p className="text-[15px] text-muted-foreground">民事交通事故，比對 30 件相似判決</p>
+      <p className="text-hint text-muted-foreground">民事交通事故，比對 30 件相似判決</p>
       <OutcomeBar counts={{ win: 15, partial: 10, lose: 5 }} legend={false} />
-      <p className="text-[15px]">30 件裡：<b>全部勝訴 15 件、一部勝訴 10 件、敗訴 5 件</b></p>
+      <p className="text-hint">30 件裡：<b>全部勝訴 15 件、一部勝訴 10 件、敗訴 5 件</b></p>
       <hr className="m-0 h-px border-0 bg-border" />
-      <p className="text-[15px] text-muted-foreground">如果判決是「一部勝訴」，可能判准的金額</p>
+      <p className="text-hint text-muted-foreground">如果判決是「一部勝訴」，可能判准的金額</p>
       <p className="text-[30px] leading-tight font-extrabold tabular-nums">約 2 萬～58 萬元</p>
-      <p className="text-[15px] text-muted-foreground">10 件有 8 件落在這個範圍</p>
+      <p className="text-hint text-muted-foreground">10 件有 8 件落在這個範圍</p>
     </SampleCard>
   );
 }
@@ -96,13 +96,13 @@ function CivilSample() {
 function CriminalSample() {
   return (
     <SampleCard title="刑事查詢結果範例">
-      <p className="text-[15px] text-muted-foreground">刑事竊盜，比對 30 件相似判決</p>
-      <p className="text-[15px] text-muted-foreground">可能的罪名與法條</p>
+      <p className="text-hint text-muted-foreground">刑事竊盜，比對 30 件相似判決</p>
+      <p className="text-hint text-muted-foreground">可能的罪名與法條</p>
       <p className="text-xl font-extrabold">竊盜罪（刑法第 320 條第 1 項）</p>
       <hr className="m-0 h-px border-0 bg-border" />
-      <p className="text-[15px] text-muted-foreground">相似判決的刑期</p>
+      <p className="text-hint text-muted-foreground">相似判決的刑期</p>
       <p className="text-[30px] leading-tight font-extrabold tabular-nums">拘役～有期徒刑 6 個月</p>
-      <p className="text-[15px] text-muted-foreground">10 件有 8 件落在這個範圍</p>
+      <p className="text-hint text-muted-foreground">10 件有 8 件落在這個範圍</p>
     </SampleCard>
   );
 }

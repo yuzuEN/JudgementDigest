@@ -59,7 +59,7 @@ export function CriminalSection({ state, tab, setTab, level = 1 }: {
   // 「不確定」選被告：刑事只用對方的主張推估，要說清楚這不是你會被判的結果
   const accused = intake.caseType === "unsure" && civilRole(intake) === "defendant";
   return (
-    <section id="criminal" aria-labelledby="criminal-result" className="flex scroll-mt-4 flex-col gap-6">
+    <section id="criminal" aria-labelledby="criminal-result" className="flex scroll-mt-4 flex-col gap-6 phone:gap-3">
       <ResultHeading id="criminal-result" level={level} title="刑事參考結果" lead="根據案情推估可能的罪名與刑期，並提供相似判決供參考。" />
       {error && (
         <ErrorBox message={error} onRetry={load} hint="請重新載入結果，或回上一步檢查描述。">
@@ -123,11 +123,11 @@ function ChargesPanel({ report, rewritten }: { report: CriminalReport; rewritten
             <li key={c.name} className="flex flex-wrap items-center gap-x-6 gap-y-2 py-3 first:pt-0 last:pb-0">
               <span className="flex min-w-0 flex-[1_1_260px] flex-col">
                 <b>{c.name}</b>
-                <span className="text-[15px] text-muted-foreground">{c.law}</span>
+                <span className="text-hint text-muted-foreground">{c.law}</span>
                 {c.law_note && <span className="text-sm text-muted-foreground">{c.law_note}</span>}
               </span>
               <span className="flex min-w-[180px] flex-[1_1_200px] flex-col gap-1">
-                <span className="flex justify-between text-[15px]"><span className="text-muted-foreground">機率</span><b className="tabular-nums">{percent(c.probability)}</b></span>
+                <span className="flex justify-between text-hint"><span className="text-muted-foreground">機率</span><b className="tabular-nums">{percent(c.probability)}</b></span>
                 <span className="relative">
                   <Bar value={c.probability} label={`${c.name}：${percent(c.probability)}，模型判定的門檻是 50%`} />
                   {/* 50% 是模型判定的門檻：和民事勝訴機率一樣畫一條直線 */}
@@ -137,13 +137,13 @@ function ChargesPanel({ report, rewritten }: { report: CriminalReport; rewritten
             </li>
           ))}
         </ul>
-        <ul className="m-0 flex list-disc flex-col gap-1 border-t pt-3 pl-5 text-[15px] text-muted-foreground">
+        <ul className="m-0 flex list-disc flex-col gap-1 border-t pt-3 pl-5 text-hint text-muted-foreground">
           <li>通常超過 50% 的機率之罪名，模型才會更加確信其成立。</li>
           <li>每個罪名的機率是分開估的，一件案子可能同時涉及好幾個罪名，所以加起來不一定是 100%。</li>
         </ul>
       </section>
       {!report.mock && (
-        <p className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[15px]">
+        <p className="flex flex-wrap items-center gap-x-3 gap-y-1 text-hint">
           <span className="inline-flex items-center gap-1.5 rounded-full border-[1.5px] border-input bg-card px-3 font-semibold">
             <FileTextIcon className="size-4" aria-hidden="true" />這次比對用的是：{rewritten ? "整理成判決書寫法的文字" : "你原本的描述"}
           </span>
@@ -165,7 +165,7 @@ function topLabel(items: { label: string; share: number }[]) {
 
 function Legend({ children, fill }: { children: ReactNode; fill: string }) {
   return (
-    <span className="inline-flex items-center gap-2 text-[15px]">
+    <span className="inline-flex items-center gap-2 text-hint">
       <span className={cn("size-[18px] flex-none rounded-[5px] border-[1.5px] border-outcome-part-fg", fill)} aria-hidden="true" />{children}
     </span>
   );
@@ -195,7 +195,7 @@ function SentenceRows({ charge, mock }: { charge: Charge; mock: boolean }) {
                 label={`${b.label}：${mock ? "相似的有罪判決" : "模型推估"} ${percent(b.share)}${actual ? `，最相似 ${charge.n_similar} 件實際宣告刑 ${percent(actualOf(b.label))}` : ""}`} />
               {actual && <Bar value={actualOf(b.label)} className="h-4" fill={ACTUAL_FILL} />}
             </div>
-            <span className="flex flex-col text-[15px] tabular-nums">
+            <span className="flex flex-col text-hint tabular-nums">
               <span>{mock ? "" : "模型 "}{percent(b.share)}</span>
               {actual && <span>實際 {percent(actualOf(b.label))}</span>}
             </span>
@@ -212,10 +212,10 @@ function ChargeSwitch({ report, selected, onSelect, label }: {
 }) {
   return (
     <div className="no-print flex flex-wrap items-center gap-2" role="group" aria-label={label}>
-      <span className="text-[15px] text-muted-foreground">罪名</span>
+      <span className="text-hint text-muted-foreground">罪名</span>
       {report.charges.map((c, i) => (
         <button key={c.name} type="button" aria-pressed={i === selected} onClick={() => onSelect(i)}
-          className={cn("min-h-11 rounded-full border-2 px-4 text-[15px] font-semibold",
+          className={cn("min-h-11 rounded-full border-2 px-4 text-hint font-semibold",
             i === selected ? "border-foreground bg-secondary" : "border-input bg-card hover:border-primary")}>
           {c.name}
         </button>
@@ -261,7 +261,7 @@ function CasesPanel({ report, selected, onSelect }: {
       <div className="flex flex-wrap items-center justify-between gap-3">
         {perCharge ? <ChargeSwitch report={report} selected={selected} onSelect={onSelect} label="看哪個罪名的相似判決" /> : <span />}
         {/* 只放檢索範圍的總數；「怎麼找的」說明連結一直都在 */}
-        <p className="ml-auto flex items-center gap-1 text-[15px] text-muted-foreground tabular-nums">
+        <p className="ml-auto flex items-center gap-1 text-hint text-muted-foreground tabular-nums">
           {!report.mock && scopeOf(selected) && <>共 {scopeOf(selected)!.n.toLocaleString("en-US")} 件</>}
           <InfoLink to="相似判決怎麼找" label="相似判決怎麼找的說明" />
         </p>
@@ -287,7 +287,7 @@ function CasesPanel({ report, selected, onSelect }: {
 
 function CriminalCasesTable({ cases }: { cases: SimilarCase[] }) {
   return (
-    <Table className="table-stack min-w-[680px] text-[15px]">
+    <Table className="table-stack min-w-[680px] text-hint">
       <TableHeader>
         <TableRow>
           <TableHead scope="col">字號</TableHead>

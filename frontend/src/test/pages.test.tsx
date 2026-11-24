@@ -776,9 +776,9 @@ describe("民事結果", () => {
       expect(screen.getAllByRole("tab").map((t) => t.textContent)).toEqual(["整體結果", "可能的金額", "證據對照", "對方的說法", "相似判決"]);
       expect(screen.getByRole("tab", { name: "整體結果" })).toHaveAttribute("aria-selected", "true");
       const scene = screen.getByRole("region", { name: "CasEY 角色說明" });
-      expect(scene).toHaveTextContent("我是解說員。你可以參考模型給出的結果，也可以在相似判決中查找前10件最相似的判決書資訊，並參考導讀內容。");
+      expect(scene).toHaveTextContent("你可以參考模型給出的結果，也可以在相似判決中查找前10件最相似的判決書資訊，並參考導讀內容。");
       await openTab("對方的說法");
-      expect(scene).toHaveTextContent("我是解說員。你可以參考模型給出的結果，也可以在相似判決中查找前10件最相似的判決書資訊，並參考導讀內容。");
+      expect(scene).toHaveTextContent("你可以參考模型給出的結果，也可以在相似判決中查找前10件最相似的判決書資訊，並參考導讀內容。");
       expect(screen.getByText(/比對了 30 件案由相同的真實判決/)).toBeInTheDocument();
       expect(calls[0].body).toMatchObject({ text: TRAFFIC, mid: "侵權：交通事故", claimed_amount: 500000, evidence: ["medical"] });
     });
@@ -1237,7 +1237,7 @@ describe("刑事結果", () => {
     await show({ mock: false });
     expect(screen.getAllByRole("tab").map((t) => t.textContent)).toEqual(["可能的罪名", "刑期範圍", "相似判決"]);
     const scene = screen.getByRole("region", { name: "CasEY 角色說明" });
-    expect(scene).toHaveTextContent("我是解說員。你可以參考模型給出的結果，也可以在相似判決中查找前10件最相似的判決書資訊，並參考導讀內容。");
+    expect(scene).toHaveTextContent("你可以參考模型給出的結果，也可以在相似判決中查找前10件最相似的判決書資訊，並參考導讀內容。");
     const panel = await openTab("刑期範圍");
     const [, second] = CRIMINAL_REPORT.charges;
     await userEvent.setup().click(within(panel).getByRole("button", { name: second.name }));

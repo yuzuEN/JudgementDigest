@@ -26,9 +26,9 @@ export function StageMap({ at }: { at: number }) {
   const chapter = CHAPTERS.find((c) => at >= c.from && at <= c.to);
   return (
     <nav aria-label="進度" data-slot="stepper" className="no-print">
-      {/* 手機：章節名稱擠不下，改成一行「描述案情・第 2／7 關」 */}
+      {/* 手機：章節和關卡名稱擠不下，改成一行「描述案情・第 2／7 關・案情」，點下面不再放名稱 */}
       {chapter && (
-        <p aria-hidden="true" className="mb-1.5 hidden text-sm font-bold phone:block">{chapter.label}・第 {at}／7 關</p>
+        <p aria-hidden="true" className="mb-1 hidden text-sm font-bold phone:block">{`${chapter.label}・第 ${at}／7 關・${STAGES[at - 1]}`}</p>
       )}
       <div className="mb-1.5 grid grid-cols-7 phone:hidden" aria-hidden="true">
         {CHAPTERS.map((c) => (
@@ -46,16 +46,16 @@ export function StageMap({ at }: { at: number }) {
           const href = done ? stageHref(n) : null;
           const dot = (
             <span aria-hidden="true" className={cn(
-              "relative z-10 grid size-[38px] place-items-center rounded-full border-3 bg-card text-[15px] font-bold sm:size-11",
+              "relative z-10 grid size-[38px] place-items-center rounded-full border-3 bg-card text-hint font-bold phone:size-7 phone:border-2 sm:size-11",
               done && "border-primary bg-primary text-primary-foreground",
-              now && "border-card bg-secondary text-secondary-foreground ring-4 ring-secondary",
+              now && "border-card bg-secondary text-secondary-foreground ring-4 ring-secondary phone:ring-[3px]",
               !done && !now && "border-input text-muted-foreground",
             )}>
-              {done ? <CheckIcon className="size-5" strokeWidth={2.6} /> : n}
+              {done ? <CheckIcon className="size-5 phone:size-4" strokeWidth={2.6} /> : n}
             </span>
           );
           const label = (
-            <span className={cn("text-sm leading-snug", now ? "font-extrabold text-foreground" : "text-muted-foreground", !now && "max-sm:sr-only")}>
+            <span className={cn("text-sm leading-snug", now ? "font-extrabold text-foreground" : "text-muted-foreground", !now && "max-sm:sr-only", now && "phone:sr-only")}>
               <span className="sr-only">第 {n} 關 </span>{name}{done && <span className="sr-only">（已完成）</span>}
             </span>
           );
@@ -63,12 +63,12 @@ export function StageMap({ at }: { at: number }) {
             <li key={name} aria-current={now ? "step" : undefined} className="relative flex min-w-0 flex-1 flex-col items-center gap-1 text-center">
               {i > 0 && (
                 <span aria-hidden="true" className={cn(
-                  "absolute top-[18px] right-1/2 h-[3px] w-full sm:top-[21px]",
+                  "absolute top-[18px] right-1/2 h-[3px] w-full phone:top-[12.5px] sm:top-[21px]",
                   done || now ? "bg-primary" : "bg-input",
                 )} />
               )}
               {href
-                ? <Link to={href} aria-label={`第 ${n} 關 ${name}（已完成）`} className="relative flex flex-col items-center gap-1 rounded-lg no-underline after:absolute after:-inset-[3px] after:content-['']">{dot}{label}</Link>
+                ? <Link to={href} aria-label={`第 ${n} 關 ${name}（已完成）`} className="relative flex flex-col items-center gap-1 rounded-lg no-underline after:absolute after:-inset-[3px] after:content-[''] phone:after:-inset-2">{dot}{label}</Link>
                 : <>{dot}{label}</>}
             </li>
           );

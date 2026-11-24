@@ -7,7 +7,7 @@ export function EmptyState({ title, children, icon, className }: { title: string
     <div className={cn("flex flex-col items-center gap-1.5 rounded-[14px] border-2 border-dashed border-input p-6 text-center", className)}>
       {icon}
       <p className="font-bold">{title}</p>
-      <div className="max-w-[460px] text-[15px] text-muted-foreground">{children}</div>
+      <div className="max-w-[460px] text-hint text-muted-foreground">{children}</div>
     </div>
   );
 }

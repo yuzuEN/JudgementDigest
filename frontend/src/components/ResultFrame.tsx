@@ -3,6 +3,7 @@ import { useEffect, type ReactNode } from "react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { PrintNotice } from "./casey/DisclaimerFooter";
+import { PhoneCollapse } from "./casey/PhoneCollapse";
 import { SampleBanner } from "./casey/Sample";
 import { LinkButton } from "./LinkButton";
 import { BRAND, Layout, PAGE } from "./Layout";
@@ -41,15 +42,15 @@ export function PdfButton() {
 export function ResultHeading({ title, lead, level = 1, id }: { title: string; lead: ReactNode; level?: 1 | 2; id?: string }) {
   const H = level === 1 ? "h1" : "h2";
   return (
-    <div id={id} className="flex min-w-0 scroll-mt-4 flex-col gap-2">
-      <H title={title} className="wrap-anywhere text-balance sm:truncate text-[26px] leading-[1.4] font-extrabold sm:text-[32px]">{title}</H>
-      <p className="text-lg leading-[1.8] text-muted-foreground">{lead}</p>
+    <div id={id} className="flex min-w-0 scroll-mt-4 flex-col gap-2 phone:gap-1">
+      <H title={title} className="wrap-anywhere text-balance sm:truncate text-display leading-[1.4] font-extrabold sm:text-[32px]">{title}</H>
+      <p className="text-lg leading-[1.8] phone:leading-relaxed text-muted-foreground">{lead}</p>
     </div>
   );
 }
 
 /** 結果頁解說員的話：民事、刑事、每個分頁都一樣。 */
-export const RESULT_LINE = "我是解說員。你可以參考模型給出的結果，也可以在相似判決中查找前10件最相似的判決書資訊，並參考導讀內容。";
+export const RESULT_LINE = "你可以參考模型給出的結果，也可以在相似判決中查找前10件最相似的判決書資訊，並參考導讀內容。";
 
 /**
  * 民事、刑事結果頁共用的外框：解說員、示例資料標示、回上一步、這次比對用的描述，
@@ -71,8 +72,8 @@ export function ResultFrame({ label, mock, maskedText, searchText, criminalText,
   const prefix = separate ? "民事" : "這次";
   return (
     <Layout stage={7} scene={{ who: "explainer", line: RESULT_LINE }}>
-      {mock && <div className={cn(PAGE, "no-print pt-5")}><SampleBanner /></div>}
-      <main className={cn(PAGE, "flex flex-col gap-6 pt-7 pb-14")}>
+      {mock && <div className={cn(PAGE, "no-print pt-5 phone:pt-3")}><SampleBanner /></div>}
+      <main className={cn(PAGE, "flex flex-col gap-6 pt-7 pb-14 phone:gap-4 phone:pt-4 phone:pb-8")}>
         <div className="print-only">
           <h1 className="mb-1 text-xl font-bold">類案判決參考報告（{label}）</h1>
           <p className="text-sm">產生時間：{new Date().toLocaleString("zh-TW")}／{BRAND} 類案判決參考／結果僅供參考，不是法律意見</p>
@@ -96,15 +97,20 @@ export function ResultFrame({ label, mock, maskedText, searchText, criminalText,
           </div>
         </div>
         {/* 這次比對實際用的描述（整理後的寫法，或遮名後的原文）；列印版的抬頭已經有，這裡只在畫面上顯示 */}
-        <section aria-labelledby="used-text-title" className="no-print flex flex-col gap-6">
-          <div className="flex w-full flex-col gap-2 rounded-[16px] border-2 border-dashed border-primary bg-card px-5 py-4 text-left">
-            <h2 id="used-text-title" className="text-[15px] font-bold text-secondary-foreground">{prefix}比對用的描述{searchText ? "（整理後的寫法）" : ""}</h2>
-            <p className="leading-loose whitespace-pre-wrap wrap-anywhere">{civilText}</p>
+        {/* 手機上兩段描述都收起來，只留一行標題 */}
+        <section aria-labelledby="used-text-title" className="no-print flex flex-col gap-6 phone:gap-3">
+          <div className="flex w-full flex-col gap-2 rounded-[16px] border-2 border-dashed border-primary bg-card px-5 py-4 text-left phone:px-4 phone:py-1">
+            <PhoneCollapse label={`${prefix}比對用的描述${searchText ? "（整理後的寫法）" : ""}`} className="pb-3"
+              heading={(c) => <h2 id="used-text-title" className="text-hint font-bold text-secondary-foreground">{c}</h2>}>
+              <p className="leading-loose phone:leading-relaxed whitespace-pre-wrap wrap-anywhere">{civilText}</p>
+            </PhoneCollapse>
           </div>
           {separate && (
-            <div className="flex w-full flex-col gap-2 rounded-[16px] border-2 border-dashed border-primary bg-card px-5 py-4 text-left">
-              <h3 className="text-[15px] font-bold text-secondary-foreground">刑事推估用的描述</h3>
-              <p className="leading-loose whitespace-pre-wrap wrap-anywhere">{criminalText}</p>
+            <div className="flex w-full flex-col gap-2 rounded-[16px] border-2 border-dashed border-primary bg-card px-5 py-4 text-left phone:px-4 phone:py-1">
+              <PhoneCollapse label="刑事推估用的描述" className="pb-3"
+                heading={(c) => <h3 className="text-hint font-bold text-secondary-foreground">{c}</h3>}>
+                <p className="leading-loose phone:leading-relaxed whitespace-pre-wrap wrap-anywhere">{criminalText}</p>
+              </PhoneCollapse>
             </div>
           )}
           <hr className="m-0 h-px border-0 bg-border" />

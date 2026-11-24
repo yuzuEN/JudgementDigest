@@ -32,7 +32,7 @@ export function OutcomeBar({ counts, legend = true, className }: { counts: Outco
         ))}
       </div>
       {legend && (
-        <ul className="m-0 flex list-none flex-wrap gap-x-4 gap-y-1 p-0 text-[15px]" aria-hidden="true">
+        <ul className="m-0 flex list-none flex-wrap gap-x-4 gap-y-1 p-0 text-hint" aria-hidden="true">
           {SEGMENTS.map((s) => (
             <li key={s.key} className="flex items-center gap-2">
               <span className={cn("size-[18px] flex-none rounded-[5px] border-[1.5px]", s.swatch)} />

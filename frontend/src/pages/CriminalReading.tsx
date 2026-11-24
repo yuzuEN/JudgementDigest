@@ -36,14 +36,14 @@ export default function CriminalReading({ guide, error, onRetry }: {
 
   return (
     <Layout stage={7} scene={{ who: "explainer", line: "在導讀中，判決書會根據不同功能段落做顏色區分。" }}>
-      <main className={cn(PAGE, "flex flex-col gap-7 pt-7 pb-14")}>
+      <main className={cn(PAGE, "flex flex-col gap-7 pt-7 pb-14 phone:gap-5 phone:pt-4 phone:pb-8")}>
         <div className="flex flex-col gap-3">
           <LinkButton variant="outline" to="/result/criminal?tab=cases" className="no-print w-fit border-input text-foreground">
             <ArrowLeftIcon data-icon="inline-start" />回結果
           </LinkButton>
           {guide && (
             <div className="flex items-start justify-between gap-4">
-              <h1 className="text-[26px] leading-[1.4] font-extrabold text-balance sm:text-[32px]">{guide.case.case_number}</h1>
+              <h1 className="text-display leading-[1.4] font-extrabold text-balance sm:text-[32px]">{guide.case.case_number}</h1>
               <OriginalLink url={guide.case.url} caseNumber={guide.case.case_number} />
             </div>
           )}
@@ -58,7 +58,7 @@ export default function CriminalReading({ guide, error, onRetry }: {
               <Card className="gap-4 px-[18px] sm:px-6.5" aria-labelledby="criminal-basic-title">
                 <h2 id="criminal-basic-title" className="text-xl font-bold">判決資料</h2>
                 {/* 和「你填的資料」一樣：名稱在左、內容在右；罪名一個一個標籤直排 */}
-                <dl className="m-0 flex flex-col gap-2.5 text-[15px]">
+                <dl className="m-0 flex flex-col gap-2.5 text-hint">
                   <InfoRow label="法院">{guide.case.court || "未提供"}</InfoRow>
                   <InfoRow label="裁判日期">{detail?.judgment_date || "未提供"}</InfoRow>
                   <InfoRow label="罪名">{guide.case.mid ? <MidLabels mids={guide.case.mid.split("、")} vertical /> : "未提供"}</InfoRow>
@@ -72,7 +72,7 @@ export default function CriminalReading({ guide, error, onRetry }: {
               {shown.length > 0 && (
                 <Card className="gap-3 px-[18px] sm:px-6.5" aria-labelledby="legend-title">
                   <h2 id="legend-title" className="text-xl font-bold">段落標色</h2>
-                  <p className="text-[15px] text-muted-foreground">選擇要上色的類別。取消後仍會保留文字標籤。</p>
+                  <p className="text-hint text-muted-foreground">選擇要上色的類別。取消後仍會保留文字標籤。</p>
                   <div className="grid gap-2 phone:grid-cols-2">
                     {shown.map((f) => (
                       <button key={f.id} type="button" aria-pressed={on[f.id]} onClick={() => setOn({ ...on, [f.id]: !on[f.id] })}
@@ -93,7 +93,7 @@ export default function CriminalReading({ guide, error, onRetry }: {
 
               <Card className="gap-2 px-[18px] sm:px-6.5 shadow-none" aria-labelledby="about-title">
                 <h2 id="about-title" className="text-xl font-bold">關於這些標示</h2>
-                <p className="text-[15px] text-muted-foreground">段落依判決書的標題與編號自動切分、標示，可能有誤，請以判決原文為準。</p>
+                <p className="text-hint text-muted-foreground">段落依判決書的標題與編號自動切分、標示，可能有誤，請以判決原文為準。</p>
                 <p className="text-sm text-muted-foreground">辨識到的被告姓名換成「被告」，其他人名換成【關係人】。自動遮名可能有遺漏。</p>
               </Card>
             </aside>
@@ -103,17 +103,17 @@ export default function CriminalReading({ guide, error, onRetry }: {
                 <h2 id="full-title" className="scroll-mt-4 text-xl font-bold">{detail?.source === "dataset" ? "犯罪事實" : "判決全文"}</h2>
                 {guide.mock && <SampleTag />}
               </div>
-              {guide.mock && <p className="text-[15px] text-sample-fg">這是示例判決，內容為示意，不是真實判決。</p>}
+              {guide.mock && <p className="text-hint text-sample-fg">這是示例判決，內容為示意，不是真實判決。</p>}
               {detail?.source === "dataset" && (
-                <p className="rounded-[12px] border bg-muted p-4 text-[15px] leading-relaxed">
+                <p className="rounded-[12px] border bg-muted p-4 text-hint leading-relaxed">
                   這件判決沒有收錄全文，以下只有資料集裡的犯罪事實；「××」是資料集原本遮掉的罪名、法條。主文與理由請看司法院原文。
                 </p>
               )}
               {!detail && (
                 <div role="status" className="rounded-[12px] border bg-muted p-4">
                   <p className="font-bold">這件判決沒有收錄全文</p>
-                  <p className="mt-1 text-[15px] text-muted-foreground">目前只有摘要，完整內容請看司法院原文。</p>
-                  {guide.case.summary && <p className="mt-3 leading-loose">摘要：{guide.case.summary}</p>}
+                  <p className="mt-1 text-hint text-muted-foreground">目前只有摘要，完整內容請看司法院原文。</p>
+                  {guide.case.summary && <p className="mt-3 leading-loose phone:leading-relaxed">摘要：{guide.case.summary}</p>}
                 </div>
               )}
               {paragraphs.map((p, i) => {
@@ -127,7 +127,7 @@ export default function CriminalReading({ guide, error, onRetry }: {
                       className={cn("para flex flex-col gap-1.5 rounded-[12px] px-4 py-3.5 transition-colors motion-reduce:transition-none",
                         !f ? "text-muted-foreground" : lit ? f.on : "border border-dashed border-input bg-transparent")}>
                       <span className="text-sm font-extrabold tracking-[.06em]">{p.label}</span>
-                      <p className={cn("leading-loose break-words", p.pre && "whitespace-pre-wrap", p.function === "table" && "overflow-x-auto text-[15px]")}>{p.text}</p>
+                      <p className={cn("leading-loose phone:leading-relaxed break-words", p.pre && "whitespace-pre-wrap", p.function === "table" && "overflow-x-auto text-hint")}>{p.text}</p>
                     </section>
                   </Fragment>
                 );

@@ -31,7 +31,7 @@ function Section({ id, n, title, children }: { id: string; n: number; title: str
     <section id={id} aria-labelledby={`${id}-title`} className="flex scroll-mt-6 flex-col gap-4">
       <div className="flex items-center gap-3">
         <span aria-hidden="true" className="grid size-10 flex-none place-items-center rounded-full bg-primary text-lg font-extrabold text-primary-foreground">{n}</span>
-        <h2 id={`${id}-title`} className="text-[22px] leading-[1.45] font-extrabold sm:text-[26px]">{title}</h2>
+        <h2 id={`${id}-title`} className="text-title leading-[1.45] font-extrabold sm:text-[26px]">{title}</h2>
       </div>
       {children}
     </section>
@@ -48,7 +48,7 @@ function TermList({ terms }: { terms: Term[] }) {
             <dt className="font-bold">{t.term}</dt>
             <span className="rounded-full border-[1.5px] border-input px-2.5 text-sm leading-[1.9] font-semibold">{t.group}</span>
           </div>
-          <dd className="m-0 text-[15px] text-muted-foreground">{t.meaning}</dd>
+          <dd className="m-0 text-hint text-muted-foreground">{t.meaning}</dd>
         </div>
       ))}
     </dl>
@@ -80,7 +80,7 @@ export default function Guide() {
 
   return (
     <Layout scene={{ who: "explainer", line: "在結果頁點選名詞旁的「i」，就能跳到這裡查看說明。" }}>
-      <div className={cn(PAGE, "pt-8 pb-16")}>
+      <div className={cn(PAGE, "pt-8 pb-16 phone:pt-4 phone:pb-10")}>
         <div className="flex flex-wrap items-start gap-9">
           <nav aria-label="本頁目錄" className="w-full min-w-0 flex-[1_1_240px] sm:max-w-[300px] lg:sticky lg:top-5">
             <Card className="gap-2 px-5 phone:py-2">
@@ -108,18 +108,18 @@ export default function Guide() {
 
           <article className="flex min-w-0 max-w-[760px] flex-[999_1_520px] flex-col gap-12">
             <header className="flex flex-col gap-2">
-              <h1 className="text-[26px] leading-[1.4] font-extrabold sm:text-[32px]">說明與法律小知識</h1>
-              <p className="text-lg leading-[1.8] text-muted-foreground">了解案件類型、結果中的數字與常見法律名詞。內容為一般說明，不是法律意見。</p>
+              <h1 className="text-display leading-[1.4] font-extrabold sm:text-[32px]">說明與法律小知識</h1>
+              <p className="text-lg leading-[1.8] phone:leading-relaxed text-muted-foreground">了解案件類型、結果中的數字與常見法律名詞。內容為一般說明，不是法律意見。</p>
             </header>
 
             <Section id="basics" n={1} title="民事和刑事有什麼不一樣？">
               <div className="grid gap-4 md:grid-cols-2">
                 <Card className="gap-2 px-6"><h3 className="text-xl font-bold">民事</h3>
-                  <p className="text-[15px] text-muted-foreground">私人之間的糾紛，例如要求賠償、還錢、履行契約，由當事人自己提告。主要是「要不要賠、賠多少」。</p></Card>
+                  <p className="text-hint text-muted-foreground">私人之間的糾紛，例如要求賠償、還錢、履行契約，由當事人自己提告。主要是「要不要賠、賠多少」。</p></Card>
                 <Card className="gap-2 px-6"><h3 className="text-xl font-bold">刑事</h3>
-                  <p className="text-[15px] text-muted-foreground">有沒有犯罪。由檢察官偵查起訴，法院判斷有沒有罪、判多重。</p></Card>
+                  <p className="text-hint text-muted-foreground">有沒有犯罪。由檢察官偵查起訴，法院判斷有沒有罪、判多重。</p></Card>
               </div>
-              <p className="text-[15px] text-muted-foreground">同一件事有時兩邊都會發生，例如車禍可能同時有賠償問題（民事）和過失傷害問題（刑事）。分不清楚時，在第 1 關選「不確定」。</p>
+              <p className="text-hint text-muted-foreground">同一件事有時兩邊都會發生，例如車禍可能同時有賠償問題（民事）和過失傷害問題（刑事）。分不清楚時，在第 1 關選「不確定」。</p>
             </Section>
 
             <Section id="dispute-types" n={2} title="糾紛類型說明">
@@ -133,7 +133,7 @@ export default function Guide() {
                           <dt className="font-bold">
                             {t.id.includes("：") ? <><span className="sr-only">{t.id.split("：")[0]}：</span>{t.id.split("：")[1]}</> : t.id}
                           </dt>
-                          <dd className="m-0 flex flex-col gap-1 text-[15px]">
+                          <dd className="m-0 flex flex-col gap-1 text-hint">
                             <span>{t.summary}</span>
                             <span className="text-sm text-muted-foreground">例如：{t.example}</span>
                           </dd>
@@ -163,7 +163,7 @@ export default function Guide() {
                 <li>可以先嘗試協商或調解，許多糾紛能在判決前解決。</li>
                 <li>部分程序有期限，建議儘早向專業人士確認。</li>
               </ol>
-              <p className="text-[15px] text-muted-foreground">
+              <p className="text-hint text-muted-foreground">
                 需要協助可以洽詢<a href={LAF_URL} target="_blank" rel="noreferrer" className="inline-flex items-center gap-0.5">法律扶助基金會<ExternalLinkIcon className="size-4" aria-hidden="true" /></a>。
               </p>
               <div className="flex flex-wrap gap-3">

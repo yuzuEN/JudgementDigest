@@ -4,7 +4,7 @@ import { splitMasked } from "../../format";
 export function MaskedText({ text, live = false }: { text: string; live?: boolean }) {
   return (
     <div aria-live={live ? "polite" : undefined}
-      className="masked-preview rounded-[12px] border bg-background p-[18px] leading-loose whitespace-pre-wrap wrap-anywhere">
+      className="masked-preview rounded-[12px] border bg-background p-[18px] leading-loose phone:leading-relaxed whitespace-pre-wrap wrap-anywhere">
       {splitMasked(text).map((part, i) =>
         part.masked ? <mark key={i} className="masked">{part.text}</mark> : <span key={i}>{part.text}</span>)}
     </div>
