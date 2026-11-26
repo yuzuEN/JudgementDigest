@@ -68,6 +68,18 @@ class TestSegment(unittest.TestCase):
         self.paras = segment(FULL_TEXT)
         self.fns = [(p["function"], p["part"]) for p in self.paras]
 
+    def test_bracketed_or_missing_attachment_heading(self):
+        # 「【附件】：」標題，或沒有標題、直接接檢察官書類的標題行，都算附件
+        for heading in ("【附件】：\n", ""):
+            text = FULL_TEXT.replace("附件：\n", heading)
+            parts = {p["part"] for p in segment(text) if "罪嫌" in p["text"] or "陳小華訴請" in p["text"]}
+            self.assertEqual(parts, {"附件：起訴書"}, heading)
+
+    def test_court_mention_of_prosecutor_document_is_not_attachment(self):
+        # 法院本文提到「附件：…處刑書1份」不是書類本身的標題行
+        text = FULL_TEXT.replace("附件：\n臺灣臺北地方檢察署檢察官起訴書\n", "附件：臺灣臺北地方檢察署檢察官起訴書1份\n")
+        self.assertIsNone(next(p for p in segment(text) if "罪嫌" in p["text"])["part"])
+
     def test_sections_keep_original_order(self):
         order = []
         for fn, part in self.fns:
@@ -210,6 +222,13 @@ class TestMasking(unittest.TestCase):
         self.assertIn("證人【關係人】、【關係人】", text)
         self.assertNotIn("被告被告", text)
         self.assertEqual(guide["source"], "judgment")
+
+    def test_simplified_trial_is_not_a_name(self):
+        # 「簡」是姓氏：「被告簡式審判程序」的「簡式審」不是被告的名字
+        text = FULL_TEXT.replace("三、依刑事訴訟法第449條第2項", "三、經告知被告簡式審判程序之旨，依刑事訴訟法第449條第2項")
+        out = json.dumps(segment(text), ensure_ascii=False)
+        self.assertIn("被告簡式審判程序", out)
+        self.assertNotIn("被告判程序", out)
 
     def test_full_text_masks_officers_lists_citations_and_repeated_names(self):
         raw = """被 告 王大明
