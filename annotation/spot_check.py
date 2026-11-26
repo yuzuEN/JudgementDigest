@@ -33,7 +33,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 import config  # noqa: E402
 from annotation.cues import CUES, INTEREST_SERVICE, quote_anchored  # noqa: E402
-from annotation.annotate import detect_domain, resolve_quote  # noqa: E402
+from annotation.annotate import DOMAINS, detect_domain, resolve_quote  # noqa: E402
 from annotation.prompts_v6 import MANUAL_VERSION, PROMPT_VERSION  # noqa: E402
 from annotation.sample import OUT_NAME  # noqa: E402
 
@@ -54,6 +54,16 @@ QUOTE_VERDICTS = ("正確", "錯誤")
 HEADERS = ["sample_id", "批次", "標籤", "傾向／方向", "引文", "完整範圍", "待標段落", "線索", "引文錨定（自動）",
            "判決結果比對", "判定", "引文判定", "備註"]
 COL = {h: i for i, h in enumerate(HEADERS)}
+
+
+def pick_version(con: sqlite3.Connection, domain: str) -> tuple:
+    """(手冊版本, prompt 版本)：資料庫裡有該領域目前的 prompt 版本就用它；
+    沒有而且只有一個版本時用那一個（例如刑事 v1 是 p6.0 標的），兩者都不是就用目前版本。"""
+    current = DOMAINS[domain]["prompt_version"]
+    found = [r[0] for r in con.execute("SELECT DISTINCT prompt_version FROM annotations")]
+    version = current if current in found or len(found) != 1 else found[0]
+    row = con.execute("SELECT manual_version FROM annotations WHERE prompt_version = ? LIMIT 1", (version,)).fetchone()
+    return (row[0] if row else DOMAINS[domain]["manual_version"]), version
 
 
 def load_runs(con: sqlite3.Connection, prompt_version: str = PROMPT_VERSION) -> dict:
@@ -131,15 +141,17 @@ def export(db: Path, out: Path, n_per_label: int, seed: int) -> None:
     from openpyxl.worksheet.datavalidation import DataValidation
 
     with closing(sqlite3.connect(db)) as con:   # Windows 不能刪除還開著的資料庫檔
-        criminal = detect_domain(con) == "criminal"
-        runs = load_runs(con)
-        concl = concl_directions(con)
+        domain = detect_domain(con)
+        criminal = domain == "criminal"
+        manual_version, prompt_version = pick_version(con, domain)
+        runs = load_runs(con, prompt_version)
+        concl = concl_directions(con, prompt_version)
         paras = {r[0]: r[1:3] for r in con.execute("SELECT sample_id, batch, para_text FROM paragraphs")}
         outcomes = {r[0]: r[1] for r in con.execute("SELECT sample_id, outcome FROM paragraphs")}
         first_basis = {}
         for sid, sub in con.execute("SELECT sample_id, subtype FROM annotations WHERE label = 'EV' "
                                     "AND prompt_version = ? AND subtype IS NOT NULL ORDER BY run_no, id",
-                                    (PROMPT_VERSION,)):
+                                    (prompt_version,)):
             first_basis.setdefault(sid, sub)
     if not runs:
         print("還沒有任何標註結果。")
@@ -149,6 +161,7 @@ def export(db: Path, out: Path, n_per_label: int, seed: int) -> None:
     sample_batch = "criminal-random" if criminal else "random"
     if criminal:
         print("== 刑事（判決導讀的證據、論罪科刑段落）==")
+    print(f"手冊 {manual_version}、prompt {prompt_version}")
 
     # 1. 模型自身一致性
     run_ids = sorted({r for rr in runs.values() for r in rr})
@@ -191,7 +204,7 @@ def export(db: Path, out: Path, n_per_label: int, seed: int) -> None:
     ws = wb.active
     ws.title = "填寫說明"
     for i, line in enumerate([
-        f"抽查表（手冊 {MANUAL_VERSION}）",
+        f"抽查表（手冊 {manual_version}、prompt {prompt_version}）",
         "每一列是模型（三次多數決）標了某個標籤的論點單位。請依手冊的定義判斷兩件事：",
         "「判定」：這個標籤對不對？選 符合／不符合／不確定。不確定的請在備註寫原因。",
         "「引文判定」：只在判定為「符合」時填。引文有沒有包含完成該動作的用語（規則 10）？選 正確／錯誤。",
@@ -202,8 +215,12 @@ def export(db: Path, out: Path, n_per_label: int, seed: int) -> None:
         "「判決結果比對」只在 CONCL 頁有值：衝突＝判決敗訴卻標有理由；注意＝判決勝訴卻標無理由。可能是反訴或抗辯，請看原文。",
         "v0.6：引文超過 100 字時寫成「開頭〔略〕結尾」，「完整範圍」欄是程式還原的整段。引文判定請看完整範圍：結尾有沒有完成動作的用語。",
         "v0.6：EXP 改成看功能（以一般經驗、常情、社會通念為判斷依據），不限特定用語；只有明顯不是在講經驗法則的才判不符合。",
-        ("刑事：SENT＝量刑審酌（刑法§57 各款、犯後態度、累犯、自白減刑、緩刑、沒收）；ADM＝證據能力（傳聞法則、同意作為證據），"
-         "和「可不可信」的 EV 分開。EV 的傾向是有利被告／不利被告／中性。刑事第一次抽查，每類都抽 25 個。")
+("刑事：SENT＝有寫出裁量理由的量刑、沒收、保安處分（審酌、衡酌、過苛、刑罰反應力薄弱⋯⋯）；"
+         "必減、應沒收、沒寫理由就套用的「得」減、依法不能沒收（非被告所有、已發還、已滅失）→ SUB；累犯：構成 SUB、加重 SENT。"
+         "ADM＝證據能力（傳聞法則、同意作為證據），"
+         "和「可不可信」的 EV 分開。只說證人無恩怨、無構陷動機 → EV，不是 EXP；罪數公式、只有「悖於常情」標記詞 → 不是 EXP。"
+         "法律效果段落裡只列出前案紀錄表、函文 → 不是 EV。"
+         "EV 的傾向是有利被告／不利被告／中性。每類都抽 25 個。")
         if criminal else "RULE、CONCL 規則沒改，只抽 10 個做回歸檢查。",
         "EV 的「傾向／方向」後面括號是 basis（明示評價／依證據推論）。",
         "只判斷「標出來的對不對」，不用找漏標的。",

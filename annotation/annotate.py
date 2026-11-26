@@ -1,5 +1,6 @@
 """
-以 Claude API 標註 sample.py（民事）或 sample_criminal.py（刑事）抽出的段落（手冊 v0.6、prompt p6.0），寫入 annotations 表。
+以 Claude API 標註 sample.py（民事，手冊 v0.6、prompt p6.0）或 sample_criminal.py（刑事，手冊 v0.8c、prompt p6.2c）
+抽出的段落，寫入 annotations 表。
 刑民自動判斷：資料庫的 batch 全部以 criminal 開頭就用刑事的 prompt 與標籤，否則用民事；也可用 --domain 指定。
 
 改寫自階段一、二的 annotate.py，保留：
@@ -48,15 +49,18 @@ from annotation.sample import OUT_NAME  # noqa: E402
 from annotation.quotes import (MARK, MAX_SPAN, MAX_SPAN_BY_LABEL, MIN_HEAD, MIN_TAIL,  # noqa: E402,F401
                                resolve_quote)
 from annotation.prompts_v6 import (EV_BASIS, LABELS_CIVIL, LABELS_CRIMINAL, MANUAL_VERSION,  # noqa: E402
-                                   POLARITY_BY_LABEL_CIVIL, POLARITY_CIVIL, POLARITY_CRIMINAL, PROMPT_VERSION,
+                                   MANUAL_VERSION_CRIMINAL, POLARITY_BY_LABEL_CIVIL, POLARITY_CIVIL,
+                                   POLARITY_CRIMINAL, PROMPT_VERSION, PROMPT_VERSION_CRIMINAL,
                                    SYSTEM_CIVIL, SYSTEM_CRIMINAL, USER_TEMPLATE)
 
-# 刑民各自的 prompt、標籤與 polarity 清單；刑事只有 EV 有傾向，其他標籤都填 null
+# 刑民各自的 prompt、標籤、polarity 清單與版本號；刑事只有 EV 有傾向，其他標籤都填 null。
+# 刑事的版本號獨立（p6.1c 起），改刑事 prompt 不影響民事 p6.0 的資料
 DOMAINS = {
     "civil": {"system": SYSTEM_CIVIL, "labels": LABELS_CIVIL, "polarity": POLARITY_CIVIL,
-              "by_label": POLARITY_BY_LABEL_CIVIL},
+              "by_label": POLARITY_BY_LABEL_CIVIL, "manual_version": MANUAL_VERSION, "prompt_version": PROMPT_VERSION},
     "criminal": {"system": SYSTEM_CRIMINAL, "labels": LABELS_CRIMINAL, "polarity": POLARITY_CRIMINAL,
-                 "by_label": {"EV": ["有利被告", "不利被告", "中性"]}},
+                 "by_label": {"EV": ["有利被告", "不利被告", "中性"]},
+                 "manual_version": MANUAL_VERSION_CRIMINAL, "prompt_version": PROMPT_VERSION_CRIMINAL},
 }
 
 
@@ -240,10 +244,11 @@ def main():
     ensure_subtype(con)
     domain = args.domain or detect_domain(con)
     system = DOMAINS[domain]["system"]
-    print(f"領域：{'刑事' if domain == 'criminal' else '民事'}（prompt {PROMPT_VERSION}）")
+    manual_version, prompt_version = DOMAINS[domain]["manual_version"], DOMAINS[domain]["prompt_version"]
+    print(f"領域：{'刑事' if domain == 'criminal' else '民事'}（手冊 {manual_version}、prompt {prompt_version}）")
     done = {r[0] for r in con.execute(
         "SELECT DISTINCT sample_id FROM annotations WHERE annotator = ? AND run_no = ? AND prompt_version = ?",
-        (MODEL, args.run_no, PROMPT_VERSION))}
+        (MODEL, args.run_no, prompt_version))}
     todo = [r for r in con.execute(
         "SELECT sample_id, prev_text, para_text, next_text FROM paragraphs ORDER BY sample_id")
         if r[0] not in done]
@@ -297,8 +302,8 @@ def main():
         raw = "".join(b.text for b in resp.content if b.type == "text").strip()
         rows = parse_response(raw, para, domain=domain)
         now = datetime.now().isoformat()
-        con.executemany(INSERT, [(sid, MODEL, args.run_no, lab, pol, q, conf, v, sub, MANUAL_VERSION,
-                                  PROMPT_VERSION, raw, now) for lab, pol, q, conf, v, sub in rows])
+        con.executemany(INSERT, [(sid, MODEL, args.run_no, lab, pol, q, conf, v, sub, manual_version,
+                                  prompt_version, raw, now) for lab, pol, q, conf, v, sub in rows])
         con.commit()  # 每段都存，中斷也不會丟
         n_ok += rows[0][0] != "PARSE_ERROR"
         n_fail += rows[0][0] == "PARSE_ERROR"
@@ -310,7 +315,7 @@ def main():
         "SELECT COUNT(*) FROM annotations WHERE run_no = ? AND prompt_version = ? "
         "AND (label = 'PARSE_ERROR' OR label LIKE 'INVALID:%' OR polarity LIKE 'INVALID:%' "
         "OR subtype LIKE 'INVALID:%' OR quote_valid = 0)",
-        (args.run_no, PROMPT_VERSION)).fetchone()[0]
+        (args.run_no, prompt_version)).fetchone()[0]
     print(f"\n完成 {n_ok} 段、失敗 {n_fail} 段，估算花費 ${cost:.3f}（實際以 Console 的 Usage 為準）")
     print(f"本 run 解析失敗、不合法或引文驗證失敗的列數：{bad}")
     con.close()
