@@ -110,20 +110,32 @@ artifacts/annotation_civil_v4/          （v0.3 在 annotation_civil_v1/、v0.4 
 
 ## 刑事（試做）
 
-刑事的標籤與 prompt 在 `prompts_v6.py` 的 `SYSTEM_CRIMINAL`（RULE、SUB、SENT 量刑、EV、CL、PROC、HI、ADM 證據能力、UNC、EXP）。
-抽樣改從刑事判決導讀取「證據」「論罪科刑」段落（和後端導讀頁同一種分段：有 `full_text` 遮名原文包就當場分段，否則讀舊版 `guides` 表），每件判決一段：
+刑事和 v0.6 不同的規則寫在 `刑事論點標註手冊_v0.8c.md`。刑事有自己的版本號（`PROMPT_VERSION_CRIMINAL`），改刑事 prompt 不影響民事 p6.0 的資料：
+
+| 版本 | 資料夾 | 說明 |
+|---|---|---|
+| 手冊 v0.6、p6.0 | `annotation_criminal_v1/` | 第一次試做 300 段；抽樣誤含判決後附的檢察官書類 |
+| 手冊 v0.7c、p6.1c | `annotation_criminal_v2/` | SENT 只標有裁量理由的，必減、應沒收 → SUB；保安處分併入 SENT；無恩怨、無構陷動機 → EV；PROC 補撤回告訴、免訴 |
+| 手冊 v0.8c、p6.2c | `annotation_criminal_v3/` | 依法不能沒收 → SUB；累犯分兩步；EXP 排除罪數公式與只有標記詞的；「事證明確」套語 → NONE；CL 納入釋字、憲判；抽樣排除署名後的附件；PROC、ADM 加抽 |
+
+抽樣從刑事判決導讀取「證據」「論罪科刑」段落（和後端導讀頁同一種分段：有 `full_text` 遮名原文包就當場分段，否則讀舊版 `guides` 表），每件判決一段。
+判決本文到署名（「以上正本證明與原本無異」）或第一個檢察官書類段落為止，後面的都不抽（v0.8c）。
+`--cue-n` 另外為 PROC、ADM 各加抽幾件有線索的段落（batch＝`criminal-cue:PROC`、`criminal-cue:ADM`），只用來估精確度：
 
 ```bash
 bash scripts/sync_criminal_models.sh                       # 先下載刑事檢索庫（retrieval_criminal_v1）
-python -m annotation.sample_criminal --n 300               # → artifacts/annotation_criminal_v1/annotation.sqlite
-python -m annotation.annotate --db artifacts/annotation_criminal_v1/annotation.sqlite --run-no 1 --limit 1
-python -m annotation.annotate --db artifacts/annotation_criminal_v1/annotation.sqlite --run-no 1   # 2、3 同
-python -m annotation.spot_check export --db artifacts/annotation_criminal_v1/annotation.sqlite \
-    --out artifacts/annotation_criminal_v1/抽查表_刑事_v0.6.xlsx
+python -m annotation.sample_criminal --n 300 --cue-n 30 \
+    --exclude artifacts/annotation_criminal_v1/annotation.sqlite artifacts/annotation_criminal_v2/annotation.sqlite
+                                                           # → artifacts/annotation_criminal_v3/annotation.sqlite（360 段）
+python -m annotation.annotate --db artifacts/annotation_criminal_v3/annotation.sqlite --run-no 1 --limit 1
+python -m annotation.annotate --db artifacts/annotation_criminal_v3/annotation.sqlite --run-no 1   # 2、3 同
+python -m annotation.spot_check export --db artifacts/annotation_criminal_v3/annotation.sqlite \
+    --out artifacts/annotation_criminal_v3/抽查表_刑事_v0.8c.xlsx
 ```
 
-`annotate.py` 看到 batch 是 `criminal-random` 就自動改用刑事的 prompt 與標籤（也可用 `--domain criminal`）；
-抽查表的分頁換成 RULE、SUB、SENT、EV、PROC、ADM、EXP，每類抽 25 個。
+`annotate.py` 看到 batch 是 `criminal-` 開頭就自動改用刑事的 prompt、標籤與版本號（也可用 `--domain criminal`）；
+抽查表的分頁換成 RULE、SUB、SENT、EV、PROC、ADM、EXP，每類抽 25 個，隨機樣本不夠時從加抽批補；
+標籤比例只算隨機樣本（`criminal-random`）。`spot_check.py` 依資料庫裡實際的 prompt 版本匯出，所以舊版的資料庫照樣能匯出。
 
 ## 驗證方式與目前的結果
 
