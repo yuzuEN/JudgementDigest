@@ -360,7 +360,8 @@ class TestAnnexCutoff(unittest.TestCase):
 
     def test_annex_without_heading_is_excluded(self):
         paragraphs = segment(ANNEX_TEXT)
-        self.assertTrue(any("犯嫌堪以認定" in p["text"] and not p.get("part") for p in paragraphs))  # 分段程式沒標 part
+        # 分段程式從檢察官書類的標題行起標成附件；body_end 再擋一次標題寫法不同的書類
+        self.assertTrue(all(p.get("part") == "附件：聲請簡易判決處刑書" for p in paragraphs if "犯嫌堪以認定" in p["text"]))
         texts = [paragraphs[i]["text"] for i in eligible(paragraphs)]
         self.assertTrue(texts)
         self.assertTrue(all("罪嫌" not in t and "犯嫌" not in t and "詢據" not in t for t in texts))
