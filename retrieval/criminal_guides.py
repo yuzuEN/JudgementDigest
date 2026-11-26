@@ -36,8 +36,10 @@ _SPACE_RE = re.compile(rf"(?<={_CJK})[ 　]+|[ 　]+(?={_CJK})")
 _META_RE = re.compile(r"^(?:檔名|旗標|檢查單號|裁判類別|原因|主文|裁判字號|裁判日期|裁判案由)：\[")
 _DATE_RE = re.compile(r"^中華民國\d{2,3}年\d{1,2}月\d{1,2}日$")
 _TABLE_RE = re.compile(r"^附表[一二三四五六七八九十\d]*(?:[：:（(].{0,30})?$")
-_ATTACHMENT_RE = re.compile(r"^附件[一二三四五六七八九十\d]*[：:]?$")
+_ATTACHMENT_RE = re.compile(r"^[【〔\[（(]?附件[一二三四五六七八九十\d]*[】〕\]）)]?[：:]?$")
 _ATTACHMENT_TITLE_RE = re.compile(r"(追加起訴書|起訴書|聲請簡易判決處刑書|移送併辦意旨書|併辦意旨書|上訴書)")
+# 沒有「附件」標題、直接接上檢察官書類的標題行（「臺灣臺南地方檢察署檢察官聲請簡易判決處刑書」）
+_PROSECUTOR_TITLE_RE = re.compile(r"^.{0,16}檢察(?:署|分署)(?:檢察官)?" + _ATTACHMENT_TITLE_RE.pattern + r"(?:（[^）]*）)?$")
 # 段落編號：一、 ㈠ （一） 壹、 甲、。前面是「第」「欄」「編號」「、」時是內文（第一、二級毒品；犯罪事實欄一、三），不切
 # 編號只在句子開頭才算：前面是段首或「。：；」。「備忘錄三（五）規定」的（五）是引用，不切
 _HEAD_SPLIT = re.compile(r"(?:^|(?<=[。：:；;]))(?=(?:[一二三四五六七八九十]{1,3}|[壹貳參叁肆伍陸柒捌玖拾]|[甲乙丙丁戊])、"
@@ -114,6 +116,8 @@ def _blocks(full_text: str) -> List[Dict]:
             kind = "table"; start(kind, line)
         elif _ATTACHMENT_RE.match(key):
             part = "附件"; kind = "info"; start(kind, line)
+        elif not part and _PROSECUTOR_TITLE_RE.match(key):
+            part = "附件：" + _ATTACHMENT_TITLE_RE.search(key).group(1); kind = "info"; start(kind, line)
         elif _DATE_RE.match(key) and kind in ("verdict", "facts", "reasons"):
             kind = "other"; start(kind, line)
         else:
