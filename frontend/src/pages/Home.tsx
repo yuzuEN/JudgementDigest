@@ -88,7 +88,7 @@ function CivilSample() {
       <hr className="m-0 h-px border-0 bg-border" />
       <p className="text-hint text-muted-foreground">如果判決是「一部勝訴」，可能判准的金額</p>
       <p className="text-[30px] leading-tight font-extrabold tabular-nums">約 2 萬～58 萬元</p>
-      <p className="text-hint text-muted-foreground">10 件有 8 件落在這個範圍</p>
+      <p className="text-hint text-muted-foreground">30 件相似案件中，有 25 件落在這個範圍</p>
     </SampleCard>
   );
 }
@@ -96,13 +96,12 @@ function CivilSample() {
 function CriminalSample() {
   return (
     <SampleCard title="刑事查詢結果範例">
-      <p className="text-hint text-muted-foreground">刑事竊盜，比對 30 件相似判決</p>
-      <p className="text-hint text-muted-foreground">可能的罪名與法條</p>
-      <p className="text-xl font-extrabold">竊盜罪（刑法第 320 條第 1 項）</p>
+      <p className="text-hint text-muted-foreground">最接近罪名</p>
+      <p className="text-xl font-extrabold">竊盜罪（刑法第 320 條）</p>
       <hr className="m-0 h-px border-0 bg-border" />
-      <p className="text-hint text-muted-foreground">相似判決的刑期</p>
+      <p className="text-hint text-muted-foreground">預測刑度</p>
       <p className="text-[30px] leading-tight font-extrabold tabular-nums">拘役～有期徒刑 6 個月</p>
-      <p className="text-hint text-muted-foreground">10 件有 8 件落在這個範圍</p>
+      <p className="text-hint text-muted-foreground">30 件相似案件中，有 18 件落在這個範圍</p>
     </SampleCard>
   );
 }

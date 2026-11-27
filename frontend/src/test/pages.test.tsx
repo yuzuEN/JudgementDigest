@@ -18,7 +18,12 @@ describe("首頁", () => {
     starts.forEach((a) => expect(a).toHaveAttribute("href", "/start"));
     expect(screen.getByRole("heading", { name: "結果的使用限制" })).toBeInTheDocument();
     expect(screen.getByLabelText("民事查詢結果範例（示例）")).toHaveTextContent("一部勝訴 10 件");
-    expect(screen.getByLabelText("刑事查詢結果範例（示例）")).toHaveTextContent("示例");
+    const criminal = screen.getByLabelText("刑事查詢結果範例（示例）");
+    expect(criminal).toHaveTextContent("示例");
+    expect(criminal).toHaveTextContent("最接近罪名竊盜罪（刑法第 320 條）預測刑度");
+    expect(criminal).toHaveTextContent("30 件相似案件中，有 18 件落在這個範圍");
+    expect(criminal).not.toHaveTextContent("比對 30 件相似判決");
+    expect(screen.getByLabelText("民事查詢結果範例（示例）")).toHaveTextContent("30 件相似案件中，有 25 件落在這個範圍");
     // 首頁不放「不是律師或法官」的角色補充（只留關卡 1）
     expect(screen.getByRole("region", { name: "CasEY 角色說明" })).not.toHaveTextContent("不是律師或法官");
     expect(screen.queryByRole("navigation", { name: "進度" })).not.toBeInTheDocument();
@@ -307,6 +312,20 @@ describe("第 6 關：整理成判決書的寫法", () => {
     await user.click(screen.getByRole("button", { name: "看參考結果" }));
     await screen.findByText("62%");
     expect(calls.find((c) => c.key === "POST /civil/report")!.body).toMatchObject({ search_text: null });
+  });
+
+  it("切到「我的原文」時文字框換成原文，切回來整理的內容還在", async () => {
+    setup(llm);
+    const user = userEvent.setup();
+    renderAt("/confirm", <Confirm />, at6, { text: "他欠我錢" });
+    await user.click(await screen.findByRole("button", { name: BUTTON }));
+    expect(await screen.findByLabelText("整理後的寫法（可以直接修改）")).toHaveValue("原告主張被告未還款。");
+    await user.click(screen.getByRole("radio", { name: "我的原文" }));
+    expect(screen.getByLabelText("我的原文（遮名後）")).toHaveValue("他欠我錢");
+    expect(screen.getByLabelText("我的原文（遮名後）")).toHaveAttribute("readonly");
+    expect(screen.queryByLabelText("整理後的寫法（可以直接修改）")).toBeNull();
+    await user.click(screen.getByRole("radio", { name: "整理後的寫法" }));
+    expect(screen.getByLabelText("整理後的寫法（可以直接修改）")).toHaveValue("原告主張被告未還款。");
   });
 
   it("提醒描述裡沒有的數字；沒有時說明都對得上", async () => {

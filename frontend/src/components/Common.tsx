@@ -20,7 +20,8 @@ export function CommonPoints({ points }: { points?: string[] | null }) {
   return (
     <span className="mt-1 flex flex-wrap items-center gap-1.5 text-sm">
       {points.map((p) => (
-        <span key={p} className="rounded-full border border-input bg-secondary px-2 leading-6 text-secondary-foreground">{p}</span>
+        // 圓角固定 12px（一行高 24px，看起來和膠囊一樣）；窄螢幕折成兩三行時不會變成大圓弧
+        <span key={p} className="rounded-[12px] border border-input bg-secondary px-2 leading-6 text-secondary-foreground">{p}</span>
       ))}
     </span>
   );
