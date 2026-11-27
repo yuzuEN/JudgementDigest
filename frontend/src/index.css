@@ -291,11 +291,11 @@
     display: flex;
     flex-wrap: wrap;
     align-items: center;
-    gap: 4px 12px;
+    gap: 4px 6px;
   }
+  /* 欄名後面直接接內容（約 6px），不對齊成一欄 */
   table.table-stack > tbody > tr > td[data-label]::before {
     content: attr(data-label);
-    min-width: 5.5em;
     font-size: 14px;
     font-weight: 700;
     color: var(--muted-foreground);

@@ -3,7 +3,7 @@ import {
   RotateCwIcon, ShieldCheckIcon, SparklesIcon, TriangleAlertIcon, XIcon,
 } from "lucide-react";
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
-import { Navigate, useNavigate, useSearchParams } from "react-router-dom";
+import { Link, Navigate, useNavigate, useSearchParams } from "react-router-dom";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -261,7 +261,7 @@ function MaskStage({ heading, intake, update, kinds, llm }: {
           <PhoneCollapse label="這些資料會怎麼處理？">
             <p className="text-hint">
               這段文字只用來比對相似判決，不會保存。{llm && "之後如果你選擇用 AI 補充或整理，傳給 AI 服務前會先問你同意。"}
-              不想提供的話，可以<LinkButton variant="link" to="/start?stage=2" className="h-auto p-0 text-hint">回描述案情</LinkButton>刪掉這些內容。
+              不想提供的話，可以<Link to="/start?stage=2">回描述案情</Link>刪掉這些內容。
             </p>
           </PhoneCollapse>
         </Note>
@@ -528,37 +528,48 @@ function RewriteStage({ heading, llm, intake, update, state, onStart, consent, a
 
       {state !== "loading" && reviewed && (
         <>
-          {added.length > 0 ? (
-            <div role="alert" className="flex items-start gap-3 rounded-[14px] border-2 border-warn-line bg-warn px-4 py-3.5 text-warn-fg">
-              <TriangleAlertIcon className="mt-1 size-5 flex-none" aria-hidden="true" />
-              <div className="flex flex-col gap-1.5">
-                <p className="font-bold">整理後出現了原文沒有的數字：{added.map((n) => `「${n}」`).join("、")}</p>
-                <p className="text-hint">請逐一確認這些數字是否正確。若有錯誤，可以直接修改，或改用原文。</p>
-              </div>
+          {/* 選「我的原文」時改顯示原文（唯讀）；整理後的寫法保留著，切回來還在 */}
+          {intake.useRewrite === "original" ? (
+            <div className="flex flex-col gap-2">
+              <label htmlFor="original-text" className="font-bold">我的原文（遮名後）</label>
+              <p id="original-hint" className="text-hint text-muted-foreground">會用這段文字{usedFor}。要修改原文，請回第 2 關。</p>
+              <Textarea id="original-text" value={intake.maskedText} readOnly aria-describedby="original-hint" className="min-h-[200px] resize-y bg-muted/40" />
             </div>
           ) : (
-            <p className="flex items-center gap-1.5 text-hint font-bold text-secondary-foreground"><CheckIcon className="size-4" aria-hidden="true" />整理後的數字，都能在原文找到。</p>
-          )}
-          <div className="flex flex-col gap-2">
-            <label htmlFor="rewrite-draft" className="font-bold">{unsure ? "民事用的寫法（可以直接修改）" : "整理後的寫法（可以直接修改）"}</label>
-            <p id="rewrite-hint" className="text-hint text-muted-foreground">
-              {criminal && "請先確認被告、被害人與「敘述者」是否對應正確；稱謂是本次分析的角色，不代表已起訴或有罪。"}
-              請檢查有沒有多出你<b className="text-foreground">沒說過</b>的事，例如{criminal ? "日期、傷勢、前科、和解" : "日期、金額、簽約或書面文件"}。
-            </p>
-            <Textarea id="rewrite-draft" value={draft} aria-describedby="rewrite-hint" className="min-h-[200px] resize-y"
-              onChange={(e) => choose(intake.useRewrite, e.target.value)} />
-          </div>
-          {unsure && (
+            <>
+            {added.length > 0 ? (
+              <div role="alert" className="flex items-start gap-3 rounded-[14px] border-2 border-warn-line bg-warn px-4 py-3.5 text-warn-fg">
+                <TriangleAlertIcon className="mt-1 size-5 flex-none" aria-hidden="true" />
+                <div className="flex flex-col gap-1.5">
+                  <p className="font-bold">整理後出現了原文沒有的數字：{added.map((n) => `「${n}」`).join("、")}</p>
+                  <p className="text-hint">請逐一確認這些數字是否正確。若有錯誤，可以直接修改，或改用原文。</p>
+                </div>
+              </div>
+            ) : (
+              <p className="flex items-center gap-1.5 text-hint font-bold text-secondary-foreground"><CheckIcon className="size-4" aria-hidden="true" />整理後的數字，都能在原文找到。</p>
+            )}
             <div className="flex flex-col gap-2">
-              <label htmlFor="criminal-draft" className="font-bold">刑事用的寫法（可以直接修改）</label>
-              <p id="criminal-hint" className="text-hint text-muted-foreground">
-                刑事用判決書「犯罪事實」的寫法推估罪名與刑期{civilRole(intake) === "defendant" && "，只整理對方的主張，不含你的說法"}。
-                請先確認被告、被害人與「敘述者」是否對應正確；稱謂是本次分析的角色，不代表已起訴或有罪。
-                留空的話，刑事會用你原本的描述。
+              <label htmlFor="rewrite-draft" className="font-bold">{unsure ? "民事用的寫法（可以直接修改）" : "整理後的寫法（可以直接修改）"}</label>
+              <p id="rewrite-hint" className="text-hint text-muted-foreground">
+                {criminal && "請先確認被告、被害人與「敘述者」是否對應正確；稱謂是本次分析的角色，不代表已起訴或有罪。"}
+                請檢查有沒有多出你<b className="text-foreground">沒說過</b>的事，例如{criminal ? "日期、傷勢、前科、和解" : "日期、金額、簽約或書面文件"}。
               </p>
-              <Textarea id="criminal-draft" value={intake.criminalDraft} aria-describedby="criminal-hint" className="min-h-[160px] resize-y"
-                onChange={(e) => choose(intake.useRewrite, draft, e.target.value)} />
+              <Textarea id="rewrite-draft" value={draft} aria-describedby="rewrite-hint" className="min-h-[200px] resize-y"
+                onChange={(e) => choose(intake.useRewrite, e.target.value)} />
             </div>
+            {unsure && (
+              <div className="flex flex-col gap-2">
+                <label htmlFor="criminal-draft" className="font-bold">刑事用的寫法（可以直接修改）</label>
+                <p id="criminal-hint" className="text-hint text-muted-foreground">
+                  刑事用判決書「犯罪事實」的寫法推估罪名與刑期{civilRole(intake) === "defendant" && "，只整理對方的主張，不含你的說法"}。
+                  請先確認被告、被害人與「敘述者」是否對應正確；稱謂是本次分析的角色，不代表已起訴或有罪。
+                  留空的話，刑事會用你原本的描述。
+                </p>
+                <Textarea id="criminal-draft" value={intake.criminalDraft} aria-describedby="criminal-hint" className="min-h-[160px] resize-y"
+                  onChange={(e) => choose(intake.useRewrite, draft, e.target.value)} />
+              </div>
+            )}
+            </>
           )}
           {/* 一列兩個：左邊原文、右邊整理後的寫法 */}
           <RadioCards label="使用哪一種寫法" value={intake.useRewrite} onChange={(v) => choose(v)} className="grid-cols-2"
